@@ -9,7 +9,7 @@
         ],
         "priority": "person",
         "desc": "Garden area with parking spot.",
-        "dynamic_stride": true,
+        "dynamic_stride": false,
         "filters": {
             "ignore_labels": [
                 "car",
@@ -19,7 +19,7 @@
         "thresholds": {
             "person": 0.5,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.3
         }
     },
     "01": {
@@ -32,14 +32,14 @@
         ],
         "priority": "person",
         "desc": "Entrance door, garden area",
-        "dynamic_stride": true,
+        "dynamic_stride": false,
         "filters": {
             "ignore_labels": []
         },
         "thresholds": {
             "person": 0.5,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         }
     },
     "02": {
@@ -62,7 +62,7 @@
         "thresholds": {
             "person": 0.5,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         }
     },
     "03": {
@@ -75,14 +75,14 @@
         ],
         "priority": "person",
         "filters": {
-            "ignore_labels": []
+            "ignore_labels": ["car","truck"]
         },
         "desc": "Balcony area, with garden underneath",
         "dynamic_stride": false,
         "thresholds": {
             "person": 0.5,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.3
         }
     },
     "04": {
@@ -102,7 +102,7 @@
         "thresholds": {
             "person": 0.5,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         }
     },
     "05": {
@@ -122,7 +122,7 @@
         "thresholds": {
             "person": 0.5,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         }
     },
     "06": {
@@ -142,7 +142,7 @@
         "thresholds": {
             "person": 0.5,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         }
     },
     "07": {

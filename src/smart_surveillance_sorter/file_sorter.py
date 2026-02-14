@@ -132,8 +132,13 @@ class FileSorter:
         for item in final_results:
             v_path = item["video_path"]
             cam_name = item["camera_name"]
-            cat = item["category"]
+            #cat = item["category"]
             
+            # --- NORMALIZZAZIONE CATEGORIA ---
+            # Se l'IA ha restituito 'nothing', forziamo in 'others'
+            cat = item["category"]
+            if cat == "nothing":
+                cat = "others"
             target_dir = get_safe_path(self.dest_base, cam_name, cat, self.structure_type)
             
             # 1. SPOSTA VIDEO
@@ -141,15 +146,30 @@ class FileSorter:
                 if self._execute_io(v_path, target_dir / item["video_name"]):
                     files_processati.add(v_path)
 
-            # 2. SPOSTA FRAME AI (se presenti)
+            # # 2. SPOSTA FRAME AI (se presenti)
+            # video_details = next((r for r in raw_results if r["video_path"] == v_path), None)
+            # if video_details and "frames" in video_details:
+            #     for f_info in video_details["frames"]:
+            #         f_src = f_info["frame_path"]
+            #         if f_src not in files_processati:
+            #             if self._execute_io(f_src, target_dir / Path(f_src).name):
+            #                 files_processati.add(f_src)
+            #         # ... stesso per crop_path ...
             video_details = next((r for r in raw_results if r["video_path"] == v_path), None)
             if video_details and "frames" in video_details:
                 for f_info in video_details["frames"]:
-                    f_src = f_info["frame_path"]
-                    if f_src not in files_processati:
+                    
+                    # Frame originale
+                    f_src = f_info.get("frame_path")
+                    if f_src and f_src not in files_processati:
                         if self._execute_io(f_src, target_dir / Path(f_src).name):
                             files_processati.add(f_src)
-                    # ... stesso per crop_path ...
+                    
+                    # Immagine Crop (quella zoomata per Qwen)
+                    c_src = f_info.get("crop_path")
+                    if c_src and c_src not in files_processati:
+                        if self._execute_io(c_src, target_dir / Path(c_src).name):
+                            files_processati.add(c_src)        
 
             # 3. SPOSTA IMMAGINI NVR (Cercandole nel full_index)
             # Troviamo il record nel full_index per questo video

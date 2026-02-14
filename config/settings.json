@@ -24,8 +24,8 @@
     "yolo_settings": {
         "model_path": "yolov8l",
         "device": "cuda",
-        "num_occurrence": 3,
-        "time_gap_sec": 3,
+        "num_occurrence": 2,
+        "time_gap_sec": 5,
         "yolo_override_threshold": 0.85,
         "detection_groups": {
             "PERSON": [
@@ -58,7 +58,7 @@
         "thresholds": {
             "person": 0.5,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         }
     },
     "vision_settings": {

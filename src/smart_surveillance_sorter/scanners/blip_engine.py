@@ -14,6 +14,7 @@ class BLIPEngine:
         self.output_dir = output_dir
         # 1. Caricamento del Modello (BLIP VQA Base è un ottimo compromesso tra peso e velocità)
         self.model_name = "Salesforce/blip-vqa-base" 
+        #self.model_name = "Salesforce/blip-vqa-capfilt-large"
         log.info(f"🔄 Caricamento BLIP Engine ({self.model_name}) su {self.device}...")
         # Carica prima la config e imposta il flag a False
     

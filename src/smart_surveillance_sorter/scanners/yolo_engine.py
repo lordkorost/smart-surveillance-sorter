@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 import logging
 from pathlib import Path
 from typing import Optional
@@ -136,7 +137,7 @@ class YoloEngine:
             min_area_ratio = 0.002 
 
             res = self.model(str(image_path), classes=[0], verbose=False, device=self.device)[0]
-
+            class_names = res.names
             best_det = None
             max_conf = 0
             
@@ -145,6 +146,7 @@ class YoloEngine:
 
             for box in res.boxes:
                 conf = float(box.conf[0])
+
                 if conf < min_confidence:
                     continue
 
@@ -156,10 +158,31 @@ class YoloEngine:
 
                 if conf > max_conf:
                     max_conf = conf
+                   # Recuperiamo l'ID e il nome della classe
+                    cls_id = int(box.cls[0])
+                    label_name = class_names.get(cls_id, "unknown")
+
+                    # Salviamo TUTTO dentro best_det
                     best_det = {
                         "confidence": conf,
                         "bbox": [x1, y1, x2, y2],
+                        "label": label_name # <--- IMPORTANTE: aggiungilo qui
                     }
+
+                    # Ora creiamo il log usando i dati appena salvati
+                    yolo_log_path = Path("yolo_detailed_log.jsonl")
+                    yolo_entry = {
+                        "timestamp": datetime.now().isoformat(),
+                        "video": str(video_path.name),
+                        "camera": cam_id,
+                        "class_detected": label_name, # Usa direttamente label_name
+                        "confidence": round(conf, 4),
+                        "bbox": [x1, y1, x2, y2]
+                    }
+            
+                    with open(yolo_log_path, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(yolo_entry) + "\n")
+            # -------------------------
 
             if not best_det:
                 return None
