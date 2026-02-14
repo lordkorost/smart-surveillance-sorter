@@ -1,0 +1,23 @@
+{
+    "shared_components": {
+        "mandatory_rules": "- Output ONLY one word.\n- No explanations.",
+        "system_instruction": "You are a security image analyzer. Classify the image strictly according to the rules below."
+    },
+    "modules": {
+        "analyst_mission_crop": "### ANALYST MISSION\nYou are analyzing TWO images of the same event:\n1. The FULL FRAME (for context and scale).\n2. A ZOOMED CROP (to see details of the suspect object).\n",
+        "fallback_header": "### FALLBACK ANALYSIS\nNo initial detections were found. Perform a deep scan of the original NVR footage to find any missed subjects.\n",
+        "clean_header": "### MAINTENANCE CHECK\nAnalyze the camera lens health. Look for obstructions, dirt, spider webs, or fog."
+    },
+    "class_descriptions": {
+        "PERSON": "If a person is present anywhere in the image, output 'person' immediately. Do not doubt or reason further",
+        "ANIMAL": "If an animal (dog, cat, bird, etc.) is detected",
+        "VEHICLE": "If a vehicle (car, truck, bike) is detected",
+        "CLEAN_CHECK": "COMPARE the Reference Image (clean) with the Current Image. Look for ANY new element that obstructs the view: white glowing filaments, blurry patches, or dark spots that are NOT present in the reference. If a portion of the image is obscured, covered, or blurred by an object near the lens (spider web, insect, dust, or moisture): output 'dirty'. If the view is identical in clarity to the reference: output 'clean'."    
+    },
+    "templates": {
+        "standard": "### SYSTEM INSTRUCTION\n{system_instruction}\n\n### LOCATION CONTEXT\n{desc}\n\n### DETECTION HIERARCHY\n{hierarchy}\n\n### MANDATORY RULES\n{rules}\n\n### ALLOWED OUTPUT\n{allowed_outputs}",
+        "with_crop": "{crop_header}\n### SYSTEM INSTRUCTION\n{system_instruction}\n\n### LOCATION CONTEXT\n{desc}\n\n### DETECTION HIERARCHY\n{hierarchy}\n\n### MANDATORY RULES\n{rules}\n\n### ALLOWED OUTPUT\n{allowed_outputs}",
+        "fallback": "{fallback_header}\n### SYSTEM INSTRUCTION\n{system_instruction}\n\n### LOCATION CONTEXT\n{desc}\n\n### DETECTION HIERARCHY\n{hierarchy}\n\n### MANDATORY RULES\n{rules}\n\n### ALLOWED OUTPUT\n{allowed_outputs}",
+        "clean_check": "{clean_header}\n### SYSTEM INSTRUCTION\n{system_instruction}\n\n### LOCATION CONTEXT\n{desc}\n\n### COMPARISON MISSION\n{class_desc}\n\n### MANDATORY RULES\n{rules}\n\n### ALLOWED OUTPUT\nclean | dirty"
+    }
+}

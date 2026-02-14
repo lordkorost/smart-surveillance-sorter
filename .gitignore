@@ -1,0 +1,28 @@
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# --- Dati e Video (Il "grosso" da escludere) ---
+*.mp4
+*.mkv
+*.avi
+*.jpg
+*.jpeg
+*.png
+# Escludi le cartelle dove il sorter salva i risultati
+fails/
+checks/
+output/
+dataset/
+2026-02-13/
+
+# --- Configurazione Locale ---
+# Escludi le tue impostazioni personali se non vuoi che 
+# altri PC sovrascrivano i tuoi IP/Porte
+# settings.json
+
+# --- Log ---
+*.log

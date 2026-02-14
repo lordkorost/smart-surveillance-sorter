@@ -1,0 +1,171 @@
+{
+    "00": {
+        "name": "Orto",
+        "location": "outdoor",
+        "search_patterns": [
+            "_00_",
+            "ch00",
+            "Cam00"
+        ],
+        "priority": "person",
+        "desc": "Garden area with parking spot.",
+        "dynamic_stride": true,
+        "filters": {
+            "ignore_labels": [
+                "car",
+                "truck"
+            ]
+        },
+        "thresholds": {
+            "person": 0.5,
+            "vehicle": 0.55,
+            "animal": 0.35
+        }
+    },
+    "01": {
+        "name": "Porta Giardino",
+        "location": "outdoor",
+        "search_patterns": [
+            "_01_",
+            "ch01",
+            "Cam01"
+        ],
+        "priority": "person",
+        "desc": "Entrance door, garden area",
+        "dynamic_stride": true,
+        "filters": {
+            "ignore_labels": []
+        },
+        "thresholds": {
+            "person": 0.5,
+            "vehicle": 0.55,
+            "animal": 0.35
+        }
+    },
+    "02": {
+        "name": "Parcheggio",
+        "location": "outdoor",
+        "search_patterns": [
+            "_02_",
+            "ch02",
+            "Cam02"
+        ],
+        "priority": "person",
+        "filters": {
+            "ignore_labels": [
+                "car",
+                "truck"
+            ]
+        },
+        "desc": "Parking area",
+        "dynamic_stride": true,
+        "thresholds": {
+            "person": 0.5,
+            "vehicle": 0.55,
+            "animal": 0.35
+        }
+    },
+    "03": {
+        "name": "Balcone Corridoio",
+        "location": "outdoor",
+        "search_patterns": [
+            "_03_",
+            "ch03",
+            "Cam03"
+        ],
+        "priority": "person",
+        "filters": {
+            "ignore_labels": []
+        },
+        "desc": "Balcony area, with garden underneath",
+        "dynamic_stride": false,
+        "thresholds": {
+            "person": 0.5,
+            "vehicle": 0.55,
+            "animal": 0.35
+        }
+    },
+    "04": {
+        "name": "Balcone Cucina",
+        "location": "outdoor",
+        "search_patterns": [
+            "_04_",
+            "ch04",
+            "Cam04"
+        ],
+        "priority": "person",
+        "filters": {
+            "ignore_labels": []
+        },
+        "desc": "Balcony area, with garden underneath.",
+        "dynamic_stride": false,
+        "thresholds": {
+            "person": 0.5,
+            "vehicle": 0.55,
+            "animal": 0.35
+        }
+    },
+    "05": {
+        "name": "Giardino Mare",
+        "search_patterns": [
+            "_05_",
+            "ch05",
+            "Cam05"
+        ],
+        "location": "outdoor",
+        "priority": "person",
+        "filters": {
+            "ignore_labels": []
+        },
+        "desc": "Garden area",
+        "dynamic_stride": false,
+        "thresholds": {
+            "person": 0.5,
+            "vehicle": 0.55,
+            "animal": 0.35
+        }
+    },
+    "06": {
+        "name": "Giardino Cancello",
+        "search_patterns": [
+            "_06_",
+            "ch06",
+            "Cam06"
+        ],
+        "location": "outdoor",
+        "priority": "person",
+        "filters": {
+            "ignore_labels": []
+        },
+        "desc": "Garden area, street visible through the gate.",
+        "dynamic_stride": false,
+        "thresholds": {
+            "person": 0.5,
+            "vehicle": 0.55,
+            "animal": 0.35
+        }
+    },
+    "07": {
+        "name": "Ingresso Orto",
+        "location": "outdoor",
+        "search_patterns": [
+            "_07_",
+            "ch07",
+            "Cam07"
+        ],
+        "priority": "person",
+        "filters": {
+            "ignore_labels": [
+                "car",
+                "truck"
+            ]
+        },
+        "desc": "Entrance door",
+        "dynamic_stride": false,
+        "thresholds": {
+            "person": 0.5,
+            "vehicle": 0.55,
+            "animal": 0.35
+        }
+    }
+}
