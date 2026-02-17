@@ -16,7 +16,6 @@ from tqdm import tqdm
 from colorama import Fore, Style
 
 
-import logging
 
 log = logging.getLogger(__name__) 
 

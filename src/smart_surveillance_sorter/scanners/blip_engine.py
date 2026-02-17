@@ -2,7 +2,7 @@ import json
 import logging
 from pathlib import Path
 from .blip_helpers import build_vqa_question
-from transformers import BlipProcessor, BlipForQuestionAnswering
+from transformers import BlipForConditionalGeneration, BlipProcessor, BlipForQuestionAnswering
 import torch
 from PIL import Image
 log = logging.getLogger(__name__) 
@@ -13,18 +13,21 @@ class BLIPEngine:
         self.device = device
         self.output_dir = output_dir
         # 1. Caricamento del Modello (BLIP VQA Base è un ottimo compromesso tra peso e velocità)
-        self.model_name = "Salesforce/blip-vqa-base" 
+        #self.model_name = "Salesforce/blip-vqa-base" 
         #self.model_name = "Salesforce/blip-vqa-capfilt-large"
-        log.info(f"🔄 Caricamento BLIP Engine ({self.model_name}) su {self.device}...")
+        #log.info(f"🔄 Caricamento BLIP Engine ({self.model_name}) su {self.device}...")
         # Carica prima la config e imposta il flag a False
-    
-        try:
-            self.processor = BlipProcessor.from_pretrained(self.model_name)
-            self.model = BlipForQuestionAnswering.from_pretrained(self.model_name).to(self.device)
-            log.info("✅ BLIP Engine caricato con successo.")
-        except Exception as e:
-            log.error(f"❌ Errore nel caricamento di BLIP: {e}")
-            raise
+        from PIL import Image
+
+        self.processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large")
+        self.model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large")
+        # try:
+        #     self.processor = BlipProcessor.from_pretrained(self.model_name,use_fast=False)
+        #     self.model = BlipForQuestionAnswering.from_pretrained(self.model_name).to(self.device)
+        #     log.info("✅ BLIP Engine caricato con successo.")
+        # except Exception as e:
+        #     log.error(f"❌ Errore nel caricamento di BLIP: {e}")
+        #     raise
 
         # 2. Parametri di Soglia (opzionali, presi dal JSON o default)
         self.threshold = self.settings.get("blip_settings", {}).get("threshold", 0.5)
@@ -57,9 +60,9 @@ class BLIPEngine:
             vqa_evidence[category]["total"] += 1
             
             # Chiamata all'helper e verifica
-            question = build_vqa_question(category, detection_groups)
+            ####question = build_vqa_question(category, detection_groups)
             #img_path = frame.get("crop_path") or frame.get("frame_path")
-            
+            question = "What is the main object in this image? Answer with one word: person, animal, vehicle, or nothing."
             # --- DOPPIO CONTROLLO: FRAME -> CROP ---
             full_img = frame.get("frame_path")
             crop_img = frame.get("crop_path")
@@ -68,9 +71,10 @@ class BLIPEngine:
             is_confirmed, confidence = self._verify_presence(full_img, question)
             
             # 2. Se fallisce, tentiamo con il crop (se esiste)
-            if not is_confirmed and crop_img:
-                log.info(f"🔍 Frame intero non convinto. Provo il crop di dettaglio: {Path(crop_img).name}")
-                is_confirmed, confidence = self._verify_presence(crop_img, question)
+            #DA RIMETTEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+            # if not is_confirmed and crop_img:
+            #     log.info(f"🔍 Frame intero non convinto. Provo il crop di dettaglio: {Path(crop_img).name}")
+            #     is_confirmed, confidence = self._verify_presence(crop_img, question)
             
             
             #is_confirmed, confidence = self._verify_presence(img_path, question)
@@ -121,19 +125,19 @@ class BLIPEngine:
         # Definiamo il file (usa .jsonl per l'append ignorante e sicuro)
         log_file = self.output_dir / "blip_history.jsonl"
         try:
-            # 1. Preparazione Immagine e Input
-            raw_image = Image.open(image_path).convert('RGB')
-            inputs = self.processor(raw_image, question, return_tensors="pt").to(self.device)
+            # # 1. Preparazione Immagine e Input
+            # raw_image = Image.open(image_path).convert('RGB')
+            # inputs = self.processor(raw_image, question, return_tensors="pt").to(self.device)
 
-            # 2. Generazione Risposta con punteggi (per calcolare la confidenza)
-            outputs = self.model.generate(
-                **inputs, 
-                output_scores=True, 
-                return_dict_in_generate=True,
-                max_new_tokens=15
-            )
-            # Poiché return_dict_in_generate=True, outputs è un oggetto complesso che HA .sequences
-            answer = self.processor.decode(outputs.sequences[0], skip_special_tokens=True).lower().strip()
+            # # 2. Generazione Risposta con punteggi (per calcolare la confidenza)
+            # outputs = self.model.generate(
+            #     **inputs, 
+            #     output_scores=True, 
+            #     return_dict_in_generate=True,
+            #     max_new_tokens=15
+            # )
+            # # Poiché return_dict_in_generate=True, outputs è un oggetto complesso che HA .sequences
+            # answer = self.processor.decode(outputs.sequences[0], skip_special_tokens=True).lower().strip()
             # 3. Decodifica della risposta testuale
             #log.debug(f"DEBUG BLIP: Risposta='{answer}' | Keywords valide={all_valid_keywords}")
 
@@ -150,10 +154,13 @@ class BLIPEngine:
             # log.debug(f"DEBUG RISPOSTA APERTA: '{answer_aperta}'")
             # 4. SALVATAGGIO IMMEDIATO (APPEND)
             # Salviamo Immagine -> Domanda -> Risposta
+            inputs = self.processor(image_path, return_tensors="pt")
+            outputs = self.model.generate(**inputs)
+            print(f"RAW CAPTION: {self.processor.decode(outputs[0], skip_special_tokens=True)}")
             log_entry = {
                 "img": str(Path(image_path).name),
-                "q": question,
-                "a": answer
+                #"q": question,
+                "a": outputs
             }
 
             with open(log_file, 'a', encoding='utf-8') as f:
@@ -164,7 +171,7 @@ class BLIPEngine:
             probs = torch.softmax(logits, dim=-1)
             confidence = torch.max(probs).item()
 
-            is_confirmed = any(word in answer for word in all_valid_keywords)
+            is_confirmed = any(word in outputs for word in all_valid_keywords)
             return is_confirmed, confidence
 
         except Exception as e:

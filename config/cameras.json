@@ -97,7 +97,7 @@
         "filters": {
             "ignore_labels": []
         },
-        "desc": "Balcony area, with garden underneath.",
+        "desc": "Balcony area, with garden underneath. There are some garden gnomes on the lawn.",
         "dynamic_stride": false,
         "thresholds": {
             "person": 0.5,

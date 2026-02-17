@@ -19,5 +19,17 @@
         "with_crop": "{crop_header}\n### SYSTEM INSTRUCTION\n{system_instruction}\n\n### LOCATION CONTEXT\n{desc}\n\n### DETECTION HIERARCHY\n{hierarchy}\n\n### MANDATORY RULES\n{rules}\n\n### ALLOWED OUTPUT\n{allowed_outputs}",
         "fallback": "{fallback_header}\n### SYSTEM INSTRUCTION\n{system_instruction}\n\n### LOCATION CONTEXT\n{desc}\n\n### DETECTION HIERARCHY\n{hierarchy}\n\n### MANDATORY RULES\n{rules}\n\n### ALLOWED OUTPUT\n{allowed_outputs}",
         "clean_check": "{clean_header}\n### SYSTEM INSTRUCTION\n{system_instruction}\n\n### LOCATION CONTEXT\n{desc}\n\n### COMPARISON MISSION\n{class_desc}\n\n### MANDATORY RULES\n{rules}\n\n### ALLOWED OUTPUT\nclean | dirty"
+    },
+    "MAIN_CLASSES": ["PERSON", "ANIMAL", "VEHICLE"],
+    "FAKE_CLASSES": {
+        "SHOE": ["a photo of a shoe or footwear"],
+        "WOOD": ["a photo of a piece of wood or a stick"],
+        "GARDEN": ["a photo of a garden object or debris"],
+        "GROUND": ["a photo of the ground"]
+    },
+    "CLASS_PROMPTS": {
+        "PERSON": ["a photo of a person", "a photo of a human"],
+        "ANIMAL": ["a photo of a cat", "a photo of a dog", "a photo of a horse", "a photo of a bear", "a photo of a bird"],
+        "VEHICLE": ["a photo of a car", "a photo of a truck", "a photo of a bike"]
     }
 }

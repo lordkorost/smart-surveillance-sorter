@@ -798,9 +798,13 @@ class YoloEngine:
         
         for box in results[0].boxes:
             conf = float(box.conf[0])
+            #class_names = box.names
             if conf > max_conf:
                 max_conf = conf
                 cls_id = int(box.cls[0])
+                # Prendi il nome della classe direttamente dal modello
+                label_name = self.model.names.get(cls_id, "unknown")
+                #label_name = class_names.get(cls_id, "unknown")
                 label = self.model.names[cls_id]
                 best_det = {
                     "category": label.lower(),
@@ -810,6 +814,19 @@ class YoloEngine:
 
         # Se abbiamo un sospetto, prepariamo il dizionario per lo Scanner
         if best_det:
+             # Ora creiamo il log usando i dati appena salvati
+
+            yolo_log_path = Path("yolo_detailed_log.jsonl")
+            yolo_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "video": str(video_path.name),
+            "camera": cam_id,
+            "class_detected": label_name, # Usa direttamente label_name
+            "confidence": round(conf, 4),
+            "bbox": [int(x) for x in box.xyxy[0]]
+            }
+            with open(yolo_log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(yolo_entry) + "\n") 
             return {
                 "camera_id": cam_id,
                 "video_name": Path(video_path).name, # Ci serve per il report finale

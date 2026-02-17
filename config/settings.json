@@ -5,13 +5,16 @@
         "models_dir": "models"
     },
     "classification_settings": {
-        "priority_hierarchy": [
-            "person",
-            "animal",
-            "vehicle"
-        ],
+        "priority_hierarchy": ["PERSON", "ANIMAL", "VEHICLE"],
+        "final_score_weights": {
+            "crop": 0.7,
+            "frame": 0.3,
+            "blip": 0.1
+        },
+        "fake_threshold": 0.7,
         "save_others": true
     },
+ 
     "storage_settings": {
         "filename_template": "{nvr_name}_{camera_id}_{timestamp}",
         "timestamp_format": "%Y%m%d%H%M%S",

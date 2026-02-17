@@ -54,7 +54,7 @@ def check_duplicates(root_dir):
 if __name__ == "__main__":
     # Cambia questo percorso con la cartella dove hai smistato i video
     # Esempio: "/home/lordkorost/progetti/smart-surveillance-sorter/2026-02-13/video_smistati"
-    path_video = "./2026-02-13/sorted" 
+    path_video = "./2026-02-13/ordinati" 
     
     if len(sys.argv) > 1:
         path_video = sys.argv[1]

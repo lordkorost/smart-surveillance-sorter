@@ -57,7 +57,11 @@ class VisionEngine:
                 #     "top_p": top_p                  # Aiuta a mantenere il ragionamento sensato
                 # }
             )
-      
+            #log.critical(response)
+            # Il trucco per la risposta "nuda e cruda":
+            log.critical("--- RAW OLLAMA RESPONSE ---")
+            log.critical(repr(response['message']['content']))
+            log.critical("---------------------------")
             # thinking_content = ""
             # if hasattr(response, 'thinking') and response.thinking:
             #     thinking_content = response.thinking.strip()
@@ -70,7 +74,7 @@ class VisionEngine:
             # 2. Prendi l'intera risposta testuale
             full_response = response.response.lower()
             log.info(f"🤔 THINKING:\n{thinking_content}")
-            log.info(f"💬 RISPOSTA COMPLETA:\n{full_response}")
+            #log.info(f"💬 RISPOSTA COMPLETA:\n{full_response}")
             # # 3. Cerchiamo il verdetto nel testo, anche se sommerso da tag strani
             # if "final verdict:" in full_response:
             #     # Estraiamo solo quello che viene DOPO "final verdict:"
