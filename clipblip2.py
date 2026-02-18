@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 import time
-#import tokenize
 import torch
 from open_clip import create_model_and_transforms
 from transformers import BlipProcessor, BlipForConditionalGeneration
@@ -19,7 +18,7 @@ folder = Path("2026-02-13/extracted_frames")
 images = sorted(list(folder.glob("*.jpg")))
 
 # --- Modello CLIP ---
-clip_model, preprocess, _ = create_model_and_transforms('ViT-L-14', pretrained='openai')
+#clip_model, preprocess, _ = create_model_and_transforms('ViT-L-14', pretrained='openai')
 clip_model, preprocess, _ = create_model_and_transforms('ViT-L-14', pretrained='openai')
 clip_model.to(DEVICE)
 clip_model.eval()
@@ -48,15 +47,15 @@ BLIP_KEYWORDS = {
 }
 VETO_THRESHOLD = 0.2
 SIGNIFICANCE_THRESHOLD = 0.2
-BLIP_BOOST_PERSON = 0.35      # da 0.2 → fa salire PERSON
+BLIP_BOOST_PERSON = 0.35      
 BLIP_BOOST_OTHER = 0.1
 FINAL_WEIGHT_CROP = 0.7
-FINAL_WEIGHT_FRAME = 0.15     # ridotto da 0.3 → meno peso agli oggetti grandi nel frame
-PERSON_PRIORITY_THRESHOLD = 0.25  # più permissivo
+FINAL_WEIGHT_FRAME = 0.3     
+PERSON_PRIORITY_THRESHOLD = 0.25  
 PERSON_FAKE_RELATIVE = 1.1
 DELTA_THRESHOLD = {
         "PERSON": 0.25,
-        "ANIMAL": 0.15,
+        "ANIMAL": 0.45,
         "VEHICLE": 0.2
     }
 
@@ -110,14 +109,7 @@ for img_path in images:
     crop_img = preprocess(img).unsqueeze(0).to(DEVICE)
     frame_img = preprocess(Image.open(frame_path).convert("RGB")).unsqueeze(0).to(DEVICE) if frame_path else crop_img
 
-    # # --- CLIP score crop + frame ---
-    # clip_scores_crop = get_clip_score(crop_img, MAIN_CLASSES)
-    # clip_scores_frame = get_clip_score(frame_img, MAIN_CLASSES)
-
-    # final_scores = {cls: FINAL_WEIGHT_CROP * clip_scores_crop.get(cls, 0) +
-    #                       FINAL_WEIGHT_FRAME * clip_scores_frame.get(cls, 0)
-    #                 for cls in MAIN_CLASSES}
-
+ 
     # # --- BLIP caption ---
     blip_inputs = blip_processor(images=img, return_tensors="pt").to(DEVICE)
     blip_ids = blip_model.generate(**blip_inputs)
@@ -130,7 +122,7 @@ for img_path in images:
     # --- Calcolo CLIP + BLIP + Fake ---
     clip_scores_crop = get_clip_score(crop_img, MAIN_CLASSES)
     clip_scores_frame = get_clip_score(frame_img, MAIN_CLASSES)
-    final_scores = {cls: 0.7 * clip_scores_crop[cls] + 0.3 * clip_scores_frame[cls] for cls in MAIN_CLASSES}
+    final_scores = {cls: FINAL_WEIGHT_CROP * clip_scores_crop[cls] + FINAL_WEIGHT_FRAME * clip_scores_frame[cls] for cls in MAIN_CLASSES}
 
     # BLIP keyword match con boost dinamico
     blip_scores = {cls: 0 for cls in MAIN_CLASSES}
@@ -147,8 +139,6 @@ for img_path in images:
     max_fake_score = max(fake_scores_dict.values())
 
 
-
-
     # --- PARAMETRI NOTTE ---
     NIGHT_HOURS = list(range(0, 7)) + list(range(18, 24))
     YOLO_NIGHT_BOOST = 0.3  # da tarare in base ai test
@@ -158,7 +148,8 @@ for img_path in images:
     timestamp_str = "20260213184025"  # esempio: prendere dai nomi tipo "NVR reo_00_20260213184025_person_0_crop.jpg"
     dt = datetime.datetime.strptime(timestamp_str, "%Y%m%d%H%M%S")
     hour = dt.hour
-
+    # Determiniamo se è giorno per le regole restrittive sugli animali
+    is_night = hour in NIGHT_HOURS
     # --- BOOST PERSON NOTTURNO ---
     if hour in NIGHT_HOURS and os.path.exists(YOLO_JSON_PATH):
         with open(YOLO_JSON_PATH, "r") as f:
@@ -178,92 +169,104 @@ for img_path in images:
                 final_scores["PERSON"] += YOLO_NIGHT_BOOST
                 # possiamo anche loggare per debug
                 print(f"[NIGHT BOOST] Added {YOLO_NIGHT_BOOST} to PERSON for {file_basename}")
+
     best_score_cls = max(final_scores, key=final_scores.get)
     best_score_val = final_scores[best_score_cls]
-    # # --- PRIORITA' PERSON --- 
-    # # if final_scores["PERSON"] >= PERSON_PRIORITY_THRESHOLD:
-    # #     best_class = "PERSON"
-    # if (
-    # final_scores["PERSON"] >= PERSON_PRIORITY_THRESHOLD
-    # and max_fake_score < 0.6
-    # ):
+
+    # --- 1. PRIORITA' PERSON (INTOCCABILE) ---
+    # Manteniamo la tua logica: se c'è sospetto persona, vince persona
+    if final_scores["PERSON"] >= PERSON_PRIORITY_THRESHOLD and max_fake_score < 0.6:
+        best_class = "PERSON"
+    
+    # --- 2. LOGICA PER TUTTI GLI ALTRI CASI ---
+    else:
+        # Se siamo di NOTTE, manteniamo la tua logica attuale (0 falsi positivi già confermati)
+        if is_night:
+            if max_fake_score > VETO_THRESHOLD:
+                delta_threshold = DELTA_THRESHOLD.get(best_score_cls, 0.2)
+                best_class = best_score_cls if (best_score_val - max_fake_score > delta_threshold) else "OTHER"
+            else:
+                best_class = best_score_cls
+        
+        # Se siamo di GIORNO, applichiamo il pugno di ferro sugli ANIMALI
+        else:
+            if best_score_cls == "ANIMAL":
+                # REQUISITI STRINGENTI PER ANIMALE DIURNO:
+                # 1. Score animale deve essere molto alto (>0.85)
+                # 2. La fake score non deve essere minacciosa (<0.4)
+                # 3. Il distacco tra animale e fake deve essere netto (es. 0.45)
+                
+                distacco_fake = best_score_val - max_fake_score
+                
+                if best_score_val >= 0.85 and max_fake_score < 0.4 and distacco_fake > 0.45:
+                    best_class = "ANIMAL"
+                else:
+                    # Se non passa questi criteri, è molto probabilmente il tuo legno/scarpa
+                    best_class = "OTHER"
+            
+            # Per le altre classi di giorno (tipo Vehicle o altro) seguiamo la logica standard
+            else:
+                if max_fake_score > VETO_THRESHOLD:
+                    delta_threshold = DELTA_THRESHOLD.get(best_score_cls, 0.2)
+                    best_class = best_score_cls if (best_score_val - max_fake_score > delta_threshold) else "OTHER"
+                else:
+                    best_class = best_score_cls
+   
+    # best_score_cls = max(final_scores, key=final_scores.get)
+    # best_score_val = final_scores[best_score_cls]
+    # # --- PRIORITA' PERSON ---
+    # if final_scores["PERSON"] >= PERSON_PRIORITY_THRESHOLD and max_fake_score < 0.6:
     #     best_class = "PERSON"
     # else:
     #     if max_fake_score > VETO_THRESHOLD:
     #         # caso speciale PERSON
     #         if best_score_cls == "PERSON" and best_score_val >= PERSON_PRIORITY_THRESHOLD:
-    #             # calcoliamo il fake relativo
     #             if max_fake_score > PERSON_FAKE_RELATIVE * best_score_val:
     #                 best_class = "OTHER"
     #             else:
     #                 best_class = "PERSON"
     #         else:
-    #             # logica normale
+    #             # logica normale con delta_threshold
     #             delta_threshold = DELTA_THRESHOLD.get(best_score_cls, 0.2)
     #             if best_score_val - max_fake_score > delta_threshold:
     #                 best_class = best_score_cls
     #             else:
     #                 best_class = "OTHER"
     #     else:
-    #         # nessun veto fake, scegli la classe massima o priorità
-    #         significant_classes = [cls for cls, val in final_scores.items() if val > SIGNIFICANCE_THRESHOLD]
-    #         if len(significant_classes) > 1:
-    #             for cls in priority_hierarchy:
-    #                 if cls in significant_classes:
-    #                     best_class = cls
-    #                     break
+          
+    #          # --- FILTRO PIÙ SEVERO PER ANIMAL ---
+    #         if best_score_cls == "ANIMAL":
+    #             if not (final_scores["ANIMAL"] >= 0.75 and max_fake_score < 0.6):
+    #                 best_class = "OTHER"
+    #             else:
+    #                 best_class = "ANIMAL"
     #         else:
-    #             best_class = best_score_cls
+    #             # logica originale invariata
+    #             significant_classes = [cls for cls, val in final_scores.items() if val > SIGNIFICANCE_THRESHOLD]
 
-    # --- PRIORITA' PERSON ---
-    if final_scores["PERSON"] >= PERSON_PRIORITY_THRESHOLD and max_fake_score < 0.6:
-        best_class = "PERSON"
-    else:
-        if max_fake_score > VETO_THRESHOLD:
-            # caso speciale PERSON
-            if best_score_cls == "PERSON" and best_score_val >= PERSON_PRIORITY_THRESHOLD:
-                if max_fake_score > PERSON_FAKE_RELATIVE * best_score_val:
-                    best_class = "OTHER"
-                else:
-                    best_class = "PERSON"
-            else:
-                # logica normale con delta_threshold
-                delta_threshold = DELTA_THRESHOLD.get(best_score_cls, 0.2)
-                if best_score_val - max_fake_score > delta_threshold:
-                    best_class = best_score_cls
-                else:
-                    best_class = "OTHER"
-        else:
-            # nessun veto fake, scelgo la classe massima
-            significant_classes = [cls for cls, val in final_scores.items() if val > SIGNIFICANCE_THRESHOLD]
+    #             if len(significant_classes) > 1:
+    #                 non_person_classes = [cls for cls in significant_classes if cls != "PERSON"]
+    #                 if len(non_person_classes) > 1:
+    #                     sorted_classes = sorted(
+    #                         [(cls, final_scores[cls]) for cls in non_person_classes],
+    #                         key=lambda x: x[1],
+    #                         reverse=True
+    #                     )
+    #                     best_cls, best_val = sorted_classes[0]
+    #                     second_cls, second_val = sorted_classes[1]
 
-            if len(significant_classes) > 1:
-                # --- NUOVA LOGICA GAP per animali vs veicoli ---
-                non_person_classes = [cls for cls in significant_classes if cls != "PERSON"]
-                if len(non_person_classes) > 1:
-                    # ordina per punteggio decrescente
-                    sorted_classes = sorted(
-                        [(cls, final_scores[cls]) for cls in non_person_classes],
-                        key=lambda x: x[1],
-                        reverse=True
-                    )
-                    best_cls, best_val = sorted_classes[0]
-                    second_cls, second_val = sorted_classes[1]
-
-                    GAP_THRESHOLD = 0.25  # da tarare
-                    if best_val - second_val > GAP_THRESHOLD:
-                        best_class = best_cls
-                    else:
-                        # troppo vicino → priorità gerarchica
-                        for cls in priority_hierarchy:
-                            if cls in non_person_classes:
-                                best_class = cls
-                                break
-                else:
-                    best_class = non_person_classes[0]
-            else:
-                best_class = best_score_cls
-
+    #                     GAP_THRESHOLD = 0.25
+    #                     if best_val - second_val > GAP_THRESHOLD:
+    #                         best_class = best_cls
+    #                     else:
+    #                         for cls in priority_hierarchy:
+    #                             if cls in non_person_classes:
+    #                                 best_class = cls
+    #                                 break
+    #                 else:
+    #                     best_class = non_person_classes[0]
+    #             else:
+    #                 best_class = best_score_cls
     
     # --- Debug completo
     print(f"Crop: {img_path.name}")
@@ -340,26 +343,65 @@ for frame_path, data in results.items():
 video_categories = {}
 
 for video_name, scores in videos_scores.items():
-    # PRIORITA' PERSON ASSOLUTA
+    # 1. PRIORITA' PERSON ASSOLUTA
     if scores.get("PERSON_PRESENT", False):
         video_categories[video_name] = "PERSON"
         continue
 
-    if scores["count"] == 0:
+    # Recuperiamo il count che hai popolato nel primo ciclo
+    count = scores["count"]
+
+    if count == 0:
         video_categories[video_name] = "OTHER"
         continue
 
-    # calcola punteggio medio
-    avg_animal = scores["ANIMAL"] / scores["count"]
-    avg_vehicle = scores["VEHICLE"] / scores["count"]
+    # Calcola punteggi medi
+    avg_animal = scores["ANIMAL"] / count
+    avg_vehicle = scores["VEHICLE"] / count
 
-    # scegli il più alto
-    if avg_animal > avg_vehicle:
-        video_categories[video_name] = "ANIMAL"
-    elif avg_vehicle > avg_animal:
-        video_categories[video_name] = "VEHICLE"
+    # Determiniamo la categoria dominante tra Animal e Vehicle
+    if avg_animal >= avg_vehicle:
+        # --- LOGICA SEVERA PER ANIMAL ---
+        if count == 1:
+            # Singolo frame: deve essere quasi perfetto
+            video_categories[video_name] = "ANIMAL" if avg_animal > 0.92 else "OTHER"
+        elif count == 2:
+            video_categories[video_name] = "ANIMAL" if avg_animal > 0.88 else "OTHER"
+        else:
+            # 3 o più frame: ci fidiamo della persistenza
+            video_categories[video_name] = "ANIMAL" if avg_animal > 0.70 else "OTHER"
+    
     else:
-        video_categories[video_name] = "OTHER"  # nel caso di pareggio molto basso
+        # --- LOGICA PER VEHICLE ---
+        # Per i veicoli possiamo stare un pelo più bassi (es. 0.85 per frame singolo)
+        if count == 1:
+            video_categories[video_name] = "VEHICLE" if avg_vehicle > 0.85 else "OTHER"
+        else:
+            video_categories[video_name] = "VEHICLE" if avg_vehicle > 0.65 else "OTHER"
+
+# for video_name, scores in videos_scores.items():
+#     # PRIORITA' PERSON ASSOLUTA
+#     if scores.get("PERSON_PRESENT", False):
+#         video_categories[video_name] = "PERSON"
+#         continue
+
+#     if scores["count"] == 0:
+#         video_categories[video_name] = "OTHER"
+#         continue
+
+#     # calcola punteggio medio
+#     avg_animal = scores["ANIMAL"] / scores["count"]
+#     avg_vehicle = scores["VEHICLE"] / scores["count"]
+
+    
+
+    # # scegli il più alto
+    # if avg_animal > avg_vehicle:
+    #     video_categories[video_name] = "ANIMAL"
+    # elif avg_vehicle > avg_animal:
+    #     video_categories[video_name] = "VEHICLE"
+    # else:
+    #     video_categories[video_name] = "OTHER"  # nel caso di pareggio molto basso
 
 results["video_categories"] = video_categories
 

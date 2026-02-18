@@ -20,6 +20,7 @@ CHECKS_DIR = PROJECT_ROOT / "checks"
 CAMERAS_JSON = CONFIG_DIR / "cameras.json"
 SETTINGS_JSON = CONFIG_DIR / "settings.json"
 PROMPTS_JSON = CONFIG_DIR / "prompts.json"
+CLIP_BLIP_JSON = CONFIG_DIR / "clip_blip_settings.json"
 
 # Verifica ambiente
 HAS_OLLAMA = os.system("command -v ollama > /dev/null") == 0
