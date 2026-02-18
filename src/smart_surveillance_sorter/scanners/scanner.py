@@ -852,9 +852,11 @@ class Scanner():
             })
         return standardized
     
+    
     def _blip_scan_refine(self):
-        self.blip_results = []
-
+        self.clip_blip_results = []
+        self.clip_blip_video_dict = {}
+      
         if not self.results:
             log.warning("Nessun risultato YOLO da passare a BLIP.")
             return
@@ -867,34 +869,73 @@ class Scanner():
             # Cerchiamo la camera nel config (che dovresti avere nello Scanner)
             cam_info = self.cameras_config.get(cam_id_str, {})
             cam_name = cam_info.get("name", f"Camera_{cam_id_str}")
-            # 1. Chiamiamo l'analisi (ritorna "person", "animal", "vehicle" o "empty")
-            final_category = self.blip_engine.analyze_video_results(video_data)
-            
+            # 1. Chiamiamo l'analisi sull'engine ritorna un dizionario
+            # "2026-02-13/NVR reo_02_20260213063518.mp4": {
+            #     "frames": [
+            #         {
+            #             "clip_crop": {
+            #                 "PERSON": 1.0,
+            #                 "ANIMAL": 0.0,
+            #                 "VEHICLE": 0.0
+            #             },
+            #             "clip_frame": {
+            #                 "PERSON": 1.0,
+            #                 "ANIMAL": 0.0,
+            #                 "VEHICLE": 0.0
+            #             },
+            #             "blip_caption": "yolo_nvr_validated_conf_0.82",
+            #             "blip_scores": {
+            #                 "PERSON": 0,
+            #                 "ANIMAL": 0,
+            #                 "VEHICLE": 0
+            #             },
+            #             "final_scores": {
+            #                 "PERSON": 1.0,
+            #                 "ANIMAL": 0.0,
+            #                 "VEHICLE": 0.0
+            #             },
+            #             "fake_scores": {},
+            #             "max_fake_score": 0.0,
+            #             "label": "PERSON",
+            #             "bbox": [
+            #                 830,
+            #                 124,
+            #                 875,
+            #                 234
+            #             ]
+            #         }
+            #     ],
+            #     "video_category": "PERSON"
+            video_dict = self.clip_blip_engine.scan_single_video(video_data)
+            final_category = video_dict.get("video_category").lower()
             if final_category != "empty":
-                # 2. Troviamo il "best_frame" (il primo che ha confermato la categoria)
-                # Se BLIP ha confermato più frame, prendiamo il primo che ha 'blip_confirmed' = True
+                # 2. Troviamo il "best_frame" 
                 best_frame = next(
                     (f for f in video_data["frames"] 
-                    if f["category"].upper() == final_category.upper() and f.get("blip_confirmed")), 
+                    if f["category"].upper() == final_category.upper() and f.get("label") == final_category.upper()), 
                     video_data["frames"][0] # Fallback sul primo frame se è un override YOLO
                 )
 
                 # 3. Costruiamo il dizionario esattamente come lo vuole la funzione di spostamento
                 refined_entry = {
                     "camera_id": str(video_data["camera_id"]),
-                    "camera_name": video_data.get("camera_name", "Unknown"), # Se lo hai nei dati originali
+                    "camera_name": cam_name, 
                     "video_name": Path(video_data["video_path"]).name,
                     "video_path": video_data["video_path"],
                     "category": final_category,
-                    "confidence": best_frame.get("blip_confidence", best_frame["confidence"]),
+                    "confidence": 1,
                     "best_frame_path": best_frame.get("frame_path"),
-                    "engine": "yolo_blip",
-                    "thinking": f"Validated by BLIP (Confirmed {final_category})"
+                    "engine": "clip_blip",
+                    "thinking": f"Validated by clip_blip (Confirmed {final_category})"
                 }
 
-                self.blip_results.append(refined_entry)
+                self.clip_blip_results.append(refined_entry)
                 log.info(f"✅ Video validato: {refined_entry['video_name']} -> {final_category}")
-        
+                self.clip_blip_video_dict.update(video_dict)
+
+        with open("risultati_finali_clipblip.json", "w") as f:
+            json.dump(self.clip_blip_video_dict, f, indent=4)
+
         # 3. Aggiorniamo le statistiche se in modalità test
         elapsed = time.time() - t_start
         if self.is_test:
@@ -903,8 +944,65 @@ class Scanner():
                 "confirmed": len(self.blip_results),
                 "time": elapsed
             }
+            with open("risultati_finali_clipblip.json", "w") as f:
+                json.dump(self.clip_blip_video_dict, f, indent=4)
+
+        log.info(f"🏁 Raffinamento BLIP completato in {elapsed:.2f}s. Video validi: {len(self.clip_blip_results)}/{len(self.results)}")
+    
+    
+    # def _blip_scan_refine(self):
+    #     self.blip_results = []
+
+    #     if not self.results:
+    #         log.warning("Nessun risultato YOLO da passare a BLIP.")
+    #         return
+
+    #     t_start = time.time()
         
-        log.info(f"🏁 Raffinamento BLIP completato in {elapsed:.2f}s. Video validi: {len(self.blip_results)}/{len(self.results)}")
+    #     for video_data in self.results:
+    #         # 1. Recupero informazioni telecamera per il formato finale
+    #         cam_id_str = str(video_data["camera_id"])
+    #         # Cerchiamo la camera nel config (che dovresti avere nello Scanner)
+    #         cam_info = self.cameras_config.get(cam_id_str, {})
+    #         cam_name = cam_info.get("name", f"Camera_{cam_id_str}")
+    #         # 1. Chiamiamo l'analisi (ritorna "person", "animal", "vehicle" o "empty")
+    #         final_category = self.blip_engine.analyze_video_results(video_data)
+            
+    #         if final_category != "empty":
+    #             # 2. Troviamo il "best_frame" (il primo che ha confermato la categoria)
+    #             # Se BLIP ha confermato più frame, prendiamo il primo che ha 'blip_confirmed' = True
+    #             best_frame = next(
+    #                 (f for f in video_data["frames"] 
+    #                 if f["category"].upper() == final_category.upper() and f.get("blip_confirmed")), 
+    #                 video_data["frames"][0] # Fallback sul primo frame se è un override YOLO
+    #             )
+
+    #             # 3. Costruiamo il dizionario esattamente come lo vuole la funzione di spostamento
+    #             refined_entry = {
+    #                 "camera_id": str(video_data["camera_id"]),
+    #                 "camera_name": video_data.get("camera_name", "Unknown"), # Se lo hai nei dati originali
+    #                 "video_name": Path(video_data["video_path"]).name,
+    #                 "video_path": video_data["video_path"],
+    #                 "category": final_category,
+    #                 "confidence": best_frame.get("blip_confidence", best_frame["confidence"]),
+    #                 "best_frame_path": best_frame.get("frame_path"),
+    #                 "engine": "yolo_blip",
+    #                 "thinking": f"Validated by BLIP (Confirmed {final_category})"
+    #             }
+
+    #             self.blip_results.append(refined_entry)
+    #             log.info(f"✅ Video validato: {refined_entry['video_name']} -> {final_category}")
+        
+    #     # 3. Aggiorniamo le statistiche se in modalità test
+    #     elapsed = time.time() - t_start
+    #     if self.is_test:
+    #         self.stats["blip_analysis"] = {
+    #             "count": len(self.results), 
+    #             "confirmed": len(self.blip_results),
+    #             "time": elapsed
+    #         }
+        
+    #     log.info(f"🏁 Raffinamento BLIP completato in {elapsed:.2f}s. Video validi: {len(self.blip_results)}/{len(self.results)}")
     
     
     def _print_final_summary(self, total_time):

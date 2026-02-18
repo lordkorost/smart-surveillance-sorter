@@ -22,7 +22,8 @@
         "use_input_dir_as_output": true
     },
     "blip_settings": {
-        "threshold": 0.5
+        "threshold": 0.5,
+        "device": "cuda"
     },
     "yolo_settings": {
         "model_path": "yolov8l",

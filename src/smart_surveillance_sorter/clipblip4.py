@@ -152,75 +152,117 @@ class ClipBlipEngine:
 
 
         frames_list = []
+        # for frame in frames:
+        #     frame_path = frame.get("frame_path")
+        #     crop_path = frame.get("crop_path")
+        #     current_bbox = frame.get("bbox") # <--- Prendi la bbox da YOLO
+        #     # --- Preprocess immagini ---
+        #     img = Image.open(crop_path).convert("RGB")
+        #     crop_img = self.preprocess(img).unsqueeze(0).to(self.DEVICE)
+        #     frame_img = self.preprocess(Image.open(frame_path).convert("RGB")).unsqueeze(0).to(self.DEVICE) if frame_path else crop_img
+
+        
+        #     # # --- BLIP caption ---
+        #     blip_inputs = self.blip_processor(images=img, return_tensors="pt").to(self.DEVICE)
+        #     blip_ids = self.blip_model.generate(**blip_inputs)
+        #     caption = self.blip_processor.decode(blip_ids[0], skip_special_tokens=True)
+
+        #     # --- Calcolo CLIP + BLIP + Fake ---
+        #     clip_scores_crop = self.get_clip_score(crop_img, self.MAIN_CLASSES)
+        #     clip_scores_frame = self.get_clip_score(frame_img, self.MAIN_CLASSES)
+
+        #     # --- [NUOVO] FILTRO IGNORE LABELS ---
+        #     # Azzeriamo i punteggi CLIP per le classi da ignorare prima di calcolare il finale
+        #     for cls in classes_to_ignore:
+        #         if clip_scores_crop.get(cls, 0) > 0.1 or clip_scores_frame.get(cls, 0) > 0.1:
+        #                 print(f"  [IGNORE FILTER] Soppressa classe {cls} (Crop: {clip_scores_crop[cls]:.2f}, Frame: {clip_scores_frame[cls]:.2f})")
+        #         if cls in clip_scores_crop:
+        #             clip_scores_crop[cls] = 0.0
+        #         if cls in clip_scores_frame:
+        #             clip_scores_frame[cls] = 0.0
+
+        #     # Calcolo base dei final_scores (con i valori potenzialmente azzerati)
+        #     final_scores = {cls: self.FINAL_WEIGHT_CROP * clip_scores_crop[cls] + self.FINAL_WEIGHT_FRAME * clip_scores_frame[cls] for cls in self.MAIN_CLASSES}
+
+        #     # BLIP keyword match con boost dinamico
+        #     blip_scores = {cls: 0 for cls in self.MAIN_CLASSES}
+        #     for cls in self.MAIN_CLASSES:
+        #         # Se la classe è tra quelle da ignorare, saltiamo il boost di BLIP
+        #         if cls in classes_to_ignore:
+        #             continue
+                
+        #         if any(k.lower() in caption.lower() for k in self.BLIP_KEYWORDS[cls]):
+        #             boost = self.BLIP_BOOST_PERSON if cls == "PERSON" else self.BLIP_BOOST_OTHER
+        #             blip_scores[cls] = boost
+        #             final_scores[cls] += boost
+
+        #     # --- IMPORTANTE: Se una classe è ignorata, forziamo il final_score a 0 
+        #     # (utile se CLIP avesse dato punteggi minimi o residui)
+        #     for cls in classes_to_ignore:
+        #         final_scores[cls] = 0.0
+
+        #     # Fake scores
+        #     all_prompts = self.MAIN_CLASSES + [desc for descs in self.FAKE_KEYS.values() for desc in descs]
+        #     all_scores = self.get_clip_score(crop_img, all_prompts)
+        #     fake_scores_dict = {fk: max([all_scores[d] for d in descs]) for fk, descs in self.FAKE_KEYS.items()}
+        #     max_fake_score = max(fake_scores_dict.values())
+
         for frame in frames:
+            # 1. Recuperiamo la categoria suggerita da YOLO per questo specifico frame
+            yolo_category = frame.get("category", "").upper() # es: "ANIMAL"
+            # Qui sta il trucco: chiediamo a CLIP di scegliere tra 
+            # la categoria di YOLO e tutte le classi di disturbo (Fake Keys)
+            fake_labels = [desc for descs in self.FAKE_KEYS.values() for desc in descs]
+            test_labels = [yolo_category] + fake_labels
+
+            # 1. CONTROLLO STATICO (fuori dal ciclo)
+            is_static = self.check_if_static(frames)
+            # Se per qualche motivo la categoria non è tra le nostre MAIN, 
+            # usiamo il set completo come fallback, altrimenti usiamo solo quella di YOLO
+            current_main_class = [yolo_category] if yolo_category in self.MAIN_CLASSES else self.MAIN_CLASSES
+            
             frame_path = frame.get("frame_path")
             crop_path = frame.get("crop_path")
-            current_bbox = frame.get("bbox") # <--- Prendi la bbox da YOLO
+            current_bbox = frame.get("bbox")
+            
             # --- Preprocess immagini ---
             img = Image.open(crop_path).convert("RGB")
             crop_img = self.preprocess(img).unsqueeze(0).to(self.DEVICE)
             frame_img = self.preprocess(Image.open(frame_path).convert("RGB")).unsqueeze(0).to(self.DEVICE) if frame_path else crop_img
-
         
-            # # --- BLIP caption ---
+            # --- BLIP caption ---
             blip_inputs = self.blip_processor(images=img, return_tensors="pt").to(self.DEVICE)
             blip_ids = self.blip_model.generate(**blip_inputs)
             caption = self.blip_processor.decode(blip_ids[0], skip_special_tokens=True)
 
-            # # --- Calcolo CLIP + BLIP + Fake ---
-            # clip_scores_crop = self.get_clip_score(crop_img, self.MAIN_CLASSES)
-            # clip_scores_frame = self.get_clip_score(frame_img, self.MAIN_CLASSES)
+            # --- Calcolo CLIP (Solo sulla classe YOLO!) ---
+            clip_scores_crop = self.get_clip_score(crop_img, test_labels)
+            clip_scores_frame = self.get_clip_score(frame_img, test_labels)
 
+            # Inizializziamo final_scores solo per le classi presenti in clip_scores
+            # Le altre classi (non rilevate da YOLO) rimarranno a 0.0
+            final_scores = {cls: 0.0 for cls in self.MAIN_CLASSES}
+            
+            for cls in current_main_class:
+                final_scores[cls] = (self.FINAL_WEIGHT_CROP * clip_scores_crop.get(cls, 0.0) + 
+                                    self.FINAL_WEIGHT_FRAME * clip_scores_frame.get(cls, 0.0))
 
-            # final_scores = {cls: self.FINAL_WEIGHT_CROP * clip_scores_crop[cls] + self.FINAL_WEIGHT_FRAME * clip_scores_frame[cls] for cls in self.MAIN_CLASSES}
-
-            # # BLIP keyword match con boost dinamico
-            # blip_scores = {cls: 0 for cls in self.MAIN_CLASSES}
-            # for cls in self.MAIN_CLASSES:
-            #     if any(k.lower() in caption.lower() for k in self.BLIP_KEYWORDS[cls]):
-            #         boost = self.BLIP_BOOST_PERSON if cls == "PERSON" else self.BLIP_BOOST_OTHER
-            #         blip_scores[cls] = boost
-            #         final_scores[cls] += boost
-
-            # --- Calcolo CLIP + BLIP + Fake ---
-            clip_scores_crop = self.get_clip_score(crop_img, self.MAIN_CLASSES)
-            clip_scores_frame = self.get_clip_score(frame_img, self.MAIN_CLASSES)
-
-            # --- [NUOVO] FILTRO IGNORE LABELS ---
-            # Azzeriamo i punteggi CLIP per le classi da ignorare prima di calcolare il finale
-            for cls in classes_to_ignore:
-                if clip_scores_crop.get(cls, 0) > 0.1 or clip_scores_frame.get(cls, 0) > 0.1:
-                        print(f"  [IGNORE FILTER] Soppressa classe {cls} (Crop: {clip_scores_crop[cls]:.2f}, Frame: {clip_scores_frame[cls]:.2f})")
-                if cls in clip_scores_crop:
-                    clip_scores_crop[cls] = 0.0
-                if cls in clip_scores_frame:
-                    clip_scores_frame[cls] = 0.0
-
-            # Calcolo base dei final_scores (con i valori potenzialmente azzerati)
-            final_scores = {cls: self.FINAL_WEIGHT_CROP * clip_scores_crop[cls] + self.FINAL_WEIGHT_FRAME * clip_scores_frame[cls] for cls in self.MAIN_CLASSES}
-
-            # BLIP keyword match con boost dinamico
-            blip_scores = {cls: 0 for cls in self.MAIN_CLASSES}
-            for cls in self.MAIN_CLASSES:
-                # Se la classe è tra quelle da ignorare, saltiamo il boost di BLIP
-                if cls in classes_to_ignore:
-                    continue
-                
-                if any(k.lower() in caption.lower() for k in self.BLIP_KEYWORDS[cls]):
+                # BLIP boost (solo se la classe è quella attuale)
+                if any(k.lower() in caption.lower() for k in self.BLIP_KEYWORDS.get(cls, [])):
                     boost = self.BLIP_BOOST_PERSON if cls == "PERSON" else self.BLIP_BOOST_OTHER
-                    blip_scores[cls] = boost
+                    print("BOOST PERSONE BLIP")
                     final_scores[cls] += boost
 
-            # --- IMPORTANTE: Se una classe è ignorata, forziamo il final_score a 0 
-            # (utile se CLIP avesse dato punteggi minimi o residui)
-            for cls in classes_to_ignore:
-                final_scores[cls] = 0.0
-
-            # Fake scores
-            all_prompts = self.MAIN_CLASSES + [desc for descs in self.FAKE_KEYS.values() for desc in descs]
+            # --- Fake scores (Sempre contro la classe di YOLO) ---
+            fake_prompts = [desc for descs in self.FAKE_KEYS.values() for desc in descs]
+            all_prompts = current_main_class + fake_prompts
             all_scores = self.get_clip_score(crop_img, all_prompts)
+            
             fake_scores_dict = {fk: max([all_scores[d] for d in descs]) for fk, descs in self.FAKE_KEYS.items()}
             max_fake_score = max(fake_scores_dict.values())
+            
+            # Determiniamo la best_class (sarà o quella di YOLO o "OTHER" se gli score sono bassi)
+            best_class = yolo_category if final_scores[yolo_category] > 0.1 else "OTHERS"
 
             # 1a. parsing ISO‑8601 (Python 3.7+)
             dt = datetime.fromisoformat(frame.get("timestamp")) 
@@ -230,7 +272,7 @@ class ClipBlipEngine:
 
 
             if is_night:
-                if frame.get("yolo_reliable")  and frame.get("category") == "person":
+                if frame.get("category") == "person":
                     final_scores["PERSON"] += self.YOLO_NIGHT_BOOST
                     # debug (puoi rimuoverlo se non ti serve)
                     print(f"[NIGHT BOOST] Added {self.YOLO_NIGHT_BOOST} to PERSON for {frame.get("crop_path")}")
@@ -238,24 +280,11 @@ class ClipBlipEngine:
             best_score_cls  = max(final_scores, key=final_scores.get)
             best_score_val  = final_scores[best_score_cls]
 
-            # # --- 1. PRIORITA' PERSON (INTOCCABILE) ---
-            # # Manteniamo la tua logica: se c'è sospetto persona, vince persona
-            # if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD and max_fake_score < 0.6:
-            #     best_class = "PERSON"
-            # Se YOLO è quasi certo e siamo su NVR, abbassiamo la soglia di sbarramento
-            # if is_nvr and frame.get("confidence") > 0.80:
-            #     # Se CLIP è cieco, ma non c'è un veto pesante (fake score alto)
-            #     if max_fake_score < 0.5:
-            #         print(f"DEBUG: YOLO (conf {frame.get('confidence')}) forza PERSON su NVR")
-            #         best_class = "PERSON"
-            # else:
-                # Invece di: max_fake_score < 0.6
-                # Usiamo un margine dinamico: il fake deve "battere" la persona per invalidarla
-            if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD and max_fake_score < (final_scores["PERSON"] + 0.2):
-                    best_class = "PERSON"
+            if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD and max_fake_score < (final_scores["PERSON"] + 0.45):
+                best_class = "PERSON"
             elif(is_night):
-                    print(f"DEBUG: Sto per chiamare night_category. Args: frame, {best_score_cls}, {best_score_val}, {max_fake_score}, {type(final_scores)}")
-                    best_class = self.calculate_night_category(frame,best_score_cls,best_score_val,max_fake_score,final_scores)
+                print(f"DEBUG: Sto per chiamare night_category. Args: frame, {best_score_cls}, {best_score_val}, {max_fake_score}, {type(final_scores)}")
+                best_class = self.calculate_night_category(frame,best_score_cls,best_score_val,max_fake_score,final_scores)
             else:
                 best_class = self.calculate_day_category(best_score_cls,best_score_val,max_fake_score,final_scores)
 
@@ -263,7 +292,7 @@ class ClipBlipEngine:
                 "clip_crop": clip_scores_crop,
                 "clip_frame": clip_scores_frame,
                 "blip_caption": caption,
-                "blip_scores": blip_scores,
+                "blip_scores": all_scores, #blip_scores,
                 "final_scores": final_scores,
                 "fake_scores": fake_scores_dict,
                 "max_fake_score": max_fake_score,
@@ -282,85 +311,128 @@ class ClipBlipEngine:
         # 3. Aggiungi la categoria dentro il dizionario di quel video
         video_dict[video_path]["video_category"] = video_cat
 
-        # Ora video_dict sarà:
-        # {
-        #   "path/video.mp4": {
-        #       "frames": [...],
-        #       "video_category": "ANIMAL"
-        #   }
-        # }
-
         return video_dict
 
 
     # -------------------------------------------------------------
     # 1) Funzione che decide la categoria per le ore di NOTTE
     # -------------------------------------------------------------
-    def calculate_night_category(self,frame,best_score_cls,best_score_val,max_fake_score,final_scores: dict) -> str:
-        """
-        Restituisce la classe finale quando `hour` rientra in NIGHT_HOURS.
-        La logica interna è identica a quella che avevi già scritto.
-        """
-        
-        # if frame.get("yolo_reliable") and frame.get("category") == "person":
-        #     final_scores["PERSON"] += self.YOLO_NIGHT_BOOST
-        #     # debug (puoi rimuoverlo se non ti serve)
-        #     print(f"[NIGHT BOOST] Added {self.YOLO_NIGHT_BOOST} to PERSON for {frame.get("crop_path")}")
-
-        # ---------------------------------------------------------
-        # 2) Logica di “selezione” per le ore di NOTTE
-        # ---------------------------------------------------------
-        # 1. PRIORITA' PERSON (INTOCCABILE)
-        # if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD and max_fake_score < 0.6:
-        #     return "PERSON"
+    # def calculate_night_category(self,frame,best_score_cls,best_score_val,max_fake_score,final_scores: dict) -> str:
+    #     """
+    #     Restituisce la classe finale quando `hour` rientra in NIGHT_HOURS.
+    #     La logica interna è identica a quella che avevi già scritto.
+    #     """
+    #     # ---------------------------------------------------------
+    #     # 2) Logica di “selezione” per le ore di NOTTE
+    #     # ---------------------------------------------------------
+    #     # 1. PRIORITA' PERSON (INTOCCABILE)
+    #     if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD and max_fake_score < 0.6:
+    #         return "PERSON"
 
 
+    #     if max_fake_score > self.VETO_THRESHOLD:
+    #         delta_threshold = self.DELTA_THRESHOLD.get(best_score_cls, 0.2)
+    #         best_class = best_score_cls if (best_score_val - max_fake_score > delta_threshold) else "OTHERS"
+    #     else:
+    #         best_class = best_score_cls
+
+    #     return best_class
+    def calculate_night_category(self, frame, best_score_cls, best_score_val, max_fake_score, final_scores: dict) -> str:
+        # 1. PRIORITA' PERSON (Calibrata per QuickGELU e notte)
+        # Se YOLO + Boost arrivano a PERSON_PRIORITY_THRESHOLD (0.25)
+        if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD:
+            # Usiamo la tolleranza di +0.45 che abbiamo deciso.
+            # In questo caso: 0.40 + 0.45 = 0.85. 
+            # Siamo quasi a 0.88! Se vuoi salvarlo proprio tutto, usa +0.50
+            if max_fake_score < (final_scores["PERSON"] + 0.50):
+                return "PERSON"
+
+        # 2. LOGICA PER GLI ALTRI (ANIMAL/VEHICLE)
+        # Se il fake score è alto, serve un margine per vincere
         if max_fake_score > self.VETO_THRESHOLD:
+            # Per gli animali useremo un margine piccolo (es. 0.05 o 0.10) come deciso prima
             delta_threshold = self.DELTA_THRESHOLD.get(best_score_cls, 0.2)
-            best_class = best_score_cls if (best_score_val - max_fake_score > delta_threshold) else "OTHER"
-        else:
-            best_class = best_score_cls
-
-        return best_class
-
+            if (best_score_val - max_fake_score) > delta_threshold:
+                return best_score_cls
+            else:
+                return "OTHERS"
+        
+        return best_score_cls
 
 
     # -------------------------------------------------------------
     # 1) Funzione che decide la categoria per le ore di GUIRNO
     # -------------------------------------------------------------
-    def calculate_day_category(
-            self,
-            best_score_cls,
-            best_score_val,
-            max_fake_score,
-            final_scores: dict,
-        ) -> str:
+    # def calculate_day_category(
+    #         self,
+    #         best_score_cls,
+    #         best_score_val,
+    #         max_fake_score,
+    #         final_scores: dict,
+    #     ) -> str:
         
-        if best_score_cls == "ANIMAL":
-            # REQUISITI PIÙ EQUILIBRATI:
-            # Abbassiamo lo score minimo a 0.50 (se il distacco è forte)
-            # o manteniamo un distacco netto dal rumore.
-            distacco_fake = best_score_val - max_fake_score
+    #     if best_score_cls == "ANIMAL":
+    #         # REQUISITI PIÙ EQUILIBRATI:
+    #         # Abbassiamo lo score minimo a 0.50 (se il distacco è forte)
+    #         # o manteniamo un distacco netto dal rumore.
+    #         distacco_fake = best_score_val - max_fake_score
             
-            # Se l'animale è chiaro (>0.70) e il terreno è basso, è un animale.
-            # Se è più incerto (>0.50) ma il distacco dal fake è enorme (>0.40), lo prendiamo.
-            if (best_score_val >= 0.70 and max_fake_score < 0.5) or (distacco_fake > 0.40):
-                best_class = "ANIMAL"
-            else:
-                best_class = "OTHER"
+    #         # Se l'animale è chiaro (>0.70) e il terreno è basso, è un animale.
+    #         # Se è più incerto (>0.50) ma il distacco dal fake è enorme (>0.40), lo prendiamo.
+    #         if (best_score_val >= 0.70 and max_fake_score < 0.5) or (distacco_fake > 0.40):
+    #             best_class = "ANIMAL"
+    #         else:
+    #             best_class = "OTHERS"
             
-        else:
-            # Logica standard per Vehicle e Person
+    #     else:
+    #         # Logica standard per Vehicle e Person
+    #         if max_fake_score > self.VETO_THRESHOLD:
+    #             delta_threshold = self.DELTA_THRESHOLD.get(best_score_cls, 0.2)
+    #             best_class = best_score_cls if (best_score_val - max_fake_score > delta_threshold) else "OTHERS"
+    #         else:
+    #             best_class = best_score_cls
+
+    #     return best_class
+    def calculate_day_category(
+        self,
+        best_score_cls,
+        best_score_val,
+        max_fake_score,
+        final_scores: dict,
+    ) -> str:
+        
+        # --- LOGICA PERSONE: NON TOCCATA (Torna ai tuoi 189 TP) ---
+        if best_score_cls == "PERSON":
             if max_fake_score > self.VETO_THRESHOLD:
-                delta_threshold = self.DELTA_THRESHOLD.get(best_score_cls, 0.2)
-                best_class = best_score_cls if (best_score_val - max_fake_score > delta_threshold) else "OTHER"
+                # Usiamo il delta che avevi prima (es. 0.25)
+                delta_threshold = self.DELTA_THRESHOLD.get("PERSON", 0.25)
+                best_class = "PERSON" if (best_score_val - max_fake_score > delta_threshold) else "OTHERS"
             else:
-                best_class = best_score_cls
+                best_class = "PERSON"
+            return best_class
 
-        return best_class
+        # --- LOGICA ANIMALI: CORRETTA PER IL TEST COMPETITIVO ---
+        if best_score_cls == "ANIMAL":
+            # Qui sta il trucco: nel test competitivo i punteggi sono bassi.
+            # Un distacco di 0.05/0.10 è già un segnale forte contro il legno.
+            margin = best_score_val - max_fake_score
+            
+            # Abbassiamo drasticamente il requisito del distacco (da 0.45 a 0.05)
+            # e la confidenza base (da 0.70 a 0.20)
+            if best_score_val > 0.20 and margin > 0.05:
+                return "ANIMAL"
+            else:
+                return "OTHERS"
+
+        # --- LOGICA VEICOLI: (Come prima) ---
+        if best_score_cls == "VEHICLE":
+            delta_threshold = self.DELTA_THRESHOLD.get("VEHICLE", 0.2)
+            if best_score_val - max_fake_score > delta_threshold:
+                return "VEHICLE"
+            return "OTHERS"
+
+        return "OTHERS"
     
-
-
     # def decide_video_category(self, video_dict):
     #     video_path = list(video_dict.keys())[0]
     #     frames = video_dict[video_path]["frames"]
@@ -430,13 +502,13 @@ class ClipBlipEngine:
     #             best_class = "ANIMAL"
     #         else:
     #             # Se non passa questi criteri, è molto probabilmente il tuo legno/scarpa
-    #             best_class = "OTHER"
+    #             best_class = "OTHERS"
             
     #     # Per le altre classi di giorno (tipo Vehicle o altro) seguiamo la logica standard
     #     else:
     #         if max_fake_score > self.VETO_THRESHOLD:
     #             delta_threshold = self.DELTA_THRESHOLD.get(best_score_cls, 0.2)
-    #             best_class = best_score_cls if (best_score_val - max_fake_score > delta_threshold) else "OTHER"
+    #             best_class = best_score_cls if (best_score_val - max_fake_score > delta_threshold) else "OTHERS"
     #         else:
     #             best_class = best_score_cls
 
@@ -483,7 +555,7 @@ class ClipBlipEngine:
             return "PERSON"
 
         if count == 0:
-            return "OTHER"
+            return "OTHERS"
 
         # Calcola medie
         avg_animal = animal_sum / count
@@ -491,20 +563,25 @@ class ClipBlipEngine:
 
         # Determiniamo la categoria dominante
         if avg_animal >= avg_vehicle:
-            # --- LOGICA SEVERA PER ANIMAL ---
+            # Se i frame sono già stati filtrati contro i FAKE,
+            # non serve chiedere 0.92. Usiamo soglie più umane.
+            
             if count == 1:
-                return "ANIMAL" if avg_animal > 0.92 else "OTHER"
+                # Se c'è un solo frame, vogliamo essere sicuri
+                return "ANIMAL" if avg_animal > 0.45 else "OTHERS"
             elif count == 2:
-                return "ANIMAL" if avg_animal > 0.88 else "OTHER"
+                # Come nel tuo caso del gatto (media 0.64)
+                return "ANIMAL" if avg_animal > 0.40 else "OTHERS"
             else:
-                return "ANIMAL" if avg_animal > 0.70 else "OTHER"
-        
+                # Più frame abbiamo, più siamo sicuri della costanza
+                return "ANIMAL" if avg_animal > 0.35 else "OTHERS"
+
         else:
-            # --- LOGICA PER VEHICLE ---
+            # Logica per i veicoli (simmetrica)
             if count == 1:
-                return "VEHICLE" if avg_vehicle > 0.85 else "OTHER"
+                return "VEHICLE" if avg_vehicle > 0.50 else "OTHERS"
             else:
-                return "VEHICLE" if avg_vehicle > 0.65 else "OTHER"
+                return "VEHICLE" if avg_vehicle > 0.40 else "OTHERS"
 
     # def decide_video_category(self, video_dict):
     #     video_path = list(video_dict.keys())[0]
