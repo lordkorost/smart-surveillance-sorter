@@ -50,4 +50,4 @@ def compare_results(gt_path, res_path):
 
 if __name__ == "__main__":
     # Inserisci i nomi corretti dei tuoi file
-    compare_results("ground_truth.json", "risultati_finali_clipblip.json")
+    compare_results("ground_truth.json", "2026-02-13/clip_blip_res.json")

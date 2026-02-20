@@ -5,7 +5,8 @@ from pathlib import Path
 import time
 
 from smart_surveillance_sorter.constants import PROJECT_ROOT
-from smart_surveillance_sorter.log_config import configure_logger
+
+from smart_surveillance_sorter.logger import get_logger
 from smart_surveillance_sorter.scanners.scanner import Scanner
 from smart_surveillance_sorter.utils import check_dir
 
@@ -61,9 +62,10 @@ def main():
     args = parser.parse_args()
     input_dir = args.dir
 
-    configure_logger(debug=args.test)  # <‑‑ configure once
-    log = logging.getLogger(__name__)
-
+    #configure_logger(debug=args.test)  
+    #log = logging.getLogger(__name__)
+    # All'inizio dello script
+    log = get_logger(debug=args.test)
     if not check_dir(Path(input_dir),is_readable=True):
         log.critical(f"❌ ERRORE CRITICO: cartella di input non esistente")
         sys.exit(1)
@@ -78,7 +80,9 @@ def main():
 
 
     #print(f"🚀 Root del progetto: {PROJECT_ROOT}")
-    log.info(f"Request to scan {input_dir} with Mode:{args.mode},Refine Pass:{args.refine},Fallback Pass:{args.fallback}")
+    #log.info(f"Request to scan {input_dir} with Mode:{args.mode},Refine Pass:{args.refine},Fallback Pass:{args.fallback}")
+    # Mettendo le variabili tra parentesi o usando i due punti, il giallo si attiva
+    log.info(f"Request to scan folder={input_dir} | Mode={args.mode} | Refine={args.refine} | Fallback={args.fallback}")
     start_time = time.time()
     # Otteniamo lo scanner configurato
     scanner = Scanner(
@@ -91,19 +95,19 @@ def main():
         is_check_clean=args.check_clean
     )
     
-    log.info(f"Scan folder: {Fore.YELLOW}{args.dir}{Style.RESET_ALL} | Mode: {Fore.CYAN}{args.mode}{Style.RESET_ALL}")
+    log.info(f"Scan folder={args.dir} | Mode={args.mode}")
 
     # 3. Avvio scansione
-    log.info(f"📂 Inizio analisi cartella: {Fore.YELLOW}{input_dir}{Style.RESET_ALL}")
+    log.info(f"📂 Inizio analisi cartella={input_dir}")
     try:
         scanner.scan_folder(input_dir, outputDir)
         # Usiamo Fore.GREEN per il successo
-        log.info(f"{Fore.GREEN}✅ Analisi completata con successo.{Style.RESET_ALL}")
+        log.info(f"✅ Analisi completata con successo.")
         
     except KeyboardInterrupt:
-        log.warning(f"{Fore.YELLOW}⚠️ Analisi interrotta dall'utente.{Style.RESET_ALL}")
+        log.warning(f"⚠️ Analisi interrotta dall'utente.")
     except Exception as e:
-        log.error(f"{Fore.RED}💥 Errore critico durante la scansione: {e}{Style.RESET_ALL}")
+        log.error(f"💥 Errore critico durante la scansione: {e}")
         sys.exit(1)
     
     end_time = time.time()

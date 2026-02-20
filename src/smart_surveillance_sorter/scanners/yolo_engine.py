@@ -2,6 +2,7 @@ from datetime import datetime
 import json
 import logging
 from pathlib import Path
+import shutil
 from typing import Optional
 
 import cv2
@@ -43,7 +44,7 @@ class YoloEngine:
 
     
     
-    def scan_single_image(self, image_path: Path, video_path: Path, cam_id: str):
+    def scan_single_image(self, image_path: Path, video_path: Path,  frames_dir: Path,cam_id: str):
             """
             Run a YOLO‑based detection on a single image extracted from a video.
 
@@ -188,11 +189,22 @@ class YoloEngine:
                 return None
 
             # --- LOGICA DI CROP AGGIUNTA ---
-            # Generiamo il path per il crop (es: nomefile_crop.jpg)
+            # # Generiamo il path per il crop (es: nomefile_crop.jpg)
+            # crop_filename = f"{image_path.stem}_crop{image_path.suffix}"
+            # crop_path = image_path.parent / crop_filename
+
+          # --- LOGICA DI COPIA E CROP NVR ---
+            self.frames_dir = frames_dir
+            self.frames_dir.mkdir(parents=True, exist_ok=True)
+
+            # 1. Definiamo i nuovi percorsi dentro 'extracted_frames'
+            nvr_original_dest = self.frames_dir / image_path.name
             crop_filename = f"{image_path.stem}_crop{image_path.suffix}"
-            crop_path = image_path.parent / crop_filename
+            crop_path = self.frames_dir / crop_filename
             
             try:
+                # 2. Copiamo prima l'immagine originale NVR nella cartella dei frame
+                shutil.copy2(image_path, nvr_original_dest)
                 # Carichiamo l'immagine originale
                 img = cv2.imread(str(image_path))
                 if img is not None:
@@ -206,7 +218,7 @@ class YoloEngine:
                 else:
                     best_det["crop_path"] = None
             except Exception as e:
-                print(f"⚠️ Errore durante il ritaglio dell'immagine NVR: {e}")
+                log.critical(f"⚠️ Errore durante il ritaglio dell'immagine NVR: error={e}")
                 best_det["crop_path"] = None
             # ------------------------------
 
@@ -219,7 +231,8 @@ class YoloEngine:
                 "frames": [
                     {
                         "category": "person",
-                        "frame_path": str(image_path),
+                        #"frame_path": str(image_path),
+                        "frame_path": str(nvr_original_dest),
                         "crop_path": best_det.get("crop_path"), # <--- Passiamo il crop!
                         "confidence": best_det["confidence"],
                         "bbox": best_det["bbox"],
@@ -440,7 +453,7 @@ class YoloEngine:
         )
 
         if not final_target_ids:
-            log.warning(f"Nessuna classe target per cam {cam_id}")
+            log.warning(f"Nessuna classe target per cam={cam_id}")
             return None
 
         # ------------------------------------------------------------------
@@ -481,7 +494,7 @@ class YoloEngine:
         current_stride = stride_std
         prev_stride = stride_std
 
-        print(f"DEBUG: Video {video_path.name} ha {fps} FPS")
+        #log.debug(f"Video={video_path.name} ha FPS={fps}")
         
         # ------------------------------------------------------------------
         # 4️⃣ Loop di Analisi
@@ -540,7 +553,7 @@ class YoloEngine:
 
             # Controllo Early Stop
             if occ_count["person"] >= num_occurrence or occ_count["animal"] >= num_occurrence:
-                log.info(f"Early stop su {video_path.name}")
+                log.debug(f"Early stop su video={video_path.name}")
                 break
             
             # CALCOLO STRIDE PER IL PROSSIMO SALTO
@@ -548,7 +561,7 @@ class YoloEngine:
 
             if current_stride != prev_stride:
                 fase = "PROTEZIONE/DETECTION" if current_stride <= stride_std else "VELOCITÀ CROCIERA"
-                print(f"[{video_path.name}] Frame {frame_idx}: Cambio stride a {current_stride} ({fase})")
+                #print(f"[{video_path.name}] Frame {frame_idx}: Cambio stride a {current_stride} ({fase})")
                 prev_stride = current_stride
 
             # --- LOGICA DEL SALTO (Skip) ---
@@ -726,14 +739,14 @@ class YoloEngine:
             
             # 2. Se YOLO ha dei sospetti, mandiamo solo quelli alla Vision AI
             for suspect in suspicious_frames:
-                log.info(f"🔍 Fallback: Vision AI controlla sospetto in {suspect['video_name']}")
+                log.debug(f"🔍 Fallback: Vision AI controlla sospetto in video={suspect['video_name']}")
                 
                 # Chiamiamo la Vision AI (usiamo il motore che abbiamo già)
                 report = self.vision_engine.refine_single_video(suspect)
                 
                 # Se la Vision AI conferma (es. category != "nothing")
                 if report and report.get("category") != "nothing":
-                    log.info(f"✨ RECUPERATO: {item['video_name']} classificato come {report['category']}")
+                    log.debug(f"✨ RECUPERATO: video={item['video_name']} classificato come category={report['category']}")
                     current_results.append(report)
                     break # Trovato uno, passiamo al prossimo video
 
@@ -789,7 +802,7 @@ class YoloEngine:
         
         if not results or len(results[0].boxes) == 0:
             # Aggiungi questo per il debug
-            log.debug(f"🔍 YOLO Fallback: Nessun target trovato in {image_path.name}")
+            log.debug(f"🔍 YOLO Fallback: Nessun target trovato in img={image_path.name}")
             return None
 
         # Prendiamo la detenzione con confidenza maggiore tra quelle trovate

@@ -332,59 +332,7 @@ def get_target_ids(model, settings, mode, camera_ignore_labels):
     
     return list(set(target_ids)) # Ritorna ID unici
 
-
 def calculate_score(category, conf, vision_answer, scoring_settings):
-    """
-    Compute a confidence score for a detection by combining YOLO confidence
-    with a Vision model response.
-
-    Parameters
-    ----------
-    category : str
-        The class name predicted by YOLO for the current detection.
-    conf : float
-        YOLO confidence score for the detection (range 0–1).
-    vision_answer : str
-        The category returned by the Vision model for the same detection.
-        Typical values are the same category name, ``"nothing"``, or other
-        labels defined by the Vision model.
-    scoring_settings : dict
-        A dictionary containing two optional sub‑dictionaries:
-
-        * ``weights`` – mapping confidence thresholds to base scores
-          (e.g. ``{"score_high": 3.0, "score_mid": 2.0, "score_low": 1.0}``).
-        * ``multipliers`` – mapping categories to a multiplier that is
-          applied when Vision confirms the YOLO category
-          (default multiplier is ``1.6``).
-
-    Returns
-    -------
-    float
-        The final score for the detection.  The score is calculated as:
-
-        1. A base score is chosen according to ``conf``:
-           * ``conf`` ≥ 0.70 → ``score_high`` (default 3.0)
-           * 0.55 ≤ ``conf`` < 0.70 → ``score_mid`` (default 2.0)
-           * 0.40 ≤ ``conf`` < 0.55 → ``score_low`` (default 1.0)
-           * ``conf`` < 0.40 → 0.3
-
-        2. If ``vision_answer`` matches ``category``, the base score is
-           multiplied by the corresponding value in ``multipliers``
-           (default 1.6).
-
-        3. If ``vision_answer`` is ``"nothing"``, the score remains
-           unchanged (the snippet only shows the multiplier branch,
-           but the logic for ``"nothing"`` can be extended as needed).
-
-    Notes
-    -----
-    This function is used by the pipeline to weigh detections before
-    aggregating them into an overall alert level.  The exact values for
-    ``score_high``, ``score_mid``, and ``score_low`` as well as the
-    default multiplier are configurable through ``scoring_settings``.
-    The implementation follows the logic outlined in the project’s
-    ``utils.py`` module [1].
-    """
     weights = scoring_settings.get("weights", {})
     multipliers = scoring_settings.get("multipliers", {})
 
@@ -400,18 +348,102 @@ def calculate_score(category, conf, vision_answer, scoring_settings):
 
     # 2. Modificatore basato sulla risposta di Vision
     if vision_answer == category:
-        # Se Vision conferma esattamente la categoria di YOLO
+        # CONFERMA: Bonus pesante
         multiplier = multipliers.get(category, 1.6)
         base *= multiplier
+    
     elif vision_answer == "nothing":
-        # Se Vision non vede nulla, non diamo bonus ma non penalizziamo troppo
-        base *= 1.0
+        # SMENTITA: Qui applichiamo il Veto. 
+        # Moltiplichiamo per un valore negativo o molto vicino a zero.
+        # Se metti -10.0, cancelli istantaneamente ogni accumulo precedente.
+        base = -10.0 
+            
     else:
-        # Se Vision vede una categoria DIVERSA (es. YOLO dice animal, Vision dice person)
-        # Penalizziamo la rilevazione corrente
-        base *= 0.5
+        # DISCORDANZA: Vision vede altro (es. YOLO cane, Vision persona)
+        # Penalizziamo pesantemente la categoria originale
+        base *= 0.1
             
     return base
+
+# def calculate_score(category, conf, vision_answer, scoring_settings):
+#     """
+#     Compute a confidence score for a detection by combining YOLO confidence
+#     with a Vision model response.
+
+#     Parameters
+#     ----------
+#     category : str
+#         The class name predicted by YOLO for the current detection.
+#     conf : float
+#         YOLO confidence score for the detection (range 0–1).
+#     vision_answer : str
+#         The category returned by the Vision model for the same detection.
+#         Typical values are the same category name, ``"nothing"``, or other
+#         labels defined by the Vision model.
+#     scoring_settings : dict
+#         A dictionary containing two optional sub‑dictionaries:
+
+#         * ``weights`` – mapping confidence thresholds to base scores
+#           (e.g. ``{"score_high": 3.0, "score_mid": 2.0, "score_low": 1.0}``).
+#         * ``multipliers`` – mapping categories to a multiplier that is
+#           applied when Vision confirms the YOLO category
+#           (default multiplier is ``1.6``).
+
+#     Returns
+#     -------
+#     float
+#         The final score for the detection.  The score is calculated as:
+
+#         1. A base score is chosen according to ``conf``:
+#            * ``conf`` ≥ 0.70 → ``score_high`` (default 3.0)
+#            * 0.55 ≤ ``conf`` < 0.70 → ``score_mid`` (default 2.0)
+#            * 0.40 ≤ ``conf`` < 0.55 → ``score_low`` (default 1.0)
+#            * ``conf`` < 0.40 → 0.3
+
+#         2. If ``vision_answer`` matches ``category``, the base score is
+#            multiplied by the corresponding value in ``multipliers``
+#            (default 1.6).
+
+#         3. If ``vision_answer`` is ``"nothing"``, the score remains
+#            unchanged (the snippet only shows the multiplier branch,
+#            but the logic for ``"nothing"`` can be extended as needed).
+
+#     Notes
+#     -----
+#     This function is used by the pipeline to weigh detections before
+#     aggregating them into an overall alert level.  The exact values for
+#     ``score_high``, ``score_mid``, and ``score_low`` as well as the
+#     default multiplier are configurable through ``scoring_settings``.
+#     The implementation follows the logic outlined in the project’s
+#     ``utils.py`` module [1].
+#     """
+#     weights = scoring_settings.get("weights", {})
+#     multipliers = scoring_settings.get("multipliers", {})
+
+#     # 1. Punteggio base basato sulla confidenza YOLO
+#     if conf >= 0.70:
+#         base = weights.get("score_high", 3.0)
+#     elif conf >= 0.55:
+#         base = weights.get("score_mid", 2.0)
+#     elif conf >= 0.40:
+#         base = weights.get("score_low", 1.0)
+#     else:
+#         base = 0.3
+
+#     # 2. Modificatore basato sulla risposta di Vision
+#     if vision_answer == category:
+#         # Se Vision conferma esattamente la categoria di YOLO
+#         multiplier = multipliers.get(category, 1.6)
+#         base *= multiplier
+#     elif vision_answer == "nothing":
+#         # Se Vision non vede nulla, non diamo bonus ma non penalizziamo troppo
+#         base *= 1.0
+#     else:
+#         # Se Vision vede una categoria DIVERSA (es. YOLO dice animal, Vision dice person)
+#         # Penalizziamo la rilevazione corrente
+#         base *= 0.5
+            
+#     return base
 
 def get_safe_path(base_dir, camera_name, category, structure_type):
     """

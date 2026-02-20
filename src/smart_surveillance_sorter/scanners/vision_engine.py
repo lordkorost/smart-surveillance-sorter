@@ -40,79 +40,59 @@ class VisionEngine:
             images = [str(image_paths)]
         else:
             images = [str(p) for p in image_paths]
-        #log.debug(prompt)
         try:
-            # --- DEBUG LOGS ---
-            log.debug(f"📝 PROMPT INVIATO:\n{prompt}")
-            # Se image_paths è una lista, stampiamola per sicurezza
-            log.debug(f"🖼️ IMMAGINI INVIATE: {image_paths}")
             response = generate(
                 model=vision_model,
                 prompt=prompt,
-                images=images
-                # options={
-                #     "temperature": temperature,
-                #     "num_predict": num_predict,     # LIMITE TOKEN: Se non decide entro ~250 parole, lo taglia
-                #     "top_k": top_k,                 # Riduce la casualità "folle"
-                #     "top_p": top_p                  # Aiuta a mantenere il ragionamento sensato
-                # }
+                images=images,
+                options = {
+                    'temperature': 0,
+                    'top_p': 0.1,
+                    'top_k': 1
+                }
             )
-            #log.critical(response)
-            # Il trucco per la risposta "nuda e cruda":
-            log.critical("--- RAW OLLAMA RESPONSE ---")
-            log.critical(repr(response['message']['content']))
-            log.critical("---------------------------")
-            # thinking_content = ""
-            # if hasattr(response, 'thinking') and response.thinking:
-            #     thinking_content = response.thinking.strip()
-            # answer = response.response.strip().lower()
-            # 1. Estrai il thinking (se esiste)
-            thinking_content = ""
-            if hasattr(response, 'thinking') and response.thinking:
-                thinking_content = response.thinking.strip()
+            
 
-            # 2. Prendi l'intera risposta testuale
-            full_response = response.response.lower()
-            log.info(f"🤔 THINKING:\n{thinking_content}")
-            #log.info(f"💬 RISPOSTA COMPLETA:\n{full_response}")
-            # # 3. Cerchiamo il verdetto nel testo, anche se sommerso da tag strani
-            # if "final verdict:" in full_response:
-            #     # Estraiamo solo quello che viene DOPO "final verdict:"
-            #     answer = full_response.split("final verdict:")[1].strip()
-            #     # Puliamo ulteriormente per prendere solo la prima parola (es: "person")
-            #     answer = answer.split()[0].replace('🎯', '').strip()
-            # else:
-            #     # Fallback: se non c'è il tag formale, cerchiamo le parole chiave nel testo
-            #     if "person" in full_response:
-            #         answer = "person"
-            #     elif "animal" in full_response:
-            #         answer = "animal"
-            #     elif "vehicle" in full_response:
-            #         answer = "vehicle"
-            #     else:
-            #         answer = "nothing" # O mantieni il verdetto originale di YOLO
-            #     # Invece di stampare, ritorniamo tutto
-            #     return {
-            #         "label": answer,
-            #         "thinking": thinking_content
-            #     }
-            # 3. Estrazione Verdetto
+          
+         
+            # 2. Prendi il testo (già in minuscolo)
+            full_response = response.get('response', '').lower().strip()
+            thinking_content = response.get('thinking', '') 
+            
+            #log.info(f"🤔 FULL TEXT:\n{full_response}")
+              # --- NUOVA LOGICA DI ESTRAZIONE ---
+            
+            # 3. Estrazione Verdetto con logica a cascata
+            answer = "others" # Default
+
             if "final verdict:" in full_response:
-                # Prende quello che c'è dopo "final verdict:"
                 answer_part = full_response.split("final verdict:")[1].strip()
-                # Prende la prima parola, toglie emoji e anche il punto finale (fondamentale!)
-                answer = answer_part.split()[0].replace('🎯', '').replace('.', '').strip()
+                answer = answer_part.split()[0].strip('.,🎯 \n\t')
             else:
-                # Fallback se Ollama non usa il tag: prendiamo la prima parola della risposta
-                answer = full_response.split()[0].replace('.', '') if full_response.strip() else "nothing"
+                # Se Ollama è pigro e risponde solo "person" o "animal"
+                if "person" in full_response:
+                    answer = "person"
+                elif "animal" in full_response:
+                    answer = "animal"
+                elif "vehicle" in full_response or "car" in full_response:
+                    answer = "vehicle"
+                else:
+                    # Ultima spiaggia: prendi la prima parola della risposta
+                    if full_response:
+                        answer = full_response.split()[0].strip('.,🎯 \n\t')
+
+            # ORA lo stampiamo fuori dai blocchi IF, così lo vedi SEMPRE
+            #log.critical(f"🎯 VERDETTO ESTRATTO: {answer}")
 
             return {
                 "label": answer,
-                "thinking": thinking_content
+                "thinking": thinking_content if thinking_content else "No internal reasoning"
             }
         except Exception as e:
-            log.error(f"Chiamata a Ollama ({vision_model}) fallita: {e}")
-            return {"label": "nothing", "thinking": str(e)}
+            log.error(f"Chiamata a Ollama ({vision_model}) fallita: {str(e)}")
+            import traceback
+            log.error(traceback.format_exc()) # Questo ti dice l'esatta riga dell'errore
+            return {"label": "others", "thinking": f"Error: {str(e)}"}
 
     def refine_single_video(self, video_data):
     
@@ -121,8 +101,8 @@ class VisionEngine:
         frames = video_data["frames"]
         
         cam_cfg = self.cameras_config.get(cam_id, {})
-        has_crops = any(f.get("crop_path") for f in frames)
-        
+        #has_crops = any(f.get("crop_path") for f in frames)
+        has_crops = False
         # Generazione prompt
         prompt = build_dynamic_prompt(
             self.prompts_config, 
@@ -130,9 +110,9 @@ class VisionEngine:
             mode=self.mode, 
             has_crop=has_crops
         )
-        log.debug("--- INIZIO PROMPT INVIATO ---")
-        log.debug(prompt)
-        log.debug("--- FINE PROMPT INVIATO ---")
+        # log.debug("--- INIZIO PROMPT INVIATO ---")
+        # log.debug(prompt)
+        # log.debug("--- FINE PROMPT INVIATO ---")
         scores = defaultdict(float)
         last_frame = {}
         
@@ -145,81 +125,80 @@ class VisionEngine:
             category = frame["category"]
             conf = frame["confidence"]
             img_path = frame["frame_path"]
-            crop_path = frame.get("crop_path")
+            #crop_path = frame.get("crop_path")
 
             # Analisi Multi-Image
             image_inputs = [img_path]
-            if crop_path and Path(crop_path).exists():
-                image_inputs.append(crop_path)
+            # if crop_path and Path(crop_path).exists():
+            #     image_inputs.append(crop_path)
             
             # vision_answer = self.query_vision_model(prompt, image_inputs)
             result = self.query_vision_model(prompt, image_inputs)
             
-            vision_answer = result.get("label", "nothing")
+            #vision_answer = result.get("label", "nothing")
             thinking = result.get("thinking", "")
-
+            vision_answer = result.get("label", "others").lower()
+            if vision_answer == "nothing": vision_answer = "others" # Bridge per sicurezza    
             # Salviamo il thinking nel record del video per il log finale
             video_data["thinking"] = thinking
             # --- PRIORITÀ PERSONA ---
-            if vision_answer == "person":
-                log.info(f"🚨 VISION CONFIRMED: Person on {video_path.name}")
-                return self._build_result(cam_id, video_path, "person", img_path, frames,thinking)
+            # --- LOGICA DENTRO IL CICLO FRAME ---
 
-            # --- SCORING ---
-            # Passiamo l'intero blocco scoring_cfg come richiesto dalla tua funzione
-            score_gain = calculate_score(category, conf, vision_answer, scoring_cfg)
-            scores[category] += score_gain
+            # 1. Se Vision dice Persona, chiudiamo subito (Massima Priorità)
+            if vision_answer == "person":
+                return self._build_result(cam_id, video_path, "person", img_path, frames, thinking)
+
+            # 2. Calcolo del guadagno (Gain)
+            # Usiamo una logica di smentita aggressiva per eliminare il legno
+            if vision_answer == "others":
+                # Se Vision non vede nulla, diamo un peso negativo che annulla la confidenza di YOLO
+                current_gain = -10.0 
+            elif vision_answer == category:
+                # Se Vision conferma (animal==animal o vehicle==vehicle), bonus!
+                current_gain = max(conf * 2.0, 1.5) # Forza almeno a 1.5 se c'è accordo
+            else:
+                # Se c'è discordanza (es. YOLO dice Animal, Vision dice Vehicle)
+                current_gain = conf * 0.5
+
+            scores[category] += current_gain
             last_frame[category] = img_path
 
-            # --- DEBUG PUNTEGGI ---
-            score_gain = calculate_score(category, conf, vision_answer, scoring_cfg)
-            old_score = scores[category]
-            scores[category] += score_gain
-            
-            log.debug(f"🔍 [DEBUG SCORE] Frame: {Path(img_path).name}")
-            log.debug(f"   |-- YOLO: {category} ({conf:.2f})")
-            log.debug(f"   |-- VISION: {vision_answer}")
-            log.debug(f"   |-- GAIN: {score_gain:.2f} (Weights/Multipliers applied)")
-            log.debug(f"   |-- TOTAL {category.upper()} SCORE: {old_score:.2f} -> {scores[category]:.2f}")
+            # 3. Early Exit (Solo per Animal/Vehicle confermati)
+            # Se il punteggio sale e Vision è d'accordo, usciamo senza aspettare altri frame
+            if category in ["animal", "vehicle"] and scores[category] >= 5.0 and vision_answer == category:
+                return self._build_result(cam_id, video_path, category, img_path, frames, thinking)
 
-            # Bonus Vision Discovery
-            if vision_answer in ["animal", "vehicle"] and vision_answer != category:
-                scores[vision_answer] += (score_gain * 0.8)
-                last_frame[vision_answer] = img_path
 
-            # Early Exit Animal/Vehicle
-            if category in ["animal", "vehicle"]:
-                target_threshold = thresholds.get(category, 10.0)
-                log.debug(f"   |-- CHECK EXIT: {scores[category]:.2f} >= {target_threshold}?")
-                if scores[category] >= target_threshold:
-                    log.warning(f"🛑 EARLY EXIT TRIGGERED for {category} at score {scores[category]:.2f}")
-                    return self._build_result(cam_id, video_path, category, img_path, frames,thinking=thinking)
 
         return self._run_ballot(scores, frames, last_frame, cam_id, video_path, scoring_cfg,thinking)
 
-    def _run_ballot(self, scores, frames, last_frame, cam_id, video_path, scoring_cfg,thinking):
-        
+    def _run_ballot(self, scores, frames, last_frame, cam_id, video_path, scoring_cfg, thinking):
         override_cfg = scoring_cfg.get("yolo_override", {})
         min_conf = override_cfg.get("person_min_conf", 0.58)
+        # Punteggio minimo per fidarsi dei voti accumulati (animali/veicoli)
         min_score = override_cfg.get("min_total_score_to_skip_override", 1.2)
 
-        active_scores = {k: v for k, v in scores.items() if k in ["person","animal", "vehicle"]}
+        active_scores = {k: v for k, v in scores.items() if k in ["person", "animal", "vehicle"]}
         
-        # Override YOLO Person
-        if not active_scores or max(active_scores.values(), default=0) <= min_score:
-            high_conf_yolo = [f for f in frames if f["category"] == "person" and f["confidence"] > min_conf]
-            if high_conf_yolo:
-                best = max(high_conf_yolo, key=lambda x: x["confidence"])
-                log.warning(f"⚠️ OVERRIDE: YOLO conferma Person ({best['confidence']:.2f})")
-                return self._build_result(cam_id, video_path, "person", best["frame_path"], frames,thinking)
+        # --- STEP 1: OVERRIDE PERSONA (Il tuo Veto) ---
+        # Se non abbiamo punteggi forti, controlliamo se YOLO aveva visto una persona con alta confidenza
+        current_max_score = max(active_scores.values(), default=0)
+        
+        if current_max_score <= min_score:
+            high_conf_yolo_person = [f for f in frames if f["category"] == "person" and f["confidence"] > min_conf]
+            if high_conf_yolo_person:
+                best = max(high_conf_yolo_person, key=lambda x: x["confidence"])
+                log.warning(f"⚠️ OVERRIDE: YOLO conferma Person ({best['confidence']:.2f}) nonostante Vision")
+                return self._build_result(cam_id, video_path, "person", best["frame_path"], frames, thinking)
 
+        # --- STEP 2: VERDETTO FINALE ---
         if active_scores:
             final_cat = max(active_scores, key=active_scores.get)
             if active_scores[final_cat] > min_score:
-                return self._build_result(cam_id, video_path, final_cat, last_frame[final_cat], frames,thinking)
+                return self._build_result(cam_id, video_path, final_cat, last_frame[final_cat], frames, thinking)
 
-        return self._build_result(cam_id, video_path, "nothing", frames[0]["frame_path"] if frames else None, frames,thinking=thinking)
-
+        # --- STEP 3: DEFAULT ---
+        return self._build_result(cam_id, video_path, "others", frames[0]["frame_path"] if frames else None, frames, thinking=thinking)
     # def _build_result(self, cam_id, video_path, category, frame_used, all_frames):
     #     video_name = Path(video_path).name
     #     result = {
@@ -299,11 +278,13 @@ class VisionEngine:
         #answer = self.query_vision_model(prompt, [img_path])
         result = self.query_vision_model(prompt, [img_path])
             
-        answer = result.get("label", "nothing")
+        #answer = result.get("label", "others")
+        answer = result.get("label", "others").lower()
+        if answer == "nothing": answer = "others" # Bridge per sicurezza
         thinking = result.get("thinking", "")
         # 4. Validazione e creazione del report
         # Verifichiamo che la risposta sia tra quelle permesse (non 'nothing')
-        if answer != "nothing":
+        if answer != "others":
             return {
                 "camera_id": cam_id_str,
                 "camera_name": cam_name,
@@ -316,24 +297,63 @@ class VisionEngine:
                 "thinking": thinking, 
             }
         
-        return {"category": "nothing"}
+        return {"category": "others"}
     
 
 
-    def analyze_cleanliness(self, image_list, cam_id):
+    def analyze_cleanliness(self, image_list, cam_id,):
         """
         image_list = [path_riferimento, path_nvr_notturna]
         """
+      
         cam_cfg = self.cameras_config.get(cam_id, {})
-        
+        vision_model = self.vision_cfg.get("model_name", "qwen3-vl:8b")
         # Costruiamo il prompt dal JSON (come abbiamo visto prima)
         from .vision_helpers import build_clean_prompt
         prompt = build_clean_prompt(self.prompts_config, cam_cfg)
-
+      
         try:
-            response = self.query_vision_model(prompt, image_list)
-            return response['label']
+            
+            response = generate(
+                model=vision_model,
+                prompt=prompt,
+                images=image_list,
+            )
+            
+
+          
+           
+            # 2. Prendi il testo (già in minuscolo)
+            full_response = response.get('response', '').lower().strip()
+            thinking_content = response.get('thinking', '') 
+           
+           #log.info(f"🤔 FULL TEXT:\n{full_response}")
+              # --- NUOVA LOGICA DI ESTRAZIONE ---
+            log.debug(f"Thinking: {thinking_content}")
+           
+            # 3. Estrazione Verdetto con logica a cascata
+            answer = "uncertain" # Default
+
+            # Logica specifica per la pulizia
+            if any(word in full_response for word in ["clean", "perfetta"]):
+                answer = "clean"
+            elif any(word in full_response for word in ["dirty", "dust"]):
+                answer = "dirty"
+            else:
+                answer = "uncertain"
+            
+            return answer
         except Exception as e:
             return f"error: {str(e)}"
 
+    
+
+    def resize_for_vision(image_path, output_path, size=(1280, 720)):
+        from PIL import Image
+        
+        with Image.open(image_path) as img:
+            # Mantiene le proporzioni se preferisci, o forza il 720p
+            img.thumbnail(size, Image.Resampling.LANCZOS)
+            img.save(output_path, "JPEG", quality=85)
+        return output_path
     

@@ -13,7 +13,12 @@
         "filters": {
             "ignore_labels": [
                 "car",
-                "truck"
+                "truck",
+                "boat",
+                "motorcycle",
+                "bicycle",
+                "bus",
+                "train"
             ]
         },
         "thresholds": {
@@ -54,7 +59,12 @@
         "filters": {
             "ignore_labels": [
                 "car",
-                "truck"
+                "truck",
+                "boat",
+                "motorcycle",
+                "bicycle",
+                "bus",
+                "train"
             ]
         },
         "desc": "Parking area",
@@ -75,7 +85,15 @@
         ],
         "priority": "person",
         "filters": {
-            "ignore_labels": ["car","truck"]
+            "ignore_labels": [
+                "car",
+                "truck",
+                "boat",
+                "motorcycle",
+                "bicycle",
+                "bus",
+                "train"
+            ]
         },
         "desc": "Balcony area, with garden underneath",
         "dynamic_stride": false,
@@ -117,7 +135,7 @@
         "filters": {
             "ignore_labels": []
         },
-        "desc": "Garden area",
+        "desc": "Garden area. There are some garden gnomes on the lawn.",
         "dynamic_stride": false,
         "thresholds": {
             "person": 0.5,
@@ -157,7 +175,12 @@
         "filters": {
             "ignore_labels": [
                 "car",
-                "truck"
+                "truck",
+                "boat",
+                "motorcycle",
+                "bicycle",
+                "bus",
+                "train"
             ]
         },
         "desc": "Entrance door",

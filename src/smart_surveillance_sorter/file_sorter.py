@@ -36,7 +36,7 @@ class FileSorter:
                 shutil.copy2(str(src), str(dst))
             return True
         except Exception as e:
-            log.error(f"Errore durante {self.method} di {src.name}: {e}")
+            log.critical(f"Errore durante {self.method} di {src.name}: {e}")
             return False
         
     
@@ -90,18 +90,18 @@ class FileSorter:
         if os.access(self.input_dir, os.W_OK):
             # Caso normale: scriviamo nell'input
             self.dest_base = self.input_dir
-            log.info(f"✅ Destinazione: {self.input_dir}")
+            log.info(f"✅ Destinazione={self.input_dir}")
         else:
             # Caso emergenza: scriviamo nella work_dir (che è temp_dir)
             self.dest_base = self.work_dir / "SMI_SORTED_RESULTS"
             self.dest_base.mkdir(parents=True, exist_ok=True)
-            log.warning(f"⚠️ Input protetto! Risultati dirottati su: {self.dest_base}")
+            log.warning(f"⚠️ Input protetto! Risultati dirottati su folder={self.dest_base}")
         # --- CARICAMENTO MAPPING REALE ---
         # Usiamo la tua funzione che legge cameras.json, non settings.json!
         from utils import get_camera_mapping 
         camera_mapping = get_camera_mapping() 
         
-        log.debug(f"--- DEBUG: Mapping caricato da cameras.json: {camera_mapping}")
+        #log.debug(f"--- DEBUG: Mapping caricato da cameras.json: {camera_mapping}")
 
 
         classificati_paths = {item["video_path"] for item in final_results}
@@ -197,6 +197,6 @@ class FileSorter:
             import shutil
             try:
                 shutil.rmtree(self.work_dir)
-                self.log.info(f"🧹 Cartella cache rimossa: {self.work_dir.name}")
+                self.log.info(f"🧹 Cartella cache rimossa: cartella={self.work_dir.name}")
             except Exception as e:
-                self.log.warning(f"⚠️ Errore durante la rimozione della cache: {e}")
+                self.log.warning(f"⚠️ Errore durante la rimozione della cache: error={e}")

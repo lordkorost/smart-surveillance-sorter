@@ -31,6 +31,18 @@
             "ANIMAL": 0.45,
             "VEHICLE": 0.2
     },
+    "PERSON_BOOST_TOLERANCE":0.45,
+    "DAY_ANIMAL_MIN_CONF": 0.20,
+    "DAY_ANIMAL_MARGIN":0.05,
+    "ANIMAL_AGG_THRESHOLDS": {
+        "1": 0.45,
+        "2": 0.40,
+        "default": 0.35
+    },
+    "VEHICLE_AGG_THRESHOLDS": {
+        "1": 0.50,
+        "default": 0.40
+    },
     "NIGHT_HOURS":{
         "sunrise": 7,
         "sunset": 18,
@@ -38,6 +50,7 @@
         "midnight":24
     },
     "YOLO_NIGHT_BOOST": 0.3,
-    "yolo_res_json":"yolo_scan_res.json" 
+    "yolo_res_json":"yolo_scan_res.json",
+    "STATIC_MOVEMENT_THRESHOLD": 25
 
 }
