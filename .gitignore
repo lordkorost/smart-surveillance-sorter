@@ -12,13 +12,10 @@ env/
 *.jpg
 *.jpeg
 *.png
-# Escludi le cartelle dove il sorter salva i risultati
-fails/
-checks/
-output/
-dataset/
-2026-02-13/
-
+# Escludi tutti i modelli nella cartella model
+model/*.pt
+model/*.onnx
+model/*.engine
 # --- Configurazione Locale ---
 # Escludi le tue impostazioni personali se non vuoi che 
 # altri PC sovrascrivano i tuoi IP/Porte

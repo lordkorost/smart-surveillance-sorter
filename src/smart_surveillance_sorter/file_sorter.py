@@ -1,5 +1,4 @@
 import logging
-import os
 from pathlib import Path
 import shutil
 
@@ -7,30 +6,22 @@ from smart_surveillance_sorter.utils import get_safe_path
 log = logging.getLogger(__name__)
 class FileSorter:
     def __init__(self, settings, input_dir, work_dir, is_test=False):
+        
         self.settings = settings
         self.input_dir = Path(input_dir)
         self.work_dir = Path(work_dir)
         self.is_test = is_test
         
         # Determina la strategia
-        # Se è un TEST, usiamo SYMLINK per velocità e sicurezza.
-        # Se non è un test, controlliamo se siamo sullo stesso disco (inplace).
         self.inplace = self.input_dir in self.work_dir.parents or self.input_dir == self.work_dir
+        self.method = "COPY" if (self.is_test or not self.inplace) else "MOVE"
         
-        if self.is_test:
-            self.method = "SYMLINK"
-        elif self.inplace:
-            self.method = "MOVE"
-        else:
-            self.method = "COPY"
-            
-        log.info(f"🚀 Strategia di ordinamento: {self.method}")
-        
+        # Struttura cartelle dal settings
         storage_cfg = settings.get("storage_settings", {})
         self.structure_type = storage_cfg.get("structure_type", "camera_first")
 
     def _execute_io(self, src, dst):
-        """Esegue fisicamente lo spostamento, la copia o il link simbolico."""
+        """Esegue fisicamente lo spostamento o la copia."""
         src = Path(src)
         dst = Path(dst)
         
@@ -39,18 +30,10 @@ class FileSorter:
             
         try:
             dst.parent.mkdir(parents=True, exist_ok=True)
-            
             if self.method == "MOVE":
                 shutil.move(str(src), str(dst))
-            elif self.method == "SYMLINK":
-                # Se il link esiste già, lo rimuoviamo per ricrearlo
-                if dst.is_symlink() or dst.exists():
-                    dst.unlink()
-                # Creiamo il link simbolico
-                os.symlink(str(src), str(dst))
-            else: # COPY
+            else:
                 shutil.copy2(str(src), str(dst))
-                
             return True
         except Exception as e:
             log.critical(f"Errore durante {self.method} di {src.name}: {e}")
@@ -163,6 +146,7 @@ class FileSorter:
                 if self._execute_io(v_path, target_dir / item["video_name"]):
                     files_processati.add(v_path)
 
+        
             video_details = next((r for r in raw_results if r["video_path"] == v_path), None)
             if video_details and "frames" in video_details:
                 for f_info in video_details["frames"]:
