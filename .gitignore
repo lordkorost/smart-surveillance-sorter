@@ -13,9 +13,9 @@ env/
 *.jpeg
 *.png
 # Escludi tutti i modelli nella cartella model
-model/*.pt
-model/*.onnx
-model/*.engine
+models/*.pt
+models/*.onnx
+models/*.engine
 # --- Configurazione Locale ---
 # Escludi le tue impostazioni personali se non vuoi che 
 # altri PC sovrascrivano i tuoi IP/Porte
