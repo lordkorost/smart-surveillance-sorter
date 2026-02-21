@@ -5,7 +5,7 @@ from transformers import BlipProcessor, BlipForConditionalGeneration
 from PIL import Image
 from open_clip import create_model_and_transforms, tokenize
 from smart_surveillance_sorter.constants import CAMERAS_JSON, CLIP_BLIP_JSON, SETTINGS_JSON
-from smart_surveillance_sorter.utils import load_json
+from smart_surveillance_sorter.utils import get_smart_coordinates, is_night_astronomic, load_json
 
 log = logging.getLogger(__name__) 
 
@@ -60,6 +60,17 @@ class ClipBlipEngine:
                 self.NIGHT_HOURS_HOURS["sunset"],
             self.NIGHT_HOURS_HOURS["midnight"]))
         self.priority_hierarchy = ["PERSON", "ANIMAL", "VEHICLE"] #da prendere da settings
+        
+        self.lat, self.lon = get_smart_coordinates(self.settings["city"])
+        # 1. Recupera il nome della città dai settings
+        self.city_name = settings.get("city", "Roma")
+        
+        # 2. Chiama la logica smart (quella che controlla il JSON in config/)
+        # Questa funzione restituirà lat/lon dalla cache o ricalcolate
+        self.lat, self.lon = get_smart_coordinates(self.city_name)
+        
+        print(f"🚀 Sistema avviato per {self.city_name} (Lat: {self.lat}, Lon: {self.lon})")
+        
         
         # Genera dinamicamente la mappa partendo dai settings di YOLO
         self.label_to_main_class = {}
@@ -203,13 +214,20 @@ class ClipBlipEngine:
             # Determiniamo la best_class (sarà o quella di YOLO o "OTHER" se gli score sono bassi)
             best_class = yolo_category if final_scores[yolo_category] > 0.1 else "OTHERS"
 
-            # 1a. parsing ISO‑8601 (Python 3.7+)
+            # # 1a. parsing ISO‑8601 (Python 3.7+)
+            # dt = datetime.fromisoformat(frame.get("timestamp")) 
+            # hour = dt.hour                         
+            # # 3. verifica
+            # is_night = hour in self.NIGHT_HOURS
+         
+            
+
+            # Dentro il ciclo video/frame
             dt = datetime.fromisoformat(frame.get("timestamp")) 
-            hour = dt.hour                         
-            # 3. verifica
-            is_night = hour in self.NIGHT_HOURS
 
-
+            # Verifica dinamica: addio orari fissi!
+            is_night = is_night_astronomic(dt, self.lat, self.lon)
+            print(f"DEBUG: Video Time: {dt.strftime('%H:%M:%S')} | Località: {self.city_name} | Stato: {is_night}")
             if is_night:
                 if frame.get("category") == "person":
                     final_scores["PERSON"] += self.YOLO_NIGHT_BOOST

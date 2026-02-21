@@ -45,7 +45,7 @@
     },
     "NIGHT_HOURS":{
         "sunrise": 7,
-        "sunset": 18,
+        "sunset": 17,
         "day_start": 0,
         "midnight":24
     },

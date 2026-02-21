@@ -4,6 +4,8 @@
         "prompts_path": "config/prompts.json",
         "models_dir": "models"
     },
+    "city":"Rosarno",
+    "night_boost_offset": 5,
     "classification_settings": {
         "priority_hierarchy": ["PERSON", "ANIMAL", "VEHICLE"],
         "final_score_weights": {
@@ -28,8 +30,8 @@
     "yolo_settings": {
         "model_path": "yolov8l",
         "device": "cuda",
-        "num_occurrence": 2,
-        "time_gap_sec": 5,
+        "num_occurrence": 3,
+        "time_gap_sec": 3,
         "yolo_override_threshold": 0.85,
         "detection_groups": {
             "PERSON": [

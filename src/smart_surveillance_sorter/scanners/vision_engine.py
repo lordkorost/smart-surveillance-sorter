@@ -95,6 +95,7 @@ class VisionEngine:
             return {"label": "others", "thinking": f"Error: {str(e)}"}
 
     def refine_single_video(self, video_data):
+
     
         cam_id = video_data["camera_id"]
         video_path = Path(video_data["video_path"])
@@ -104,6 +105,17 @@ class VisionEngine:
         #has_crops = any(f.get("crop_path") for f in frames)
         has_crops = False
         # Generazione prompt
+         # --- 🚀 RISOLUZIONE ALLA RADICE (FUORI DAL FOR) ---
+        is_nvr = video_data.get("resolved_by") == "nvr_image"
+        has_yolo_person = any(f.get("category") == "person" for f in frames)
+        # Se il video è NVR e YOLO ha trovato persone (anche solo una)
+        if is_nvr and has_yolo_person:
+            #print(f"  [NVR FAST-TRACK] Video {video_data.get("video_path")} validato istantaneamente via YOLO")
+            # Prendiamo il primo frame utile per popolare il report
+            #best_f = next(f for f in frames if f.get("category") == "person")
+            category = "person"
+            return self._build_result(cam_id, video_path, "person", frames[0]["frame_path"] if frames else None, frames, thinking="NVR image")
+            
         prompt = build_dynamic_prompt(
             self.prompts_config, 
             cam_cfg, 
@@ -119,7 +131,7 @@ class VisionEngine:
         # Allineamento con il tuo settings.json ("scoring_system")
         scoring_cfg = self.settings.get("scoring_system", {})
         #weights = scoring_cfg.get("weights", {})
-        thresholds = scoring_cfg.get("thresholds", {})
+        #thresholds = scoring_cfg.get("thresholds", {})
 
         for frame in frames:
             category = frame["category"]
@@ -199,28 +211,7 @@ class VisionEngine:
 
         # --- STEP 3: DEFAULT ---
         return self._build_result(cam_id, video_path, "others", frames[0]["frame_path"] if frames else None, frames, thinking=thinking)
-    # def _build_result(self, cam_id, video_path, category, frame_used, all_frames):
-    #     video_name = Path(video_path).name
-    #     result = {
-    #         "camera_id": cam_id,
-    #         "video_name": video_name,
-    #         "video_path": str(video_path),
-    #         "category": category,
-    #         "frame_priority": str(frame_used) if frame_used else None, 
-    #         "total_frames_scanned": len(all_frames),
-    #         "timestamp_analysis": time.strftime("%Y-%m-%d %H:%M:%S"),
-    #         "details": all_frames 
-    #     }
-    #     "camera_id": "03",
-    #     "camera_name": "Orto",
-    #     "video_name": "NVR_reo_03.mp4",
-    #     "video_path": "fails/NVR_reo_03.mp4",
-    #     "category": "person",
-    #     "confidence": 0.88, # Se Vision, mettiamo 1.0 o la confidenza del frame usato
-    #     "best_frame_path": "...", 
-    #     "engine": "vision" # o "yolo"
-    #     log.info(f"{'✅' if category != 'nothing' else '❌'} Video {video_name} -> {category.upper()}")
-    #     return result
+
 
     def _build_result(self, cam_id, video_path, category, frame_used, all_frames,thinking):
         video_path_obj = Path(video_path)

@@ -15,6 +15,8 @@ LOGS_DIR   = PROJECT_ROOT / "logs"
 TEMP_DIR   = PROJECT_ROOT / "temp_workdir"
 # Nuova cartella per i check periodici (es. pulizia lenti)
 CHECKS_DIR = PROJECT_ROOT / "checks"
+# File per la cache delle coordinate astronomiche
+COORDS_CACHE_JSON = CONFIG_DIR / "coords_cache.json"
 
 # File specifici
 CAMERAS_JSON = CONFIG_DIR / "cameras.json"

@@ -1,7 +1,9 @@
 from datetime import datetime
 import json
 import logging
+import os
 import re
+import socket
 import requests
 import sys
 import cv2
@@ -153,113 +155,6 @@ def get_crop_coordinates(bbox, frame_shape, margin_perc=1.0):
     ]
 
 
-
-# def extract_frames_with_cache(
-#     cap,
-#     detections,
-#     fps,
-#     video_path,
-#     frames_dir,
-#     frames_per_category,
-# ):
-#     """
-#     Extracts frames from a video at specified intervals.
-    
-#     Parameters
-#     ----------
-#     video_path : Path
-#         Path to the video file to be analyzed.
-#     frame_rate : float, optional
-#         Number of frames to extract per second (default: 1.0).
-#     output_dir : Path | None, optional
-#         Directory where the extracted frames will be saved. If `None`, a temporary directory within the input directory is created.
-    
-#     Returns
-#     -------
-#     list[Path]
-#         List of paths to the extracted frame files.
-    
-#     Notes
-#     -----
-#     * The function is used by `Scanner` to prepare data for both `YoloEngine` and `VisionEngine` [5].
-#     * Frames are saved in PNG format with sequential naming.
-    
-#     Examples
-#     --------
-#     >>> frames = extract_frames(Path("cam01.mp4"), frame_rate=2)
-#     >>> len(frames)
-#     120
-#     """
-    
-#     saved_frames = []
-#     frame_cache = {}
-#     frames_dir = Path(frames_dir)
-#     # 1. Creiamo una lista piatta di tutti i frame unici che dobbiamo estrarre
-#     # Ordiniamo per categoria e confidenza come richiesto
-#     target_detections = []
-#     for cat, items in detections.items():
-#         items.sort(key=lambda x: x["confidence"], reverse=True)
-#         # Prendiamo solo i top N per categoria
-#         for i, det in enumerate(items[:frames_per_category]):
-#             det["cat_rank"] = i
-#             det["category"] = cat
-#             target_detections.append(det)
-
-#     # 2. Estrazione
-#     for det in target_detections:
-#         frame_idx = det["frame_idx"]
-#         cat = det["category"]
-#         rank = det["cat_rank"]
-
-#         # Recupero frame con posizionamento diretto (molto più veloce)
-#         if frame_idx not in frame_cache:
-#             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-#             ret, frame = cap.read()
-#             if not ret:
-#                 continue
-#             frame_cache[frame_idx] = frame
-#         else:
-#             frame = frame_cache[frame_idx]
-
-#         # -------- Calcolo Timestamp --------
-#         # Usiamo mtime del file + offset del frame
-#         video_start_ts = video_path.stat().st_mtime
-#         ts_sec = frame_idx / fps
-#         ts_iso = datetime.fromtimestamp(video_start_ts + ts_sec).isoformat()
-
-#         # -------- Salvataggio Frame Intero (PULITO per Vision AI) --------
-#         out_name = f"{video_path.stem}_{cat}_{rank}.jpg"
-#         out_path = frames_dir / out_name
-#         cv2.imwrite(str(out_path), frame)
-        
-
-#         # -------- Salva Crop (Dettaglio per controllo) --------
-#         # -------- Taglio del Crop --------
-#         c_x1, c_y1, c_x2, c_y2 = get_crop_coordinates(det["bbox"], frame.shape)
-#         cropped_frame = frame[c_y1:c_y2, c_x1:c_x2]
-        
-#         out_name_crop = f"{video_path.stem}_{cat}_{rank}_crop.jpg"
-#         out_path_crop = frames_dir / out_name_crop
-#         if cropped_frame.size > 0: # Evitiamo crash su crop vuoti
-#             cv2.imwrite(str(out_path_crop), cropped_frame)
-        
-
-#         # -------- Record Unico per Frame + Crop --------
-#         saved_frames.append({
-#             "category": cat,
-#             "frame_path": str(out_path),
-#             "crop_path": str(out_path_crop), # <--- Legati insieme
-#             "confidence": det["confidence"],
-#             "yolo_reliable": det.get("yolo_reliable", False), # Portiamoci dietro il flag per la Vision
-#             "bbox": det["bbox"],
-#             "area_ratio": det.get("area_ratio", 0),
-#             "timestamp": ts_iso,
-#             "frame_idx": frame_idx
-#         })
-
-#     return saved_frames
-
-
 def get_target_ids(model, settings, mode, camera_ignore_labels):
     """
     Retrieve a list of numeric IDs to monitor based on the selected mode,
@@ -365,85 +260,6 @@ def calculate_score(category, conf, vision_answer, scoring_settings):
             
     return base
 
-# def calculate_score(category, conf, vision_answer, scoring_settings):
-#     """
-#     Compute a confidence score for a detection by combining YOLO confidence
-#     with a Vision model response.
-
-#     Parameters
-#     ----------
-#     category : str
-#         The class name predicted by YOLO for the current detection.
-#     conf : float
-#         YOLO confidence score for the detection (range 0–1).
-#     vision_answer : str
-#         The category returned by the Vision model for the same detection.
-#         Typical values are the same category name, ``"nothing"``, or other
-#         labels defined by the Vision model.
-#     scoring_settings : dict
-#         A dictionary containing two optional sub‑dictionaries:
-
-#         * ``weights`` – mapping confidence thresholds to base scores
-#           (e.g. ``{"score_high": 3.0, "score_mid": 2.0, "score_low": 1.0}``).
-#         * ``multipliers`` – mapping categories to a multiplier that is
-#           applied when Vision confirms the YOLO category
-#           (default multiplier is ``1.6``).
-
-#     Returns
-#     -------
-#     float
-#         The final score for the detection.  The score is calculated as:
-
-#         1. A base score is chosen according to ``conf``:
-#            * ``conf`` ≥ 0.70 → ``score_high`` (default 3.0)
-#            * 0.55 ≤ ``conf`` < 0.70 → ``score_mid`` (default 2.0)
-#            * 0.40 ≤ ``conf`` < 0.55 → ``score_low`` (default 1.0)
-#            * ``conf`` < 0.40 → 0.3
-
-#         2. If ``vision_answer`` matches ``category``, the base score is
-#            multiplied by the corresponding value in ``multipliers``
-#            (default 1.6).
-
-#         3. If ``vision_answer`` is ``"nothing"``, the score remains
-#            unchanged (the snippet only shows the multiplier branch,
-#            but the logic for ``"nothing"`` can be extended as needed).
-
-#     Notes
-#     -----
-#     This function is used by the pipeline to weigh detections before
-#     aggregating them into an overall alert level.  The exact values for
-#     ``score_high``, ``score_mid``, and ``score_low`` as well as the
-#     default multiplier are configurable through ``scoring_settings``.
-#     The implementation follows the logic outlined in the project’s
-#     ``utils.py`` module [1].
-#     """
-#     weights = scoring_settings.get("weights", {})
-#     multipliers = scoring_settings.get("multipliers", {})
-
-#     # 1. Punteggio base basato sulla confidenza YOLO
-#     if conf >= 0.70:
-#         base = weights.get("score_high", 3.0)
-#     elif conf >= 0.55:
-#         base = weights.get("score_mid", 2.0)
-#     elif conf >= 0.40:
-#         base = weights.get("score_low", 1.0)
-#     else:
-#         base = 0.3
-
-#     # 2. Modificatore basato sulla risposta di Vision
-#     if vision_answer == category:
-#         # Se Vision conferma esattamente la categoria di YOLO
-#         multiplier = multipliers.get(category, 1.6)
-#         base *= multiplier
-#     elif vision_answer == "nothing":
-#         # Se Vision non vede nulla, non diamo bonus ma non penalizziamo troppo
-#         base *= 1.0
-#     else:
-#         # Se Vision vede una categoria DIVERSA (es. YOLO dice animal, Vision dice person)
-#         # Penalizziamo la rilevazione corrente
-#         base *= 0.5
-            
-#     return base
 
 def get_safe_path(base_dir, camera_name, category, structure_type):
     """
@@ -569,3 +385,85 @@ def validate_ollama_setup(vision_settings):
     except requests.exceptions.ConnectionError:
         log.info(f"❌ Errore Fatale: Ollama è spento su {ip}:{port}.")
         return False
+    
+
+
+import json
+import socket
+from astral.geocoder import database, lookup
+from constants import COORDS_CACHE_JSON
+
+def fetch_coords_logic(city_name):
+    # LIVELLO 1: PROVA ONLINE (Geopy)
+    try:
+        # Controllo rapido connessione (opzionale ma consigliato)
+        from geopy.geocoders import Nominatim
+        geolocator = Nominatim(user_agent="security_app", timeout=3)
+        loc = geolocator.geocode(city_name)
+        if loc:
+            return {"lat": loc.latitude, "lon": loc.longitude}
+    except Exception:
+        print(f"⚠️ Internet assente. Cerco '{city_name}' nel database locale...")
+
+    # LIVELLO 2: FALLBACK OFFLINE (Astral Database)
+    try:
+        city_data = lookup(city_name, database())
+        return {"lat": city_data.latitude, "lon": city_data.longitude}
+    except KeyError:
+        print(f"⚠️ Città '{city_name}' non trovata offline. Fallback su Roma.")
+        return {"lat": 41.89, "lon": 12.49} # Default universale
+    
+
+def get_smart_coordinates(city_from_settings):
+    update_needed = False
+
+    # 1. Carichiamo la cache se esiste
+    if COORDS_CACHE_JSON.exists():
+        try:
+            with open(COORDS_CACHE_JSON, "r") as f:
+                cache = json.load(f)
+            
+            if cache.get("city_name") == city_from_settings:
+                return cache["lat"], cache["lon"]
+            else:
+                update_needed = True # Città cambiata nel settings.json
+        except Exception:
+            update_needed = True
+    else:
+        update_needed = True
+
+    # 2. Se serve, cerchiamo le nuove coordinate
+    if update_needed:
+        coords = fetch_coords_logic(city_from_settings)
+        
+        with open(COORDS_CACHE_JSON, "w") as f:
+            json.dump({
+                "city_name": city_from_settings,
+                "lat": coords["lat"],
+                "lon": coords["lon"]
+            }, f, indent=4)
+            
+        return coords["lat"], coords["lon"]
+    
+
+from astral import Observer
+from astral.sun import sun
+from datetime import timedelta
+import pytz
+
+def is_night_astronomic(dt_frame, lat, lon):
+    # Observer usa solo matematica locale
+    obs = Observer(latitude=lat, longitude=lon)
+    
+    # Calcolo del sole per la data del video
+    s = sun(obs, date=dt_frame.date())
+    
+    # Applichiamo l'offset di 20 min (crepuscolo civile)
+    # Il boost si attiva 20 min prima del tramonto astronomico
+    sunset_limit = s["sunset"] - timedelta(minutes=20)
+    sunrise_limit = s["sunrise"] + timedelta(minutes=20)
+    
+    # Portiamo il timestamp del frame in UTC per il confronto
+    dt_utc = dt_frame.astimezone(pytz.utc)
+    
+    return dt_utc > sunset_limit or dt_utc < sunrise_limit
