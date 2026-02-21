@@ -4,7 +4,7 @@ __pycache__/
 .venv/
 venv/
 env/
-
+.vscode
 # --- Dati e Video (Il "grosso" da escludere) ---
 *.mp4
 *.mkv
@@ -16,10 +16,7 @@ env/
 models/*.pt
 models/*.onnx
 models/*.engine
-# --- Configurazione Locale ---
-# Escludi le tue impostazioni personali se non vuoi che 
-# altri PC sovrascrivano i tuoi IP/Porte
-# settings.json
+checks/*
 
 # --- Log ---
 *.log
