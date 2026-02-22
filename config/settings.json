@@ -4,6 +4,7 @@
         "prompts_path": "config/prompts.json",
         "models_dir": "models"
     },
+    "city":"Rosarno",
     "classification_settings": {
         "priority_hierarchy": [
             "person",
@@ -24,7 +25,7 @@
     "yolo_settings": {
         "model_path": "yolov8l",
         "device": "cuda",
-        "num_occurrence": 2,
+        "num_occurrence": 3,
         "time_gap_sec": 5,
         "yolo_override_threshold": 0.85,
         "detection_groups": {

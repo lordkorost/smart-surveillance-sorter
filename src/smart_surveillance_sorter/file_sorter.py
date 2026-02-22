@@ -20,14 +20,41 @@ class FileSorter:
         storage_cfg = settings.get("storage_settings", {})
         self.structure_type = storage_cfg.get("structure_type", "camera_first")
 
+    # def _execute_io(self, src, dst):
+    #     """Esegue fisicamente lo spostamento o la copia."""
+    #     src = Path(src)
+    #     dst = Path(dst)
+        
+    #     if not src.exists():
+    #         return False
+            
+    #     try:
+    #         dst.parent.mkdir(parents=True, exist_ok=True)
+    #         if self.method == "MOVE":
+    #             shutil.move(str(src), str(dst))
+    #         else:
+    #             shutil.copy2(str(src), str(dst))
+    #         return True
+    #     except Exception as e:
+    #         log.critical(f"Errore durante {self.method} di {src.name}: {e}")
+    #         return False
+        
     def _execute_io(self, src, dst):
         """Esegue fisicamente lo spostamento o la copia."""
         src = Path(src)
         dst = Path(dst)
         
+        # 1. SE LA SORGENTE NON C'È: 
+        # In caso di Resume con MOVE, il file è già sparito dall'input. 
+        # Ritorniamo False e il Sorter passa oltre senza errori.
         if not src.exists():
             return False
             
+        # 2. SE LA DESTINAZIONE C'È GIÀ:
+        # In caso di Resume con COPY, non vogliamo riscrivere il file.
+        if dst.exists():
+            return True
+
         try:
             dst.parent.mkdir(parents=True, exist_ok=True)
             if self.method == "MOVE":
@@ -36,10 +63,10 @@ class FileSorter:
                 shutil.copy2(str(src), str(dst))
             return True
         except Exception as e:
-            log.critical(f"Errore durante {self.method} di {src.name}: {e}")
+            # Usiamo log.error per non interrompere il ciclo su altri video
+            log.error(f"Errore durante {self.method} di {src.name}: {e}")
             return False
-        
-    
+
     def _process_item(self, item, base_dir):
         """
         item: il record dal JSON finale (o dalla lista risultati)

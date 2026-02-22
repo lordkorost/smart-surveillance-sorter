@@ -397,27 +397,6 @@ class ClipBlipEngine:
             
             return "VEHICLE" if avg_vehicle > threshold else "OTHERS"
 
-        # # Determiniamo la categoria dominante
-        # if avg_animal >= avg_vehicle:
-        #     # Se i frame sono già stati filtrati contro i FAKE,
-        #     # non serve chiedere 0.92. Usiamo soglie più umane.
-            
-        #     if count == 1:
-        #         # Se c'è un solo frame, vogliamo essere sicuri
-        #         return "ANIMAL" if avg_animal > 0.45 else "OTHERS"
-        #     elif count == 2:
-        #         # Come nel tuo caso del gatto (media 0.64)
-        #         return "ANIMAL" if avg_animal > 0.40 else "OTHERS"
-        #     else:
-        #         # Più frame abbiamo, più siamo sicuri della costanza
-        #         return "ANIMAL" if avg_animal > 0.35 else "OTHERS"
-
-        # else:
-        #     # Logica per i veicoli (simmetrica)
-        #     if count == 1:
-        #         return "VEHICLE" if avg_vehicle > 0.50 else "OTHERS"
-        #     else:
-        #         return "VEHICLE" if avg_vehicle > 0.40 else "OTHERS"
 
 
     def _check_if_static(self, frames):

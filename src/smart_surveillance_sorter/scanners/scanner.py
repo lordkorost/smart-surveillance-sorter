@@ -154,40 +154,63 @@ class Scanner():
         raw_index = self._build_index(self.input_dir)
         self.full_index = self._associate_files(raw_index)
 
-        # if self.engine == "vision" and self.is_check_clean:
-        #     self.lens_status = self.check_cameras_clean()
-            
-        #     # Percorso del file JSON di report
-        #     health_report_path = Path(self.output_dir) / "lens_health.json"
-            
-        #     try:
-        #         with open(health_report_path, "w", encoding="utf-8") as f:
-        #             json.dump(self.lens_status, f, indent=4)
-        #         log.info(f"✅ Report salute lenti salvato in: {health_report_path}")
-        #     except Exception as e:
-        #         log.error(f"❌ Impossibile salvare il report lenti: {e}")
-
-
-        # --- RECUPERO PEZZO CANCELLATO ---
         yolo_cache_file = Path(self.output_dir) / "yolo_scan_res.json"
-        # 2. Check esistenza e caricamento/scansione
+        self.yolo_cache_file = yolo_cache_file
+        log.debug(f"DEBUG: results type: {type(self.results)}")
+        log.debug(f"DEBUG: full_index type: {type(self.full_index)}")
+        if self.full_index:
+            # Prendi la prima camera e il primo video
+            first_cam = list(self.full_index.keys())[0]
+            first_video = self.full_index[first_cam][0]
+            log.debug(f"DEBUG: Primo video in full_index: {first_video} (Tipo: {type(first_video)})")
         if yolo_cache_file.exists():
-            log.warning("♻️  Cache YOLO trovata! Caricamento risultati in corso...")
-            with open(yolo_cache_file, 'r', encoding='utf-8') as f:
-                self.results = json.load(f)
-        else:
-            log.info("🔍 Cache non trovata. Avvio scansione completa...")
-            self._scan_images(self.full_index)
-            self.monitor.log_stats(f"INIZIO SCANSIONE VIDEO YOLO")
-            self._scan_videos(self.full_index)
-            # Salviamo subito i risultati per i futuri test
-            save_json(self.results, yolo_cache_file)
-        
-        # 4. Fase 1 & 2: Analisi YOLO (Popola self.results)
-        # self._scan_images(self.full_index)
-        # self._scan_videos(self.full_index)
+            log.warning("♻️  Cache YOLO trovata! Caricamento risultati...")
+            try:
+                loaded_data = load_json(yolo_cache_file)
+                # Assicuriamoci che sia una lista di dizionari
+                self.results = [r for r in loaded_data if isinstance(r, dict)]
+            except Exception:
+                log.error("❌ Cache YOLO corrotta, procedo con lista vuota")
+                self.results = []
 
-        # 5. Fase 3: Raffinamento o Finalizzazione
+            for r in self.results:
+                if "video_path" in r:
+                    self.resolved_videos.add(str(r["video_path"]))
+        else:
+            self.results = []
+
+        # 3. FILTRAGGIO INDICE
+        #processed_set = {str(r["video_path"]) for r in self.results if "video_path" in r}
+        original_size = len(self.full_index)
+        processed_set = {str(r.get("video_path")) for r in self.results if isinstance(r, dict) and r.get("video_path")}
+
+        self.full_index = {
+            cam_id: [
+                video for video in videos 
+                if str(video.get("video_path")) not in processed_set
+            ]
+            for cam_id, videos in self.full_index.items()
+        }
+
+        new_count = len(self.full_index)
+        skipped = original_size - new_count
+
+        if skipped > 0:
+            log.info(f"⏭️  Saltati {skipped} video già in cache. Nuovi da processare: {new_count}")
+        
+        # 4. Avvio Scansione
+        if new_count > 0:
+            # Se la cache era vuota (prima run in assoluto), analizziamo le immagini NVR
+            if not processed_set:
+                log.info("🔍 Prima scansione: Analisi immagini NVR in corso...")
+                self._scan_images(self.full_index)
+            
+            self.monitor.log_stats(f"INIZIO SCANSIONE VIDEO YOLO ({new_count} nuovi)")
+            self._scan_videos(self.full_index)
+        else:
+            log.info("✅ Tutti i video sono già stati analizzati. Nulla da fare.")
+        
+    
         # Lo scopo qui è popolare 'final_data', l'unico oggetto che il Sorter leggerà.
         final_data = []
         self.final_reports = []
@@ -204,6 +227,18 @@ class Scanner():
             )
             self.monitor.log_stats(f"INIZIO SCANSIONE VIDEO CLIPBLIP")
             self._clip_blip_scan_refine() #<---- non c'è bisogno di passargli niente e riempie results_clip
+
+            if self.is_fallback:
+               
+                vision_queue = self._get_arbitration_queue() #<--- non c'è bisogno di passare niente
+                if vision_queue:
+                     # ... logica Vision AI ...
+                    log.info("✨ Avvio fallback su blip res con Vision AI...")
+                    self._ensure_vision_initialized() 
+                    log.info(f"🚀 {len(vision_queue)} video richiedono l'arbitrato di Vision.")
+                    # Passiamo la coda filtrata al motore Vision
+                    self._fallback_with_vision(vision_queue)
+
             log.info("Elaborazione verdetto finale YOLO + blip(no refine)...")
             self.final_reports = self.clip_blip_results
             final_data = self._finalize_results(self.final_reports, engine="blip")
@@ -234,43 +269,7 @@ class Scanner():
                 # self._fallback_scan aggiunge altri record a self.final_reports
                 self._fallback_scan() 
                 final_data = self._finalize_results(self.final_reports, engine="vision")
-            # self._ensure_vision_initialized()
-            # self._refine_with_vision()
-            # if self.is_fallback:
-            #     self._fallback_scan()
-            #     self.final_reports = self.final_reports
-        
-        
-        # if not self.is_refine:
-        #     # --- CASO SOLO YOLO + clip-
-        #     from .blip_engine import BLIPEngine # Import locale per velocità
-        #     self.blip_engine = BLIPEngine(
-        #         settings=self.settings,
-        #         #logger=log,
-        #         device=self.settings.get("yolo_settings", {}).get("device", "cpu"),
-        #         output_dir=self.output_dir
-        #     )
-        #     self._blip_scan_refine() #<---- non c'è bisogno di passargli niente e riempie results_clip
-        #     log.info("Elaborazione verdetto finale YOLO + blip(no refine)...")
-        #     self.final_reports = self.blip_results
-        #     final_data = self._finalize_results(self.final_reports, engine="blip")
-        # else:
-        #     # --- CASO VISION AI (+ Fallback) ---
-        #     log.info("✨ Avvio raffinamento con Vision AI...")
-        #     self._ensure_vision_initialized() 
-            
-        #     # self._refine_with_vision popola internamente self.final_reports
-        #     self._refine_with_vision() 
-            
-        #     if self.is_fallback:
-        #         # self._fallback_scan aggiunge altri record a self.final_reports
-        #         self._fallback_scan() 
-        #         final_data = self._finalize_results(self.final_reports, engine="vision")
-            # Trasformiamo i report accumulati nel formato standard final_data
-            # Usiamo 'vision' come engine generico, i singoli record avranno 
-            # poi il dettaglio (es. fallback_nvr) se necessario.
-            #final_data = self._finalize_results(self.final_reports, engine="vision")
-            
+           
 
         # 6. Fase 4: Sorter (Il Gran Finale)
         if final_data:
@@ -591,6 +590,8 @@ class Scanner():
             if result:
                 self.results.append(result)
                 self.resolved_videos.add(video_str)
+                with open(self.yolo_cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.results, f, indent=4)
         pbar.close()
         # --- SALVATAGGIO STATS ---
         if self.is_test:
@@ -604,6 +605,19 @@ class Scanner():
         if not self.results:
             log.warning("Nessun risultato YOLO da raffinare.")
             return
+        
+        vision_cache_file = Path(self.output_dir) / "vision_scan_res.json"
+        
+        # Inizializziamo/Carichiamo i risultati
+        if vision_cache_file.exists():
+            log.info("♻️  Cache Vision AI trovata! Caricamento progressi...")
+            self.vision_results = load_json(vision_cache_file)
+        else:
+            self.vision_results = []
+
+        # Creiamo il set per saltare i video già fatti
+        processed_vision_paths = {str(r["video_path"]) for r in self.vision_results}
+        
         # --- TIMER INIZIO ---
         t_start = time.time()
         # 1. INFO iniziale con modello (come richiesto)
@@ -627,21 +641,59 @@ class Scanner():
             bar_format="{desc}: {rate_fmt} [{bar}] {percentage:3.0f}% {n_fmt}/{total_fmt} {elapsed}<{remaining}"
         )
         pbar.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}")
+        
         for video_data in pbar:
-            # Chiamata al motore Vision
+            video_path = str(video_data.get("video_path"))
+
+            # --- 1. SALTO SE GIÀ IN CACHE ---
+            if video_path in processed_vision_paths:
+                cache_entry = next((r for r in self.vision_results if str(r["video_path"]) == video_path), None)
+                if cache_entry:
+                    self.final_reports.append(cache_entry)
+                pbar.update(1)
+                continue
+
+            # --- 2. GESTIONE OTHERS (YOLO DISCARD) ---
+            if "others" in video_data.get("categories_found", []):
+                cam_id = video_data.get("camera_id")
+                cam_info = self.cameras_config.get(str(cam_id), {})
+                cam_name = cam_info.get("name", f"Camera_{cam_id}")
+                
+                report = {
+                    "camera_id": str(cam_id),
+                    "camera_name": cam_name,
+                    "video_name": Path(video_path).name,
+                    "video_path": video_path,
+                    "category": "others",
+                    "confidence": 0,
+                    "best_frame_path": None,
+                    "engine": "yolo_discard", 
+                    "thinking": "No objects detected by YOLO engine."
+                }
+                self.vision_results.append(report)
+                # Salvataggio immediato anche per gli scarti
+                save_json(self.vision_results, vision_cache_file)
+                pbar.update(1)
+                continue 
+
+            # --- 3. CHIAMATA AL MOTORE VISION (QWEN) ---
             report = self.vision_engine.refine_single_video(video_data)
-            self.final_reports.append(report)
+            
+            if report:
+                self.vision_results.append(report)
+                # SALVATAGGIO INCREMENTALE (Vitale per Vision AI)
+                save_json(self.vision_results, vision_cache_file)
 
-            # --- LOGGING DEL THINKING SOLO IN TEST ---
-            if self.is_test and report.get("thinking"):
-                tqdm.write(f"\n{Fore.CYAN}{'='*40}{Style.RESET_ALL}")
-                tqdm.write(f"🧠 {Fore.MAGENTA}REASONING for {report['video_name']}:{Style.RESET_ALL}")
-                # Usiamo un colore spento (LIGHTBLACK) per il testo lungo così non affatica
-                tqdm.write(f"{Fore.LIGHTBLACK_EX}{report['thinking']}{Style.RESET_ALL}")
-                tqdm.write(f"🎯 {Fore.GREEN}FINAL VERDICT: {report['category']}{Style.RESET_ALL}")
-                tqdm.write(f"{Fore.CYAN}{'='*40}{Style.RESET_ALL}\n")
-
-        pbar.close()
+                # --- LOGGING TEST ---
+                if self.is_test and report.get("thinking"):
+                    tqdm.write(f"\n{Fore.CYAN}{'='*40}{Style.RESET_ALL}")
+                    tqdm.write(f"🧠 {Fore.MAGENTA}REASONING for {report['video_name']}:{Style.RESET_ALL}")
+                    tqdm.write(f"{Fore.LIGHTBLACK_EX}{report['thinking']}{Style.RESET_ALL}")
+                    tqdm.write(f"🎯 {Fore.GREEN}FINAL VERDICT: {report['category']}{Style.RESET_ALL}")
+                    tqdm.write(f"{Fore.CYAN}{'='*40}{Style.RESET_ALL}\n")
+            
+            pbar.update(1)
+        self.final_reports = self.vision_results
         # --- SALVATAGGIO STATS ----
         if self.is_test:
             self.stats["vision_refine"]["count"] = len(self.results)
@@ -862,144 +914,181 @@ class Scanner():
             })
         return standardized
     
-    
     def _clip_blip_scan_refine(self):
         self.clip_blip_results = []
         self.clip_blip_video_dict = {}
-      
+
         if not self.results:
             log.warning("Nessun risultato YOLO da passare a BLIP.")
             return
+        
+        clip_blip_res_path = Path(self.output_dir) / "clip_blip_res.json"
+
+        if clip_blip_res_path.exists():
+            log.info("♻️  Caricamento analisi tecniche CLIP/BLIP esistenti...")
+            self.clip_blip_video_dict = load_json(clip_blip_res_path)
+        else:
+            self.clip_blip_video_dict = {}
 
         t_start = time.time()
-
         log.info(f"🚀 Inizio raffinamento CLIP-BLIP su num_video={len(self.results)}")
 
-        # Inizializziamo la barra
         pbar = tqdm(
             self.results,
             desc="CLIP-BLIP",
             unit="vid",
-            ncols=100, # Larghezza totale contenuta
+            ncols=100,
             bar_format="{desc}: {percentage:3.0f}% |{bar:20}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]"
         )
         
         for video_data in self.results:
-            # 1. Recupero informazioni telecamera per il formato finale
             cam_id_str = str(video_data["camera_id"])
-            # Cerchiamo la camera nel config (che dovresti avere nello Scanner)
             cam_info = self.cameras_config.get(cam_id_str, {})
             cam_name = cam_info.get("name", f"Camera_{cam_id_str}")
-      
-            video_dict = self.clip_blip_engine.scan_single_video(video_data)
-            # Recuperi il path del video (che è la chiave del dizionario restituito)
             video_path_key = video_data.get("video_path")
 
-            # Accedi ai dati del video usando la chiave
-            video_info = video_dict.get(video_path_key, {})
+            # Inizializziamo raw_category a None per ogni ciclo
+            raw_category = None
 
-            # Ora puoi prendere la categoria in modo sicuro
-            raw_category = video_info.get("video_category")
-            #print(f"DEBUG: Raw category: {raw_category} | Type: {type(raw_category)}")
-            final_category = raw_category.lower()
-            if final_category != "empty":
-                # 2. Troviamo il "best_frame" 
-                best_frame = next(
-                    (f for f in video_data["frames"] 
-                    if f["category"].upper() == final_category.upper() and f.get("label") == final_category.upper()), 
-                    video_data["frames"][0] # Fallback sul primo frame se è un override YOLO
-                )
+            # --- CASO A: Cache ---
+            if video_path_key in self.clip_blip_video_dict:
+                video_info = self.clip_blip_video_dict[video_path_key]
+                raw_category = video_info.get("video_category")
 
-                # 3. Costruiamo il dizionario esattamente come lo vuole la funzione di spostamento
-                refined_entry = {
-                    "camera_id": str(video_data["camera_id"]),
+            # --- CASO B: Scartati da YOLO ---
+            elif "others" in video_data.get("categories_found", []):
+                other_entry = {
+                    "camera_id": cam_id_str,
                     "camera_name": cam_name, 
                     "video_name": Path(video_data["video_path"]).name,
                     "video_path": video_data["video_path"],
-                    "category": final_category,
-                    "confidence": 1,
-                    "best_frame_path": best_frame.get("frame_path"),
-                    "engine": "clip_blip",
-                    "thinking": f"Validated by clip_blip (Confirmed {final_category})"
+                    "category": "others",
+                    "confidence": 0,
+                    "best_frame_path": None,
+                    "engine": "yolo discard",
+                    "thinking": "Discarded by YOLO (No objects found)"
                 }
-
-                self.clip_blip_results.append(refined_entry)
-                #log.info(f"✅ Video_validato={refined_entry['video_name']} -> categoria={final_category}")
-                # Usiamo pbar.write per non rompere la barra grafica
-                #pbar.write(f"  ✅ video={refined_entry['video_name']} -> cat={final_category}")
-                self.clip_blip_video_dict.update(video_dict)
-                # --- AGGIUNGI QUESTA RIGA QUI SOTTO ---
+                self.clip_blip_results.append(other_entry)
                 pbar.update(1)
-        # 3. Chiusura barra e statistiche
+                continue 
+
+            # --- CASO C: Analisi Reale ---
+            else:
+                video_dict = self.clip_blip_engine.scan_single_video(video_data)
+                self.clip_blip_video_dict.update(video_dict)
+                video_info = video_dict.get(video_path_key, {})
+                raw_category = video_info.get("video_category")
+
+            # --- CREAZIONE REPORT (Indentata correttamente sotto il for) ---
+            if raw_category:
+                final_category = raw_category.lower()
+                if final_category != "empty":
+                    best_frame = next(
+                        (f for f in video_data["frames"] 
+                        if f["category"].upper() == final_category.upper() and f.get("label") == final_category.upper()), 
+                        video_data["frames"][0]
+                    )
+
+                    refined_entry = {
+                        "camera_id": cam_id_str,
+                        "camera_name": cam_name, 
+                        "video_name": Path(video_data["video_path"]).name,
+                        "video_path": video_data["video_path"],
+                        "category": final_category,
+                        "confidence": 1,
+                        "best_frame_path": best_frame.get("frame_path"),
+                        "engine": "clip_blip",
+                        "thinking": f"Validated by clip_blip (Confirmed {final_category})"
+                    }
+                    self.clip_blip_results.append(refined_entry)
+                
+                # Update della barra dopo aver finito il processo (sia cache che AI)
+                pbar.update(1)
+
         pbar.close()
-        # 3. Aggiorniamo le statistiche se in modalità test
         elapsed = time.time() - t_start
+        
+        # Salvataggio della cache tecnica (Sempre, non solo in is_test, così serve al Resume)
+        with open(clip_blip_res_path, "w", encoding="utf-8") as f:
+            json.dump(self.clip_blip_video_dict, f, indent=4)
+
         if self.is_test:
             self.stats["blip_analysis"] = {
                 "count": len(self.results), 
                 "confirmed": len(self.clip_blip_results),
                 "time": elapsed
             }
-            clip_blip_res_path = Path(self.output_dir) / "clip_blip_res.json"
-            with open(clip_blip_res_path, "w") as f:
-                json.dump(self.clip_blip_video_dict, f, indent=4)
 
-        log.info(f"🏁 Raffinamento CLIP-BLIP completato in time={elapsed:.2f}s. Video_validi={len(self.clip_blip_results)}/{len(self.results)}")
+        log.info(f"🏁 Raffinamento completato in {elapsed:.2f}s. Video_validi={len(self.clip_blip_results)}/{len(self.results)}")
+  
     
-    
-    # def _blip_scan_refine(self):
-    #     self.blip_results = []
-
-    #     if not self.results:
-    #         log.warning("Nessun risultato YOLO da passare a BLIP.")
-    #         return
-
-    #     t_start = time.time()
+    def _get_arbitration_queue(self):
+        """
+        Analizza i risultati di YOLO e BLIP per isolare i casi dubbi.
+        Non servono parametri: legge self.results e self.clip_blip_results.
+        """
+        vision_queue = []
         
-    #     for video_data in self.results:
-    #         # 1. Recupero informazioni telecamera per il formato finale
-    #         cam_id_str = str(video_data["camera_id"])
-    #         # Cerchiamo la camera nel config (che dovresti avere nello Scanner)
-    #         cam_info = self.cameras_config.get(cam_id_str, {})
-    #         cam_name = cam_info.get("name", f"Camera_{cam_id_str}")
-    #         # 1. Chiamiamo l'analisi (ritorna "person", "animal", "vehicle" o "empty")
-    #         final_category = self.blip_engine.analyze_video_results(video_data)
+        # Creiamo la mappa dei risultati BLIP: {video_path: categoria}
+        # Usiamo .lower() per evitare problemi di case-sensitivity
+        blip_map = {str(r['video_path']): r['category'].lower() for r in self.clip_blip_results}
+
+        for video_data in self.results:
+            video_path = str(video_data.get("video_path"))
+            yolo_cats = video_data.get("categories_found", [])
             
-    #         if final_category != "empty":
-    #             # 2. Troviamo il "best_frame" (il primo che ha confermato la categoria)
-    #             # Se BLIP ha confermato più frame, prendiamo il primo che ha 'blip_confirmed' = True
-    #             best_frame = next(
-    #                 (f for f in video_data["frames"] 
-    #                 if f["category"].upper() == final_category.upper() and f.get("blip_confirmed")), 
-    #                 video_data["frames"][0] # Fallback sul primo frame se è un override YOLO
-    #             )
+            # Recuperiamo il verdetto di BLIP (default a 'others' se non trovato)
+            blip_cat = blip_map.get(video_path, "others")
 
-    #             # 3. Costruiamo il dizionario esattamente come lo vuole la funzione di spostamento
-    #             refined_entry = {
-    #                 "camera_id": str(video_data["camera_id"]),
-    #                 "camera_name": video_data.get("camera_name", "Unknown"), # Se lo hai nei dati originali
-    #                 "video_name": Path(video_data["video_path"]).name,
-    #                 "video_path": video_data["video_path"],
-    #                 "category": final_category,
-    #                 "confidence": best_frame.get("blip_confidence", best_frame["confidence"]),
-    #                 "best_frame_path": best_frame.get("frame_path"),
-    #                 "engine": "yolo_blip",
-    #                 "thinking": f"Validated by BLIP (Confirmed {final_category})"
-    #             }
+            # --- LOGICA DI FILTRAGGIO ---
 
-    #             self.blip_results.append(refined_entry)
-    #             log.info(f"✅ Video validato: {refined_entry['video_name']} -> {final_category}")
-        
-    #     # 3. Aggiorniamo le statistiche se in modalità test
-    #     elapsed = time.time() - t_start
-    #     if self.is_test:
-    #         self.stats["blip_analysis"] = {
-    #             "count": len(self.results), 
-    #             "confirmed": len(self.blip_results),
-    #             "time": elapsed
-    #         }
-        
-    #     log.info(f"🏁 Raffinamento BLIP completato in {elapsed:.2f}s. Video validi: {len(self.blip_results)}/{len(self.results)}")
+            # 1. Se YOLO ha visto una PERSONA, per noi è legge. Saltiamo Qwen.
+            if "person" in yolo_cats:
+                continue
+
+            # 2. Se non ci sono persone, ma YOLO sospetta ANIMALI o VEICOLI
+            has_animal = "animal" in yolo_cats
+            has_vehicle = "vehicle" in yolo_cats
+
+            if has_animal or has_vehicle:
+                # CASO A: YOLO vede qualcosa, ma BLIP dice 'others' (il tuo filtro drastico)
+                if blip_cat == "others":
+                    vision_queue.append(video_data)
+                
+                # CASO B: Conflitto di specie (YOLO dice Animale, BLIP dice Persona)
+                elif has_animal and blip_cat == "person":
+                    vision_queue.append(video_data)
+                
+                # CASO C: BLIP conferma Animale. 
+                # Visto che BLIP ha recall 9%, se ne vede uno vogliamo che Qwen confermi 
+                # per evitare i falsi positivi (legna/alberi).
+                elif blip_cat == "animal":
+                    vision_queue.append(video_data)
+
+        return vision_queue
+
+    # def _get_arbitration_queue(self):
+    #     vision_queue = []
+    #     # Creiamo una mappa veloce {path: categoria} dai risultati BLIP appena finiti
+    #     blip_map = {r['video_path']: r['category'] for r in self.clip_blip_results}
+
+    #     for video_data in self.results:
+    #         v_path = video_data.get("video_path")
+    #         yolo_cats = video_data.get("categories_found", [])
+    #         b_cat = blip_map.get(v_path, "others").lower()
+
+    #         # 1. PERSONA: YOLO vince sempre.
+    #         if "person" in yolo_cats:
+    #             continue
+
+    #         # 2. CONFLITTI: Animali e Veicoli
+    #         if "animal" in yolo_cats or "vehicle" in yolo_cats:
+    #             # Caso: YOLO vede qualcosa, BLIP dice 'others' o conferma 'animal'
+    #             # (Vogliamo Vision per la scarsa recall/precision di BLIP sugli animali)
+    #             if b_cat in ["others", "animal"] or (b_cat == "person" and "animal" in yolo_cats):
+    #                 vision_queue.append(video_data)
+
+    #     return vision_queue
     
     
     def _print_final_summary(self, total_time):
@@ -1110,3 +1199,49 @@ class Scanner():
                 return potential_ref
         
         return None
+    
+
+    def _fallback_with_vision(self, vision_queue):
+        if not vision_queue:
+            return
+
+        self.vision_results = []
+        # log.info(f"🧠 Avvio Fallback Vision su {len(vision_queue)} casi dubbi...")
+        
+        # # 1. Inizializziamo il motore Vision solo se serve
+        # self._ensure_vision_initialized()
+
+        msg_start = f"Avvio Arbitrato Vision su {len(vision_queue)} video dubbi"
+        log.info(msg_start)
+
+        # 2. Barra di progressione per i casi critici
+        pbar = tqdm(
+            vision_queue, 
+            desc="⚖️  Vision Arbitration", 
+            unit="it", 
+            ncols=80,
+            bar_format="{desc}: {rate_fmt} [{bar}] {percentage:3.0f}% {n_fmt}/{total_fmt} {elapsed}"
+        )
+        pbar.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}")
+        # 2. Creiamo una mappa per trovare velocemente i report in clip_blip_results
+        # Assumiamo che clip_blip_results sia già popolata dallo scan precedente
+        for video_data in pbar:
+            video_path = video_data.get("video_path")
+            
+            # 3. Chiamata a Qwen solo per questo video
+            report_vision = self.vision_engine.refine_single_video(video_data)
+            
+            if report_vision:
+                # 4. SOSTITUZIONE CHIRURGICA
+                # Cerchiamo il vecchio report di BLIP e lo rimpiazziamo con quello di Vision
+                for i, r in enumerate(self.clip_blip_results):
+                    if r["video_path"] == video_path:
+                        self.clip_blip_results[i] = report_vision
+                        break
+                
+                # 5. Salvataggio incrementale della cache vision (opzionale ma consigliato)
+                self.vision_results.append(report_vision)
+                # save_json(self.vision_results, Path(self.output_dir) / "vision_scan_res.json")
+            # Logging del ragionamento se sei in modalità test
+                if self.is_test and report_vision.get("thinking"):
+                    pbar.write(f"\n🧠 Arbitro: {report_vision['video_name']} -> {report_vision['category']}")

@@ -231,9 +231,8 @@ class YoloEngine:
                 "frames": [
                     {
                         "category": "person",
-                        #"frame_path": str(image_path),
                         "frame_path": str(nvr_original_dest),
-                        "crop_path": best_det.get("crop_path"), # <--- Passiamo il crop!
+                        "crop_path": best_det.get("crop_path"), 
                         "confidence": best_det["confidence"],
                         "bbox": best_det["bbox"],
                         "timestamp": ts.isoformat()
@@ -581,8 +580,14 @@ class YoloEngine:
         # 5️⃣ Estrazione Frame Finali (Solo se ci sono detection)
         # ------------------------------------------------------------------
         if not any(detections.values()):
-            return None
-
+            #return None
+            return {
+                "camera_id": cam_id,
+                "video_path": str(video_path),
+                "categories_found": ["others"],      # Lista vuota, coerente con lo schema
+                "frames": [],               # Dizionario vuoto (o [] se saved_frames è lista)
+                "timestamp": datetime.now().isoformat()
+            }
         self.frames_dir.mkdir(parents=True, exist_ok=True)
         cap = cv2.VideoCapture(str(video_path))
         saved_frames = extract_frames_with_cache(
@@ -596,7 +601,13 @@ class YoloEngine:
         cap.release()
 
         if not saved_frames:
-            return None
+            return {
+                "camera_id": cam_id,
+                "video_path": str(video_path),
+                "categories_found": ["others"],      # Lista vuota, coerente con lo schema
+                "frames": [],               # Dizionario vuoto (o [] se saved_frames è lista)
+                "timestamp": datetime.now().isoformat()
+            }
 
         categories_found = [cat for cat, found_list in detections.items() if len(found_list) > 0]
 
