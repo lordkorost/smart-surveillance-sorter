@@ -32,111 +32,40 @@ class YoloEngine:
         #file di configurazione
         self.settings          =  settings
         self.cameras_config    =  cameras_config
-        yolo_cfg                = self.settings.get("yolo_settings", {})
+        
 
+        #aspetta a caricare il modello solo se serve
+        self.model = None
+        self.name_to_id = None
+        #yolo_cfg                = self.settings.get("yolo_settings", {})
         # carica il modello yolo
-        self.model = load_smart_yolo(
-            model_name=yolo_cfg.get("model_path", "yolov8l"), 
-            device=self.device
-        )
+        # self.model = load_smart_yolo(
+        #     model_name=yolo_cfg.get("model_path", "yolov8l"), 
+        #     device=self.device
+        # )
 
-        self.name_to_id = {v: k for k, v in self.model.names.items()}
-
-    
+        # self.name_to_id = {v: k for k, v in self.model.names.items()}
+        
+        
+    def _ensure_model_loaded(self):
+        """Carica il modello solo se non è già presente in VRAM."""
+        if self.model is None:
+            yolo_cfg = self.settings.get("yolo_settings", {})
+            log.info("🔥 [Lazy Loading] Inizializzazione YOLO Engine in corso...")
+            # Chiamiamo la tua funzione originale
+            self.model = load_smart_yolo(
+                model_name=yolo_cfg.get("model_path", "yolov8l"), 
+                device=self.device
+            )
+            # Inizializziamo il dizionario dei nomi
+            self.name_to_id = {v: k for k, v in self.model.names.items()}
     
     def scan_single_image(self, image_path: Path, video_path: Path,  frames_dir: Path,cam_id: str):
-            """
-            Run a YOLO‑based detection on a single image extracted from a video.
-
-            Parameters
-            ----------
-            image_path : Path
-                Path to the image file that was extracted from the video.
-            video_path : Path
-                Path to the original video file from which the image was taken.
-            cam_id : str
-                Identifier of the camera that captured the video.
-
-            Returns
-            -------
-            Optional[dict]
-                If a detection is found, returns a dictionary containing the
-                following keys:
-                - ``camera_id``: the camera identifier,
-                - ``video_name``: the name of the video file,
-                - ``video_path``: the full path to the video,
-                - ``image_path``: the full path to the image,
-                - ``yolo_category``: the detected category,
-                - ``yolo_data``: the raw YOLO detection data.
-                If no detection is found, returns ``None``.
-
-            Notes
-            -----
-            The method prepares the data for the Scanner module by
-            packaging the best YOLO detection found in the image. The
-            ``video_name`` is extracted from ``video_path`` for the final
-            report. If the detection confidence is below a threshold, the
-            method simply returns ``None``. The timestamp of the image is
-            typically derived from the file’s modification time. [1]
-            """
-            # min_confidence = 0.60
-            # min_area_ratio = 0.002 # Per evitare piccoli glitch/uccelli lontano
-
-            # # YOLO v8 può leggere direttamente dal path (più veloce di cv2.imread se non serve pre-processare)
-            # res = self.model(str(image_path), classes=[0], verbose=False,device=self.device)[0]
-
-            # best_det = None
-            # max_conf = 0
             
-            # # Area totale per il filtro dimensione
-            # h, w = res.orig_shape
-            # img_area = h * w
-
-            # for box in res.boxes:
-            #     conf = float(box.conf[0])
-                
-            #     if conf < min_confidence:
-            #         continue
-
-            #     x1, y1, x2, y2 = [int(x) for x in box.xyxy[0]]
-            #     area = (x2 - x1) * (y2 - y1)
-                
-            #     if area / img_area < min_area_ratio:
-            #         continue
-
-            #     if conf > max_conf:
-            #         max_conf = conf
-            #         best_det = {
-            #             "confidence": conf,
-            #             "bbox": [x1, y1, x2, y2],
-            #         }
-
-            # if not best_det:
-            #     return None
-
-            # # Usiamo la data di modifica del file come timestamp se non diversamente specificato
-            # ts = datetime.fromtimestamp(image_path.stat().st_mtime)
-
-            # return {
-            #     "camera_id": cam_id,
-            #     "video_path": str(video_path),
-            #     "categories_found": ["person"],
-            #     "frames": [
-            #         {
-            #             "category": "person",
-            #             "frame_path": str(image_path),
-            #             "confidence": best_det["confidence"],
-            #             "bbox": best_det["bbox"],
-            #             "timestamp": ts.isoformat()
-            #         }
-            #     ],
-            #     "resolved_by": "nvr_image"
-            # }
-
-            #def scan_single_image(self, image_path: Path, video_path: Path, cam_id: str):
+    
             min_confidence = 0.60
             min_area_ratio = 0.002 
-
+            self._ensure_model_loaded()
             res = self.model(str(image_path), classes=[0], verbose=False, device=self.device)[0]
             class_names = res.names
             best_det = None
@@ -188,24 +117,17 @@ class YoloEngine:
             if not best_det:
                 return None
 
-            # --- LOGICA DI CROP AGGIUNTA ---
-            # # Generiamo il path per il crop (es: nomefile_crop.jpg)
-            # crop_filename = f"{image_path.stem}_crop{image_path.suffix}"
-            # crop_path = image_path.parent / crop_filename
-
           # --- LOGICA DI COPIA E CROP NVR ---
             self.frames_dir = frames_dir
             self.frames_dir.mkdir(parents=True, exist_ok=True)
 
             # 1. Definiamo i nuovi percorsi dentro 'extracted_frames'
-            nvr_original_dest = self.frames_dir / image_path.name
+            nvr_original_dest = image_path
             crop_filename = f"{image_path.stem}_crop{image_path.suffix}"
             crop_path = self.frames_dir / crop_filename
             
             try:
-                # 2. Copiamo prima l'immagine originale NVR nella cartella dei frame
-                shutil.copy2(image_path, nvr_original_dest)
-                # Carichiamo l'immagine originale
+               
                 img = cv2.imread(str(image_path))
                 if img is not None:
                     # Calcoliamo le coordinate con il tuo metodo (usiamo margin_perc=1.0 per dare respiro)
@@ -241,199 +163,6 @@ class YoloEngine:
                 "resolved_by": "nvr_image"
             }
     
-    # def scan_video(self, video_path: Path, frames_dir: Path, cam_id: str) -> Optional[dict]:
-      
-    #     # ------------------------------------------------------------------
-    #     # 1️⃣ Configurazione e Target IDs
-    #     # ------------------------------------------------------------------
-    #     cam_cfg = self.cameras_config.get(str(cam_id), {})
-    #     ignore_labels = cam_cfg.get("filters", {}).get("ignore_labels", [])
-    #     self.frames_dir=frames_dir
-    #     final_target_ids = get_target_ids(
-    #         model=self.model, 
-    #         settings=self.settings, 
-    #         mode=self.mode, 
-    #         camera_ignore_labels=ignore_labels
-    #     )
-
-    #     if not final_target_ids:
-    #         log.warning(f"Nessuna classe target per cam {cam_id}")
-    #         return None
-
-    #     # ------------------------------------------------------------------
-    #     # 2️⃣ Apertura Video e Parametri Temporali
-    #     # ------------------------------------------------------------------
-    #     cap = get_video_capture(video_path)
-    #     if cap is None: 
-    #         return None
-
-    #     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-    #     stride = self.settings["yolo_settings"].get("vid_stride", 12)
-        
-    #     time_gap_sec = self.settings["yolo_settings"].get("time_gap_sec", 3)
-    #     occ_gap_frames = int(fps * time_gap_sec)
-    #     num_occurrence = self.settings["yolo_settings"].get("num_occurrence", 3)
-        
-    #     yolo_override_threshold = self.settings["yolo_settings"].get("yolo_override_threshold")
-    #     # ------------------------------------------------------------------
-    #     # 3️⃣ Ottimizzazione Costanti (Fuori dai Loop)
-    #     # ------------------------------------------------------------------
-    #     yolo_set = self.settings.get("yolo_settings", {})
-    #     thresholds = yolo_set.get("thresholds", {})
-    #     detection_groups = yolo_set.get("detection_groups", {})
-
-    #     # Creiamo una mappa veloce: {"dog": "animal", "person": "person", ...}
-    #     label_to_group = {}
-    #     for group_name, labels in detection_groups.items():
-    #         g_key = group_name.lower()
-    #         for lbl in labels:
-    #             label_to_group[lbl] = g_key
-
-    #     # Inizializzazione Tracking
-    #     detections = {g.lower(): [] for g in detection_groups.keys()}
-    #     occ_count = {g.lower(): 0 for g in detection_groups.keys()}
-    #     last_saved_frame = {g.lower(): -occ_gap_frames for g in detection_groups.keys()}
-
-    #     prev_stride = stride
-    #     frame_idx = 0
-    #     self.last_detection_idx = -9999  # Inizializzazione per il cooldown
-        
-    #     current_stride = stride
-    #     skip_counter = current_stride  # Questo controllerà i salti
-    #     # ------------------------------------------------------------------
-    #     # 4️⃣ Loop di Analisi
-    #     # ------------------------------------------------------------------
-    #     while True:
-
-    #         # --- LOGICA DEL SALTO ---
-    #         # Se non siamo al frame giusto, facciamo un grab() veloce e saltiamo tutto
-    #         if skip_counter < current_stride:
-    #             if not cap.grab(): # Sposta il puntatore senza decodificare
-    #                 break
-    #             frame_idx += 1
-    #             skip_counter += 1
-    #             continue
-    #         ret, frame = cap.read() # Leggiamo sempre il frame successivo (sequenziale = veloce)
-    #         if not ret:
-    #             break 
-
-    #         frame_idx += 1
-    #         skip_counter += 1
-
-    #         # Analizziamo solo se il contatore ha raggiunto lo stride deciso
-    #         # if skip_counter < current_stride:
-    #         #     continue
-    #         found_valid_target = False
-    #         yolo_results = self.model.predict(
-    #             source=frame, 
-    #             classes=final_target_ids, 
-    #             verbose=False, 
-    #             conf=0.20,
-    #             device=self.device 
-    #         )[0]
-
-            
-    #         skip_counter = 0  # Reset del cont
-    #         if len(yolo_results.boxes) == 0:
-    #             continue
-
-    #         for box in yolo_results.boxes:
-    #             cls_id = int(box.cls[0])
-    #             conf = float(box.conf[0])
-    #             label = self.model.names[cls_id]
-                
-    #             # 1. Recupero Gruppo (es. "person", "animal", "vehicle")
-    #             group = label_to_group.get(label)
-    #             if not group:
-    #                 continue
-
-    #             # 2. Controllo Confidenza dal JSON
-    #             if conf < thresholds.get(group, 0.50):
-    #                 continue
-                
-    #             found_valid_target = True
-    #             self.last_detection_idx = frame_idx
-
-    #             # 3. Calcolo Area (come nel tuo codice vecchio)
-    #             x1, y1, x2, y2 = map(int, box.xyxy[0])
-    #             bbox_area = (x2 - x1) * (y2 - y1)
-    #             h, w = frame.shape[:2]
-    #             area_ratio = bbox_area / (h * w)
-
-    #             # 4. SALVATAGGIO SEMPRE (Se sopra soglia, lo mettiamo in lista)
-    #             detections[group].append({
-    #                 "frame_idx": frame_idx,
-    #                 "confidence": conf,
-    #                 "bbox": [x1, y1, x2, y2],
-    #                 "area": bbox_area,
-    #                 "area_ratio": area_ratio,
-    #                 "label": label,
-    #                 "yolo_reliable": conf >= yolo_override_threshold
-    #             })
-
-    #             # 5. LOGICA EARLY-STOP (Solo per persone e animali, con gap temporale)
-    #             if group in ["person", "animal"]:
-    #                 if frame_idx - last_saved_frame[group] >= occ_gap_frames:
-    #                     last_saved_frame[group] = frame_idx
-    #                     occ_count[group] += 1
-            
-    #         # --- FINE LOOP BOX ---
-
-    #         # 6. Controllo Uscita Anticipata
-    #         # Se abbiamo raggiunto il numero di occorrenze distinte per persone o animali
-    #         if occ_count["person"] >= num_occurrence or occ_count["animal"] >= num_occurrence:
-    #             log.info(f"Early stop su {video_path.name}: raggiunte occorrenze target")
-    #             break
-            
-    #         # --- QUI VA IL CALCOLO DELLO STRIDE ---
-    #         # Fuori dal for box, ma dentro il while True
-    #         current_stride = self._get_next_stride(
-    #             frame_idx, 
-    #             fps, 
-    #             found_valid_target, 
-    #             cam_cfg
-    #         )
-    #         # --- LOG DI DEBUG ---
-    #         if current_stride != prev_stride:
-    #             fase = "PROTEZIONE/DETECTION" if current_stride == 12 else "VELOCITÀ CROCIERA"
-    #             print(f"[{video_path.name}] Frame {frame_idx}: Cambio stride a {current_stride} ({fase})")
-    #             prev_stride = current_stride
-    # # --------------------
-    #         # Aggiorniamo l'indice per il prossimo ciclo
-    #         frame_idx += current_stride 
-
-    #     # --- FINE WHILE VIDEO ---
-    #     cap.release()
-    #     if not any(detections.values()):
-    #         return None
-
-    #     # salvataggio frame
-    #     self.frames_dir.mkdir(parents=True, exist_ok=True)
-    #     cap = cv2.VideoCapture(str(video_path))
-    #     saved_frames = extract_frames_with_cache(
-    #             cap=cap,
-    #             detections=detections,
-    #             fps=fps,
-    #             video_path=video_path,
-    #             frames_dir=self.frames_dir,
-    #             frames_per_category=num_occurrence
-    #         )
-    #     cap.release()
-
-
-    #     if not saved_frames:
-    #         return None
-
-    #     # Troviamo solo le categorie che hanno almeno una rilevazione salvata
-    #     categories_found = [cat for cat, found_list in detections.items() if len(found_list) > 0]
-
-    #     return {
-    #         "camera_id": cam_id,
-    #         "video_path": str(video_path),
-    #         "categories_found": categories_found,
-    #         "frames": saved_frames,  # Questa è la lista prodotta da extract_frames_with_cache
-    #         "timestamp": datetime.now().isoformat()
-    #     }
     
     def scan_video(self, video_path: Path, frames_dir: Path, cam_id: str) -> Optional[dict]:
         # ------------------------------------------------------------------
@@ -443,7 +172,7 @@ class YoloEngine:
         ignore_labels = cam_cfg.get("filters", {}).get("ignore_labels", [])
         thresholds = cam_cfg.get("thresholds", {})
         self.frames_dir = frames_dir
-        
+        self._ensure_model_loaded()
         final_target_ids = get_target_ids(
             model=self.model, 
             settings=self.settings, 

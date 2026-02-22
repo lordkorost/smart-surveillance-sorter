@@ -64,3 +64,4 @@ def load_smart_yolo(model_name, device=None):
     model.to(target_device)
     
     return model
+

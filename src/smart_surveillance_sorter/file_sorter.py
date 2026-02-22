@@ -3,7 +3,8 @@ from pathlib import Path
 import shutil
 
 from smart_surveillance_sorter.utils import get_safe_path
-log = logging.getLogger(__name__)
+log = logging.getLogger(__name__) 
+
 class FileSorter:
     def __init__(self, settings, input_dir, work_dir, is_test=False):
         
@@ -210,12 +211,12 @@ class FileSorter:
         if self.method == "MOVE" and self.work_dir.exists():
             # Controllo di sicurezza: non cancellare la root dell'utente!
             if self.work_dir.resolve() == self.input_dir.resolve():
-                self.log.error("🛑 Protezione attivata: work_dir coincide con input_dir. Cleanup annullato.")
+                log.error("🛑 Protezione attivata: work_dir coincide con input_dir. Cleanup annullato.")
                 return
 
             import shutil
             try:
                 shutil.rmtree(self.work_dir)
-                self.log.info(f"🧹 Cartella cache rimossa: cartella={self.work_dir.name}")
+                log.info(f"🧹 Cartella cache rimossa: cartella={self.work_dir.name}")
             except Exception as e:
-                self.log.warning(f"⚠️ Errore durante la rimozione della cache: error={e}")
+                log.warning(f"⚠️ Errore durante la rimozione della cache: error={e}")

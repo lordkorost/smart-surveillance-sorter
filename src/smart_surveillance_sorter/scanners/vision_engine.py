@@ -44,12 +44,12 @@ class VisionEngine:
             response = generate(
                 model=vision_model,
                 prompt=prompt,
-                images=images,
-                options = {
-                    'temperature': 0,
-                    'top_p': 0.1,
-                    'top_k': 1
-                }
+                images=images
+                # options = {
+                #      'temperature': 0.1,
+                #      'top_p': 0.95,
+                #      'top_k': 20
+                #  }
             )
             
 
@@ -115,16 +115,16 @@ class VisionEngine:
             #best_f = next(f for f in frames if f.get("category") == "person")
             category = "person"
             return self._build_result(cam_id, video_path, "person", frames[0]["frame_path"] if frames else None, frames, thinking="NVR image")
-            
+
         prompt = build_dynamic_prompt(
             self.prompts_config, 
             cam_cfg, 
             mode=self.mode, 
             has_crop=has_crops
         )
-        # log.debug("--- INIZIO PROMPT INVIATO ---")
-        # log.debug(prompt)
-        # log.debug("--- FINE PROMPT INVIATO ---")
+        print("--- INIZIO PROMPT INVIATO ---")
+        print(prompt)
+        print("--- FINE PROMPT INVIATO ---")
         scores = defaultdict(float)
         last_frame = {}
         
@@ -143,10 +143,10 @@ class VisionEngine:
             image_inputs = [img_path]
             # if crop_path and Path(crop_path).exists():
             #     image_inputs.append(crop_path)
-            
+            print(category,conf,image_inputs)
             # vision_answer = self.query_vision_model(prompt, image_inputs)
             result = self.query_vision_model(prompt, image_inputs)
-            
+            print(result)
             #vision_answer = result.get("label", "nothing")
             thinking = result.get("thinking", "")
             vision_answer = result.get("label", "others").lower()
@@ -347,4 +347,6 @@ class VisionEngine:
             img.thumbnail(size, Image.Resampling.LANCZOS)
             img.save(output_path, "JPEG", quality=85)
         return output_path
+    
+
     

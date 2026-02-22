@@ -68,7 +68,7 @@ class Scanner():
     a centralised configuration module.  Upon initialization it
     logs a message summarising the configuration [1].
     """
-    def __init__(self, mode, device=None, is_refine=False, is_fallback=False, is_test = False,engine="blip",is_check_clean=False):
+    def __init__(self, mode, device=None, is_refine=False, is_fallback=False, is_test = False,engine="blip",is_check_clean=False,is_real_time=False):
        # 1. Inizializzazione fuori dal loop
         self.monitor = ResourceMonitorAMD()
         
@@ -80,6 +80,7 @@ class Scanner():
         self.is_test = is_test
         self.engine = engine
         self.is_check_clean = is_check_clean
+        self.is_real_time = is_real_time
         # 2. Logger
         #log = logging.getLogger(self.__class__.__name__)
 
@@ -125,7 +126,7 @@ class Scanner():
             device=self.device,
             settings=self.settings,
             cameras_config=self.cameras_config
-            #logger=log
+            
         )
         
         log.info(
@@ -159,10 +160,14 @@ class Scanner():
         log.debug(f"DEBUG: results type: {type(self.results)}")
         log.debug(f"DEBUG: full_index type: {type(self.full_index)}")
         if self.full_index:
-            # Prendi la prima camera e il primo video
             first_cam = list(self.full_index.keys())[0]
-            first_video = self.full_index[first_cam][0]
-            log.debug(f"DEBUG: Primo video in full_index: {first_video} (Tipo: {type(first_video)})")
+            videos_della_cam = self.full_index[first_cam]
+            
+            if videos_della_cam: # <--- AGGIUNGI SEMPRE QUESTO CONTROLLO
+                first_video = videos_della_cam[0]
+                log.debug(f"DEBUG: Primo video in full_index: {first_video}")
+            else:
+                log.debug(f"DEBUG: La camera {first_cam} non ha video associati.")
         if yolo_cache_file.exists():
             log.warning("♻️  Cache YOLO trovata! Caricamento risultati...")
             try:
@@ -181,31 +186,34 @@ class Scanner():
 
         # 3. FILTRAGGIO INDICE
         #processed_set = {str(r["video_path"]) for r in self.results if "video_path" in r}
-        original_size = len(self.full_index)
+        # Conta il totale reale dei video SOMMANDO le lunghezze delle liste
+        original_video_count = sum(len(v_list) for v_list in self.full_index.values())
+        
         processed_set = {str(r.get("video_path")) for r in self.results if isinstance(r, dict) and r.get("video_path")}
 
+        # Filtriamo mantenendo la struttura
         self.full_index = {
             cam_id: [
-                video for video in videos 
-                if str(video.get("video_path")) not in processed_set
+                v for v in v_list 
+                if str(v.get("video_path")) not in processed_set
             ]
-            for cam_id, videos in self.full_index.items()
+            for cam_id, v_list in self.full_index.items()
         }
 
-        new_count = len(self.full_index)
-        skipped = original_size - new_count
+        # Ricalcoliamo il totale reale dei video rimasti
+        new_video_count = sum(len(v_list) for v_list in self.full_index.values())
+        skipped = original_video_count - new_video_count
 
         if skipped > 0:
-            log.info(f"⏭️  Saltati {skipped} video già in cache. Nuovi da processare: {new_count}")
+            log.info(f"⏭️  Saltati {skipped} video già in cache. Nuovi da processare: {new_video_count}")
         
-        # 4. Avvio Scansione
-        if new_count > 0:
-            # Se la cache era vuota (prima run in assoluto), analizziamo le immagini NVR
+        # 4. Avvio Scansione basato sui VIDEO, non sulle chiavi del dizionario
+        if new_video_count > 0:
             if not processed_set:
                 log.info("🔍 Prima scansione: Analisi immagini NVR in corso...")
                 self._scan_images(self.full_index)
             
-            self.monitor.log_stats(f"INIZIO SCANSIONE VIDEO YOLO ({new_count} nuovi)")
+            self.monitor.log_stats(f"INIZIO SCANSIONE VIDEO YOLO ({new_video_count} nuovi)")
             self._scan_videos(self.full_index)
         else:
             log.info("✅ Tutti i video sono già stati analizzati. Nulla da fare.")
@@ -216,15 +224,6 @@ class Scanner():
         self.final_reports = []
         self.monitor.log_stats("POST-YOLO / PRE-REFINE")
         if self.is_refine and self.engine == "blip":
-            #... logica BLIPEngine ...
-            from .clip_blip_engine import ClipBlipEngine # Import locale per velocità
-            self.clip_blip_engine = ClipBlipEngine(
-                settings=self.settings,
-                cameras_config= self.cameras_config,
-                mode = self.mode,
-                device=self.settings.get("yolo_settings", {}).get("device", "cpu")
-                #output_dir=self.output_dir
-            )
             self.monitor.log_stats(f"INIZIO SCANSIONE VIDEO CLIPBLIP")
             self._clip_blip_scan_refine() #<---- non c'è bisogno di passargli niente e riempie results_clip
 
@@ -322,11 +321,25 @@ class Scanner():
         template = storage_cfg.get("filename_template", "{nvr_name}_{camera_id}_{timestamp}")
         ts_format = storage_cfg.get("timestamp_format", "%Y%m%d%H%M%S")
 
-        extensions = {".mp4", ".jpg", ".jpeg"}
+        #extensions = {".mp4", ".jpg", ".jpeg"}
+        extensions = {".mp4", ".mkv", ".avi", ".mov", ".jpg", ".jpeg"}
         file_list = [f for f in input_dir.iterdir() if f.suffix.lower() in extensions]
-        
-      
+
+        import time # Assicurati che sia importato in cima al file o qui
+
         for f in file_list:
+            # --- PROTEZIONE FILE IN SCRITTURA ---
+            # Se il file è stato modificato molto recentemente (es. negli ultimi 15 secondi)
+            if time.time() - f.stat().st_mtime < 15:
+                size_pre = f.stat().st_size
+                time.sleep(1) # Breve attesa per confermare la scrittura
+                size_post = f.stat().st_size
+                
+                if size_pre != size_post or size_post == 0:
+                    # Se la dimensione cambia o è zero, l'NVR ci sta ancora lavorando
+                    # Non logghiamo con log.info per non intasare, debug è meglio
+                    continue 
+            # -------------------------------------
             cam_id_raw, ts = parse_filename(f, template, ts_format)
             
             if cam_id_raw is None or ts is None:
@@ -341,8 +354,11 @@ class Scanner():
 
             if cam_id not in index:
                 index[cam_id] = []    
-            file_type = "video" if f.suffix.lower() == ".mp4" else "image"
-            
+            #file_type = "video" if f.suffix.lower() == ".mp4" else "image"
+            # --- CORREZIONE QUI ---
+            video_extensions = {".mp4", ".mkv", ".avi", ".mov"}
+            file_type = "video" if f.suffix.lower() in video_extensions else "image"
+            # ----------------------
             index[cam_id].append({
                 "type": file_type,
                 "timestamp": ts,
@@ -917,7 +933,7 @@ class Scanner():
     def _clip_blip_scan_refine(self):
         self.clip_blip_results = []
         self.clip_blip_video_dict = {}
-
+        t_start = time.time()  # <--- SPOSTATO QUI: deve essere all'inizio per tutti
         if not self.results:
             log.warning("Nessun risultato YOLO da passare a BLIP.")
             return
@@ -930,9 +946,29 @@ class Scanner():
         else:
             self.clip_blip_video_dict = {}
 
-        t_start = time.time()
-        log.info(f"🚀 Inizio raffinamento CLIP-BLIP su num_video={len(self.results)}")
+        # --- LOGICA LAZY LOADING ---
+        # Controlliamo se c'è almeno un video che richiede l'analisi (non in cache e non scartato)
+        videos_needing_analysis = [
+            v for v in self.results 
+            if v.get("video_path") not in self.clip_blip_video_dict 
+            and "others" not in v.get("categories_found", [])
+        ]
 
+        if not videos_needing_analysis:
+            log.info("☕ Tutti i video sono in cache o scartati. Salto caricamento Engine BLIP.")
+            # Se non ci sono video nuovi, usciamo o processiamo solo la cache
+            #t_start = time.time()
+            log.info(f"🚀 Inizio raffinamento CLIP-BLIP su num_video={len(self.results)}")
+        else:
+        # Carichiamo l'engine SOLO ORA che sappiamo di averne bisogno
+            log.info(f"🧠 Caricamento CLIP-BLIP Engine in VRAM per {len(videos_needing_analysis)} video...")
+            from .clip_blip_engine import ClipBlipEngine
+            self.clip_blip_engine = ClipBlipEngine(
+                settings=self.settings,
+                cameras_config=self.cameras_config,
+                mode=self.mode,
+                device=self.settings.get("yolo_settings", {}).get("device", "cpu")
+            )
         pbar = tqdm(
             self.results,
             desc="CLIP-BLIP",
@@ -1002,8 +1038,12 @@ class Scanner():
                     }
                     self.clip_blip_results.append(refined_entry)
                 
-                # Update della barra dopo aver finito il processo (sia cache che AI)
-                pbar.update(1)
+            # Update della barra dopo aver finito il processo (sia cache che AI)
+            pbar.update(1)
+            if self.is_real_time:
+                with open(clip_blip_res_path, "w", encoding="utf-8") as f:
+                    json.dump(self.clip_blip_video_dict, f, indent=4)
+                
 
         pbar.close()
         elapsed = time.time() - t_start
@@ -1028,13 +1068,31 @@ class Scanner():
         Non servono parametri: legge self.results e self.clip_blip_results.
         """
         vision_queue = []
-        
+        # 1. Carichiamo la cache Vision per sapere chi ha già un verdetto
+        vision_cache_file = Path(self.output_dir) / "vision_scan_res.json"
+        processed_vision = {}
+        if vision_cache_file.exists():
+            cache_data = load_json(vision_cache_file)
+            # Creiamo una mappa {path: report_completo}
+            processed_vision = {str(r['video_path']): r for r in cache_data}
         # Creiamo la mappa dei risultati BLIP: {video_path: categoria}
         # Usiamo .lower() per evitare problemi di case-sensitivity
         blip_map = {str(r['video_path']): r['category'].lower() for r in self.clip_blip_results}
 
         for video_data in self.results:
             video_path = str(video_data.get("video_path"))
+            # --- NOVITÀ: CONTROLLO CACHE PRIORITARIO ---
+            if video_path in processed_vision:
+                # Se è già in cache, aggiorniamo il verdetto in clip_blip_results 
+                # così il report finale sarà corretto senza chiamare Qwen
+                cache_entry = processed_vision[video_path]
+                for i, r in enumerate(self.clip_blip_results):
+                    if str(r["video_path"]) == video_path:
+                        self.clip_blip_results[i] = cache_entry
+                        break
+                # SALTIAMO l'aggiunta alla coda: non serve ri-processarlo!
+                continue
+            
             yolo_cats = video_data.get("categories_found", [])
             
             # Recuperiamo il verdetto di BLIP (default a 'others' se non trovato)
@@ -1067,28 +1125,7 @@ class Scanner():
 
         return vision_queue
 
-    # def _get_arbitration_queue(self):
-    #     vision_queue = []
-    #     # Creiamo una mappa veloce {path: categoria} dai risultati BLIP appena finiti
-    #     blip_map = {r['video_path']: r['category'] for r in self.clip_blip_results}
 
-    #     for video_data in self.results:
-    #         v_path = video_data.get("video_path")
-    #         yolo_cats = video_data.get("categories_found", [])
-    #         b_cat = blip_map.get(v_path, "others").lower()
-
-    #         # 1. PERSONA: YOLO vince sempre.
-    #         if "person" in yolo_cats:
-    #             continue
-
-    #         # 2. CONFLITTI: Animali e Veicoli
-    #         if "animal" in yolo_cats or "vehicle" in yolo_cats:
-    #             # Caso: YOLO vede qualcosa, BLIP dice 'others' o conferma 'animal'
-    #             # (Vogliamo Vision per la scarsa recall/precision di BLIP sugli animali)
-    #             if b_cat in ["others", "animal"] or (b_cat == "person" and "animal" in yolo_cats):
-    #                 vision_queue.append(video_data)
-
-    #     return vision_queue
     
     
     def _print_final_summary(self, total_time):
@@ -1203,13 +1240,21 @@ class Scanner():
 
     def _fallback_with_vision(self, vision_queue):
         if not vision_queue:
+            log.warning("Nessun risultato YOLO da raffinare.")
             return
-
-        self.vision_results = []
-        # log.info(f"🧠 Avvio Fallback Vision su {len(vision_queue)} casi dubbi...")
         
-        # # 1. Inizializziamo il motore Vision solo se serve
-        # self._ensure_vision_initialized()
+        vision_cache_file = Path(self.output_dir) / "vision_scan_res.json"
+    
+        # 1. CARICAMENTO CUMULATIVO (Non resettare a [])
+        if vision_cache_file.exists():
+            # Carichiamo i vecchi risultati per non perderli
+            self.vision_results = load_json(vision_cache_file)
+        else:
+            self.vision_results = []
+
+        # # Creiamo un set dei path già presenti per evitare duplicati nel file
+        existing_paths = {str(r["video_path"]) for r in self.vision_results}
+       
 
         msg_start = f"Avvio Arbitrato Vision su {len(vision_queue)} video dubbi"
         log.info(msg_start)
@@ -1223,25 +1268,43 @@ class Scanner():
             bar_format="{desc}: {rate_fmt} [{bar}] {percentage:3.0f}% {n_fmt}/{total_fmt} {elapsed}"
         )
         pbar.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}")
+       
+            
+            # Controlliamo se i dati del video sono corretti (soprattutto i path)
+            # pbar.write(f"DEBUG 📂: Path inviato: {video_path}")
         # 2. Creiamo una mappa per trovare velocemente i report in clip_blip_results
         # Assumiamo che clip_blip_results sia già popolata dallo scan precedente
         for video_data in pbar:
             video_path = video_data.get("video_path")
-            
+             # --- PRINT TATTICO 1: Ingresso ---
+            pbar.write(f"DEBUG 🔍: Invio a Vision Engine -> {video_path}")
+            pbar.write(f"DEBUG DATA 📦: {json.dumps(video_data, indent=2, default=str)}") # Usiamo json.dumps per vederlo ordinato
             # 3. Chiamata a Qwen solo per questo video
             report_vision = self.vision_engine.refine_single_video(video_data)
             
             if report_vision:
                 # 4. SOSTITUZIONE CHIRURGICA
                 # Cerchiamo il vecchio report di BLIP e lo rimpiazziamo con quello di Vision
+                pbar.write(f"DEBUG ✅: Risposta ricevuta per {video_path}")
+                pbar.write(f"DEBUG 🧠: Verdetto: {report_vision.get('category')} (Conf: {report_vision.get('confidence')})")
                 for i, r in enumerate(self.clip_blip_results):
                     if r["video_path"] == video_path:
                         self.clip_blip_results[i] = report_vision
                         break
+
+                # 3. AGGIUNTA ALLA LISTA CUMULATIVA
+                if video_path not in existing_paths:
+                    self.vision_results.append(report_vision)
+                    existing_paths.add(video_path)
+                
+                # 4. SALVATAGGIO INCREMENTALE (Tutta la lista, non solo i nuovi)
+                save_json(self.vision_results, vision_cache_file)
                 
                 # 5. Salvataggio incrementale della cache vision (opzionale ma consigliato)
-                self.vision_results.append(report_vision)
+                #self.vision_results.append(report_vision)
                 # save_json(self.vision_results, Path(self.output_dir) / "vision_scan_res.json")
             # Logging del ragionamento se sei in modalità test
                 if self.is_test and report_vision.get("thinking"):
                     pbar.write(f"\n🧠 Arbitro: {report_vision['video_name']} -> {report_vision['category']}")
+        # 4. SALVATAGGIO INCREMENTALE (Tutta la lista, non solo i nuovi)
+        save_json(self.vision_results, vision_cache_file)
