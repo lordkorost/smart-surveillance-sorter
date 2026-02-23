@@ -23,7 +23,7 @@ def genera_ground_truth(root_dir, log):
                         "category": category
                     }
                     ground_truth.append(entry)
-                    log.debug(f"Mappato: {file} -> {category}")
+                    log.debug(f"Map: {file} -> {category}")
                     
     return ground_truth
 
@@ -41,18 +41,18 @@ def check_duplicates_with_log(root_dir, log):
     duplicates = {name: cats for name, cats in file_map.items() if len(cats) > 1}
 
     if duplicates:
-        log.warning(f"⚠️ Trovati {len(duplicates)} video duplicati!")
+        log.warning(f"Found num_vid={len(duplicates)} duplicate")
         for name, cats in duplicates.items():
-            log.warning(f"  - {name} è presente in: {', '.join(cats)}")
+            log.warning(f"  - {name} is in: {', '.join(cats)}")
     else:
-        log.info("✨ Controllo duplicati: NESSUN duplicato trovato. Il dataset è coerente.")
+        log.info("No duplicate videos found. Dataset is perfect.")
 
 if __name__ == "__main__":
     
-    parser = argparse.ArgumentParser(description="Genera il Ground Truth dai video smistati manualmente.")
-    parser.add_argument("--dir", type=str, required=True, help="Directory video smistati (Input)")
-    parser.add_argument("--outputDir", type=str, default=None, help="Directory dove salvare il JSON (default: stessa di input)")
-    parser.add_argument("--test", action="store_true", help="Attiva log di debug")
+    parser = argparse.ArgumentParser(description="Create Ground Truth from manual sorted videos for testing script accuracy.")
+    parser.add_argument("--dir", type=str, required=True, help="Input directory of sorted videos")
+    parser.add_argument("--outputDir", type=str, default=None, help="Output directory to save json. (default: input dir)")
+    parser.add_argument("--test", action="store_true", help="Activate debug log")
     args = parser.parse_args()
 
     # 1. Inizializza il logger professionale anche qui
@@ -63,23 +63,23 @@ if __name__ == "__main__":
 
     # 2. Controllo sicurezza Input
     if not check_dir(Path(input_dir), is_readable=True):
-        log.critical(f"❌ ERRORE CRITICO: cartella di input non esistente o non leggibile: {input_dir}")
+        log.critical(f"Folder={input_dir} not exists or is not redeable.")
         sys.exit(1)
     
     # 3. Controllo sicurezza Output
     if not check_dir(Path(output_dir), is_writeable=True):
-        log.critical(f"❌ ERRORE CRITICO: cartella di output non scrivibile: {output_dir}")
+        log.critical(f"Folder={output_dir} is not writeable.")
         sys.exit(1)
 
     # 4. Generazione Dati
-    log.info(f"🔍 Avvio scansione per Ground Truth in: {input_dir}")
+    log.info(f"Start ground truth generate on folder={input_dir}")
     risultati = genera_ground_truth(input_dir, log)
     
     # 5. Salvataggio con la tua utility
     output_file_path = Path(output_dir) / "ground_truth.json"
     if save_json(risultati, output_file_path):
-        log.info(f"✅ Ground Truth generato con successo: {output_file_path}")
-        log.info(f"📊 Totale video mappati: {len(risultati)}")
+        log.info(f"✅ Ground Truth create. File={output_file_path}")
+        log.debug(f"Num_vid={len(risultati)}")
         
         # 6. Verifica duplicati
         check_duplicates_with_log(input_dir, log)

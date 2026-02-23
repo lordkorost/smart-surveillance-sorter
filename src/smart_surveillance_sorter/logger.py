@@ -6,7 +6,7 @@ import time
 import psutil
 import GPUtil
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple, Union
 
 # # ------------------------------------------
 # # 1. Formattatore (timestamp + livello + messaggio)
@@ -59,6 +59,8 @@ from typing import Dict, Optional
 import logging
 import time
 import re
+
+import torch
 
 class ColorFormatter(logging.Formatter):
     # Palette colori ANSI
@@ -162,25 +164,98 @@ def get_logger(name: str = None, debug: bool = False) -> logging.Logger:
     logger.propagate = True
     return logger
 
+# ------------------------------------------------------------------
+# 1.1  CPU
+# ------------------------------------------------------------------
 def get_cpu_usage() -> float:
-    """Percentuale di CPU occupata."""
+    """Percentuale di CPU occupata (usando psutil)."""
     return psutil.cpu_percent(interval=0.1)
 
-def get_ram_usage() -> Dict[str, float]:
-    """RAM totale, usata, libera in GiB."""
+def get_ram_info() -> Dict[str, float]:
+    """RAM totale, usata, libera (in GiB)."""
     vm = psutil.virtual_memory()
     return {
-        "total": vm.total / (1024 ** 3),
-        "used": vm.used / (1024 ** 3),
-        "free": vm.available / (1024 ** 3),
+        "total": vm.total      / (1024 ** 3),
+        "used":  vm.used       / (1024 ** 3),
+        "free":  vm.available  / (1024 ** 3),
     }
 
-def get_gpu_usage() -> Dict[str, float]:
-    """VRAM totale, usata, libera per la GPU più occupata."""
+# ------------------------------------------------------------------
+# 1.2  GPU (CUDA)
+# ------------------------------------------------------------------
+def get_gpu_info() -> Dict[str, float]:
+    """VRAM totale, usata, libera (in GiB) della GPU più occupata."""
     gpus = GPUtil.getGPUs()
     if not gpus:
-        return {"total": 0, "used": 0, "free": 0}
-    gpu = max(gpus, key=lambda g: g.memoryUtil)  # scegli quella più occupata
-    total = gpu.memoryTotal
-    used = gpu.memoryUsed
-    return {"total": total, "used": used, "free": total - used}
+        return {"total": 0.0, "used": 0.0, "free": 0.0}
+
+    # Se vuoi più di una GPU, puoi iterare e sommare
+    gpu = max(gpus, key=lambda g: g.memoryUtil)  # GPU con più VRAM usata
+    total = gpu.memoryTotal / 1024      # da MB a GB
+    used  = gpu.memoryUsed  / 1024
+    free  = total - used
+    return {"total": total, "used": used, "free": free}
+
+# ------------------------------------------------------------------
+# 1.3  Rileva device (CPU vs CUDA)
+# ------------------------------------------------------------------
+def detect_device() -> Tuple[Union[str, None], Union[torch.device, None]]:
+    """
+    Ritorna:
+      - 'cuda' o 'cpu' (o None se non è CUDA)
+      - torch.device('cuda:0') oppure torch.device('cpu')
+    """
+    if torch.cuda.is_available():
+        return "cuda", torch.device("cuda:0")
+    else:
+        return "cpu", torch.device("cpu")
+    
+def log_device_status(log: logging.Logger, device_str: str, torch_dev: torch.device) -> None:
+    """
+    Stampa un messaggio di log (INFO) con:
+      - tipo device (cuda/cpu)
+      - VRAM (per cuda) o RAM (per cpu)
+      - Percentuale CPU (solo se cpu)
+    """
+    if device_str == "cuda":
+        gpu = get_gpu_info()
+        msg = (
+            f"🛠️ [Scanner] Initialized on device={torch_dev} | "
+            f"VRAM Total={gpu['total']:.2f} GB | "
+            f"Used={gpu['used']:.2f} GB | "
+            f"Free={gpu['free']:.2f} GB"
+        )
+    else:   # CPU
+        ram = get_ram_info()
+        cpu = get_cpu_usage()
+        msg = (
+            f"🛠️ [Scanner] Initialized on device={torch_dev} | "
+            f"RAM Total={ram['total']:.2f} GB | "
+            f"Used={ram['used']:.2f} GB | "
+            f"Free={ram['free']:.2f} GB | "
+            f"CPU={cpu:.1f}%"
+        )
+    log.info(msg)
+
+# def get_cpu_usage() -> float:
+#     """Percentuale di CPU occupata."""
+#     return psutil.cpu_percent(interval=0.1)
+
+# def get_ram_usage() -> Dict[str, float]:
+#     """RAM totale, usata, libera in GiB."""
+#     vm = psutil.virtual_memory()
+#     return {
+#         "total": vm.total / (1024 ** 3),
+#         "used": vm.used / (1024 ** 3),
+#         "free": vm.available / (1024 ** 3),
+#     }
+
+# def get_gpu_usage() -> Dict[str, float]:
+#     """VRAM totale, usata, libera per la GPU più occupata."""
+#     gpus = GPUtil.getGPUs()
+#     if not gpus:
+#         return {"total": 0, "used": 0, "free": 0}
+#     gpu = max(gpus, key=lambda g: g.memoryUtil)  # scegli quella più occupata
+#     total = gpu.memoryTotal
+#     used = gpu.memoryUsed
+#     return {"total": total, "used": used, "free": total - used}

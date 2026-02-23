@@ -65,7 +65,7 @@ class FileSorter:
             return True
         except Exception as e:
             # Usiamo log.error per non interrompere il ciclo su altri video
-            log.error(f"Errore durante {self.method} di {src.name}: {e}")
+            log.error(f"Error on {self.method} of {src.name}.  error={e}")
             return False
 
     def _process_item(self, item, base_dir):
@@ -118,12 +118,12 @@ class FileSorter:
         if os.access(self.input_dir, os.W_OK):
             # Caso normale: scriviamo nell'input
             self.dest_base = self.input_dir
-            log.info(f"✅ Destinazione={self.input_dir}")
+            log.info(f"Dir={self.input_dir}")
         else:
             # Caso emergenza: scriviamo nella work_dir (che è temp_dir)
             self.dest_base = self.work_dir / "SMI_SORTED_RESULTS"
             self.dest_base.mkdir(parents=True, exist_ok=True)
-            log.warning(f"⚠️ Input protetto! Risultati dirottati su folder={self.dest_base}")
+            log.warning(f"Input is not writeable! Risults on folder={self.dest_base}")
         # --- CARICAMENTO MAPPING REALE ---
         # Usiamo la tua funzione che legge cameras.json, non settings.json!
         from utils import get_camera_mapping 
@@ -211,12 +211,12 @@ class FileSorter:
         if self.method == "MOVE" and self.work_dir.exists():
             # Controllo di sicurezza: non cancellare la root dell'utente!
             if self.work_dir.resolve() == self.input_dir.resolve():
-                log.error("🛑 Protezione attivata: work_dir coincide con input_dir. Cleanup annullato.")
+                log.error("🛑 Dir protection active. output_dir is input_dir. Cleanup abort.")
                 return
 
             import shutil
             try:
                 shutil.rmtree(self.work_dir)
-                log.info(f"🧹 Cartella cache rimossa: cartella={self.work_dir.name}")
+                log.info(f"Cache folder removed. Folder={self.work_dir.name}")
             except Exception as e:
-                log.warning(f"⚠️ Errore durante la rimozione della cache: error={e}")
+                log.error(f"Error removing cache: error={e}")

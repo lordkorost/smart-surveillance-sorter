@@ -111,22 +111,22 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
     global_acc = (total_tp / total_videos * 100) if total_videos > 0 else 0
 
     _print("-" * 70)
-    _print(f"{'ACCURATEZZA GLOBALE (con Others):':<45} {global_acc:>6.2f}%")
-    _print(f"{'RECALL MEDIO CATEGORIE REALI:':<45} {avg_recall:>6.2f}%")
+    _print(f"{'Global accuracy (with Others):':<45} {global_acc:>6.2f}%")
+    _print(f"{'RECALL on real category:':<45} {avg_recall:>6.2f}%")
     _print("-" * 70)
     # --- DETTAGLIO ERRORI (Messo qui per non interrompere le tabelle) ---
     if discrepancies:
-        _print("🔍 DETTAGLIO ERRORI (Discrepanze):")
+        _print("Difference list:")
         for video, actual, predicted in sorted(discrepancies):
-            _print(f"Video: {video:<40} | GT: {actual:<10} | PREDICT: {predicted:<10}")
+            _print(f"Video={video:<40} | GT={actual:<10} | PREDICT={predicted:<10}")
 
  
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Compara GT e Predizioni AI.")
-    parser.add_argument("--dir", type=str, help="Directory sessione (cerca nomi file standard)")
-    parser.add_argument("--gt", type=str, help="Percorso esplicito al file ground_truth.json")
-    parser.add_argument("--res", type=str, help="Percorso esplicito al file classification_results.json")
+    parser = argparse.ArgumentParser(description="Compare GT with AI.")
+    parser.add_argument("--dir", type=str, help="Input directory, search ground_truth.json and classification_results.json")
+    parser.add_argument("--gt", type=str, help="Path to file ground_truth.json")
+    parser.add_argument("--res", type=str, help="Path to file classification_results.json")
     args = parser.parse_args()
     
     compare_results(session_dir=args.dir, gt_file=args.gt, res_file=args.res)

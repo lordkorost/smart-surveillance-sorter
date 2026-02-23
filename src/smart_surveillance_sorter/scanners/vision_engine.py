@@ -24,15 +24,14 @@ class VisionEngine:
         self.prompts_config = load_json(PROMPTS_JSON)
             
         if not self.prompts_config:
-            log.error(f"❌ Impossibile caricare prompt da: {PROMPTS_JSON}. Raffinamento annullato.")
+            log.error(f"Is not possible load prompts from file={PROMPTS_JSON}. Refine abort.")
             self.is_refine = False # Disabilita il refine per evitare crash successivi
             return
         
 
     def query_vision_model(self, prompt, image_paths):
         vision_model = self.vision_cfg.get("model_name", "qwen3-vl:8b")
-        temperature = self.vision_cfg.get("temperature",0.1)
-        num_predict = self.vision_cfg.get("num_predict",250)
+        temperature = self.vision_cfg.get("temperature",1)
         top_k = self.vision_cfg.get("top_k",20)
         top_p = self.vision_cfg.get("top_p",0.9)
 
@@ -44,12 +43,12 @@ class VisionEngine:
             response = generate(
                 model=vision_model,
                 prompt=prompt,
-                images=images
-                # options = {
-                #      'temperature': 0.1,
-                #      'top_p': 0.95,
-                #      'top_k': 20
-                #  }
+                images=images,
+                options = {
+                     'temperature': temperature,
+                     'top_p': top_p,
+                     'top_k': top_k
+                 }
             )
             
 
@@ -89,7 +88,7 @@ class VisionEngine:
                 "thinking": thinking_content if thinking_content else "No internal reasoning"
             }
         except Exception as e:
-            log.error(f"Chiamata a Ollama ({vision_model}) fallita: {str(e)}")
+            log.error(f"Call to Ollama mode=({vision_model}) fail error={str(e)}")
             import traceback
             log.error(traceback.format_exc()) # Questo ti dice l'esatta riga dell'errore
             return {"label": "others", "thinking": f"Error: {str(e)}"}
@@ -122,9 +121,9 @@ class VisionEngine:
             mode=self.mode, 
             has_crop=has_crops
         )
-        print("--- INIZIO PROMPT INVIATO ---")
-        print(prompt)
-        print("--- FINE PROMPT INVIATO ---")
+        # print("--- INIZIO PROMPT INVIATO ---")
+        # print(prompt)
+        # print("--- FINE PROMPT INVIATO ---")
         scores = defaultdict(float)
         last_frame = {}
         
@@ -143,10 +142,10 @@ class VisionEngine:
             image_inputs = [img_path]
             # if crop_path and Path(crop_path).exists():
             #     image_inputs.append(crop_path)
-            print(category,conf,image_inputs)
+            #print(category,conf,image_inputs)
             # vision_answer = self.query_vision_model(prompt, image_inputs)
             result = self.query_vision_model(prompt, image_inputs)
-            print(result)
+            #print(result)
             #vision_answer = result.get("label", "nothing")
             thinking = result.get("thinking", "")
             vision_answer = result.get("label", "others").lower()
@@ -200,7 +199,7 @@ class VisionEngine:
             high_conf_yolo_person = [f for f in frames if f["category"] == "person" and f["confidence"] > min_conf]
             if high_conf_yolo_person:
                 best = max(high_conf_yolo_person, key=lambda x: x["confidence"])
-                log.warning(f"⚠️ OVERRIDE: YOLO conferma Person ({best['confidence']:.2f}) nonostante Vision")
+                log.debug(f"⚠️ OVERRIDE: YOLO confirm Person ({best['confidence']:.2f}) Vision category discarded.")
                 return self._build_result(cam_id, video_path, "person", best["frame_path"], frames, thinking)
 
         # --- STEP 2: VERDETTO FINALE ---

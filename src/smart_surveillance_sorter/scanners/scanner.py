@@ -9,6 +9,7 @@ from smart_surveillance_sorter.constants import CAMERAS_JSON, CHECKS_DIR, PROJEC
 import logging
 from pathlib import Path
 from smart_surveillance_sorter.file_sorter import FileSorter
+from smart_surveillance_sorter.logger import detect_device, log_device_status
 from smart_surveillance_sorter.ram_monitor import ResourceMonitorAMD
 from smart_surveillance_sorter.scanners.yolo_engine import YoloEngine
 from smart_surveillance_sorter.utils import load_json, parse_filename, save_json, save_test_metrics, validate_ollama_setup
@@ -74,17 +75,13 @@ class Scanner():
         
         # 1. Parametri operativi
         self.mode = mode
-        #self.device = device
         self.is_refine = is_refine
         self.is_fallback = is_fallback
         self.is_test = is_test
         self.engine = engine
         self.is_check_clean = is_check_clean
         self.is_real_time = is_real_time
-        # 2. Logger
-        #log = logging.getLogger(self.__class__.__name__)
-
-
+   
 
         if self.is_test:
             self.stats = {
@@ -112,7 +109,8 @@ class Scanner():
             # Cerca dentro yolo_settings, e se non c'è usa 'cuda' come fallback
             self.device = yolo_cfg.get("device", "cpu")
 
-        log.info(f"🛠️ [Scanner] Inizializzato su device={self.device}")
+        #log.info(f"🛠️ [Scanner] Inizializzato su device={self.device}")
+        log_device_status(log, self.device, detect_device)
         # 3. Stato dell'analisi
         self.results = []               # Risultati pronti per il report/sorting
         self.resolved_videos = set()    # Per evitare di ri-analizzare video già risolti
@@ -129,10 +127,10 @@ class Scanner():
             
         )
         
-        log.info(
-            f"🚀 {self.__class__.__name__} inizializzato | "
-            f"Mode={mode} | Refine={is_refine} | Device={self.device}"
-        )
+        # log.info(
+        #     f"🚀 {self.__class__.__name__} inizializzato | "
+        #     f"Mode={mode} | Refine={is_refine} | Device={self.device}"
+        # )
     
    
     def scan_folder(self, input_dir,output_dir):
@@ -141,7 +139,7 @@ class Scanner():
         """
         # --- TIMER INIZIO ---
         t_start = time.time()
-        self.monitor.log_stats("AVVIO SISTEMA")
+        #self.monitor.log_stats("AVVIO SISTEMA")
         # 1. Normalizzazione Input
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
@@ -149,7 +147,7 @@ class Scanner():
         # 2. Setup Directory di Lavoro
         self.frames_dir = self.output_dir / "extracted_frames"
         self.frames_dir.mkdir(parents=True, exist_ok=True)
-        log.info(f"📂 Estrazione Frames in corso...  Directory={self.frames_dir}")
+        log.info(f"Frames directory={self.frames_dir}")
 
         # 3. Indicizzazione e Associazione
         raw_index = self._build_index(self.input_dir)
@@ -157,8 +155,8 @@ class Scanner():
 
         yolo_cache_file = Path(self.output_dir) / "yolo_scan_res.json"
         self.yolo_cache_file = yolo_cache_file
-        log.debug(f"DEBUG: results type: {type(self.results)}")
-        log.debug(f"DEBUG: full_index type: {type(self.full_index)}")
+        log.debug(f"Results type={type(self.results)}")
+        log.debug(f"DEBUG: full_index type={type(self.full_index)}")
         if self.full_index:
             first_cam = list(self.full_index.keys())[0]
             videos_della_cam = self.full_index[first_cam]
@@ -169,13 +167,13 @@ class Scanner():
             else:
                 log.debug(f"DEBUG: La camera {first_cam} non ha video associati.")
         if yolo_cache_file.exists():
-            log.warning("♻️  Cache YOLO trovata! Caricamento risultati...")
+            log.warning("YOLO Cache found. Resume prev results.")
             try:
                 loaded_data = load_json(yolo_cache_file)
                 # Assicuriamoci che sia una lista di dizionari
                 self.results = [r for r in loaded_data if isinstance(r, dict)]
             except Exception:
-                log.error("❌ Cache YOLO corrotta, procedo con lista vuota")
+                log.error("YOLO Cache corrupted. Resume abort, starting new scan.")
                 self.results = []
 
             for r in self.results:
@@ -205,26 +203,26 @@ class Scanner():
         skipped = original_video_count - new_video_count
 
         if skipped > 0:
-            log.info(f"⏭️  Saltati {skipped} video già in cache. Nuovi da processare: {new_video_count}")
+            log.info(f"Skipped video={skipped} in cache. New video to process num={new_video_count}")
         
         # 4. Avvio Scansione basato sui VIDEO, non sulle chiavi del dizionario
         if new_video_count > 0:
             if not processed_set:
-                log.info("🔍 Prima scansione: Analisi immagini NVR in corso...")
+                log.info("NVR Images scan for person.")
                 self._scan_images(self.full_index)
             
-            self.monitor.log_stats(f"INIZIO SCANSIONE VIDEO YOLO ({new_video_count} nuovi)")
+            self.monitor.log_stats(f"YOLO scan on new videos={new_video_count}")
             self._scan_videos(self.full_index)
         else:
-            log.info("✅ Tutti i video sono già stati analizzati. Nulla da fare.")
+            log.info("All video processed.")
         
     
         # Lo scopo qui è popolare 'final_data', l'unico oggetto che il Sorter leggerà.
         final_data = []
         self.final_reports = []
-        self.monitor.log_stats("POST-YOLO / PRE-REFINE")
+        #self.monitor.log_stats("POST-YOLO / PRE-REFINE")
         if self.is_refine and self.engine == "blip":
-            self.monitor.log_stats(f"INIZIO SCANSIONE VIDEO CLIPBLIP")
+            #self.monitor.log_stats(f"INIZIO SCANSIONE VIDEO CLIPBLIP")
             self._clip_blip_scan_refine() #<---- non c'è bisogno di passargli niente e riempie results_clip
 
             if self.is_fallback:
@@ -232,20 +230,20 @@ class Scanner():
                 vision_queue = self._get_arbitration_queue() #<--- non c'è bisogno di passare niente
                 if vision_queue:
                      # ... logica Vision AI ...
-                    log.info("✨ Avvio fallback su blip res con Vision AI...")
+                    log.info("Fallback step with vision on blip res")
                     self._ensure_vision_initialized() 
-                    log.info(f"🚀 {len(vision_queue)} video richiedono l'arbitrato di Vision.")
+                    log.info(f"Num_video={len(vision_queue)} to process.")
                     # Passiamo la coda filtrata al motore Vision
                     self._fallback_with_vision(vision_queue)
 
-            log.info("Elaborazione verdetto finale YOLO + blip(no refine)...")
+            log.info("Scan end. Start folder sorting.")
             self.final_reports = self.clip_blip_results
             final_data = self._finalize_results(self.final_reports, engine="blip")
-            self.monitor.log_stats("FINE SESSIONE")
+            #self.monitor.log_stats("FINE SESSIONE")
         elif self.is_refine and self.engine == "vision":
             
             # ... logica Vision AI ...
-            log.info("✨ Avvio raffinamento con Vision AI...")
+            log.info("Starting refine with vision")
             self._ensure_vision_initialized() 
 
             if self.is_check_clean:
@@ -257,9 +255,9 @@ class Scanner():
                 try:
                     with open(health_report_path, "w", encoding="utf-8") as f:
                         json.dump(self.lens_status, f, indent=4)
-                    log.info(f"✅ Report salute lenti salvato in folder={health_report_path}")
+                    log.info(f"Cameras lens status report saved in folder={health_report_path}")
                 except Exception as e:
-                    log.error(f"❌ Impossibile salvare il report lenti: errore={e}")
+                    log.error(f"Is not possible save lens status report, error={e}")
             # self._refine_with_vision popola internamente self.final_reports
             
             self._refine_with_vision() 
@@ -275,7 +273,7 @@ class Scanner():
             # Salvataggio unico del verdetto
             final_report_path = self.output_dir / "classification_results.json"
             save_json(final_data, final_report_path)
-            log.info(f"📝 Report finale salvato in file={final_report_path}")
+            log.info(f"Final results saved in file={final_report_path}")
             
             # Inizializzazione e avvio Sorter
             self.file_sorter = FileSorter(
@@ -292,13 +290,13 @@ class Scanner():
                 full_index=self.full_index
             )
 
-            self.file_sorter.cleanup()
+            #self.file_sorter.cleanup()
 
             total_time = time.time()-t_start
             if(self.is_test):
                 save_test_metrics(output_dir, self.final_reports, total_time, self.stats, self.mode)
                 
-            self.monitor.log_stats("FINE SESSIONE")
+            #self.monitor.log_stats("FINE SESSIONE")
         # 2. Pulisci memoria Python/Torch
         import gc
         gc.collect()
@@ -312,7 +310,7 @@ class Scanner():
         
     def _build_index(self, input_dir):
       
-        log.info(f"Avvio indicizzazione file in folder={input_dir}...")
+        log.info(f"Create index of files in folder={input_dir}...")
         index = {}
         
         # Recuperiamo le impostazioni dal config
@@ -374,10 +372,10 @@ class Scanner():
             # Statistiche veloci
             vids = sum(1 for x in index[cam_id] if x["type"] == "video")
             imgs = sum(1 for x in index[cam_id] if x["type"] == "image")
-            log.info(f"Camera={cam_id}: video={vids} , img={imgs} immagini indicizzate.")
+            log.debug(f"Camera={cam_id}: video={vids} , img={imgs}.")
             
             if imgs < vids:
-                log.warning(f"Camera={cam_id} ha meno immagini NVR rispetto ai video!")
+                log.warning(f"Camera={cam_id} has less images than videos")
 
         return index
     
@@ -411,7 +409,7 @@ class Scanner():
         scanner module. It logs progress and warnings about potential
         imbalances between video and image counts per camera.
         """
-        log.info("Avvio associazione Video-Immagini con logica di confine...")
+        log.info(f"Starting associations videos-nvr images in folder={self.input_dir}")
         associations = {}
 
         for cam_id, timeline in index.items():
@@ -480,11 +478,11 @@ class Scanner():
                 #     continue
         # Se non ci sono immagini NVR da analizzare, usciamo subito
         if not tasks:
-            log.info("Nessuna immagine NVR da scansionare.")
+            log.info("No nvr images to scan")
             return
 
         # 1. INFO Iniziale
-        msg_start = f"Avvio yolo scan su num_img={len(tasks)}"
+        msg_start = f"Yolo scan on num_img={len(tasks)}"
         log.info(msg_start) # Logga su file
         #tqdm.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}") # Stampa pulito a schermo
         
@@ -493,7 +491,7 @@ class Scanner():
             tasks,
             desc="Progress",
             unit="it",
-            ncols=50,
+            ncols=100,
             bar_format="{desc} {rate_fmt} [{bar}] {percentage:3.0f}% {n_fmt}/{total_fmt} {elapsed}<{remaining}"
         )
         pbar.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}")
@@ -557,7 +555,7 @@ class Scanner():
         # 1. LOG INFO INIZIALE
         model_name = self.settings.get("yolo_settings").get("model_path")
         log.info(
-            f"Processo yolo scan videos model={model_name},device={self.device}")
+            f"Process yolo scan videos model={model_name},device={self.device}")
 
         # 2. Prepariamo i compiti (tasks) per la barra
         tasks = []
@@ -569,18 +567,13 @@ class Scanner():
                 # Includiamo solo se non risolto e se il file esiste
                 if video_str not in self.resolved_videos and video_path.exists():
                     tasks.append((cam_id, item, video_path, video_str))
-                # # Skip se già risolto dalle immagini NVR
-                # if video_str in self.resolved_videos:
-                #     continue
-
-                # if not video_path.exists():
-                #     continue
+             
         if not tasks:
-            log.info("Nessun video da scansionare (tutti risolti o mancanti).")
+            log.warning("No videos to scan.")
             return    
 
         # 1. INFO Iniziale
-        msg_start = f"Avvio yolo scan su video={len(tasks)}{Style.RESET_ALL}"
+        msg_start = f"Yolo scan on num_vid={len(tasks)}{Style.RESET_ALL}"
         log.info(msg_start) # Logga su file
         #tqdm.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}") # Stampa pulito a schermo
         # Invece di tqdm.write manuale, puoi fare così:
@@ -591,7 +584,7 @@ class Scanner():
             tasks,
             desc="Progress",
             unit="it",
-            ncols=50,
+            ncols=100,
             bar_format="{desc}: {rate_fmt} [{bar}] {percentage:3.0f}% {n_fmt}/{total_fmt} {elapsed}<{remaining}"
          )
         pbar.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}")
@@ -615,18 +608,18 @@ class Scanner():
             self.stats["yolo_videos"]["time"] = time.time() - t_start
     
         # 4. Conteggio finale (opzionale, ma utile)
-        log.info(f"Video processati con successo.")
+        log.info(f"All videos processed.")
     
     def _refine_with_vision(self):
         if not self.results:
-            log.warning("Nessun risultato YOLO da raffinare.")
+            log.warning("No YOLO result to refine.")
             return
         
         vision_cache_file = Path(self.output_dir) / "vision_scan_res.json"
         
         # Inizializziamo/Carichiamo i risultati
         if vision_cache_file.exists():
-            log.info("♻️  Cache Vision AI trovata! Caricamento progressi...")
+            log.info("Vision AI Cache found! Resume...")
             self.vision_results = load_json(vision_cache_file)
         else:
             self.vision_results = []
@@ -637,12 +630,12 @@ class Scanner():
         # --- TIMER INIZIO ---
         t_start = time.time()
         # 1. INFO iniziale con modello (come richiesto)
-        log.info(f"Processo Vision refine")
+        #log.info(f"Processo Vision refine")
 
         # 2. Prepariamo i report finali
         self.final_reports = []
         # 1. INFO Iniziale
-        msg_start = f"Avvio refine su img={len(self.results)}"
+        msg_start = f"Start refine on num_vid={len(self.results)}"
         log.info(msg_start) # Logga su file
         #tqdm.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}") # Stampa pulito a schermo
         # Invece di tqdm.write manuale, puoi fare così:
@@ -653,7 +646,7 @@ class Scanner():
             self.results,
             desc="Progress",
             unit="it",
-            ncols=50,
+            ncols=100,
             bar_format="{desc}: {rate_fmt} [{bar}] {percentage:3.0f}% {n_fmt}/{total_fmt} {elapsed}<{remaining}"
         )
         pbar.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}")
@@ -734,7 +727,7 @@ class Scanner():
         if self.vision_engine is not None:
             return
 
-        log.info("🧠 Preparazione motore Vision AI (Ollama)...")
+        log.info("Setting vision Ai (Ollama)")
         
         try:
             from smart_surveillance_sorter.scanners.vision_engine import VisionEngine
@@ -746,10 +739,10 @@ class Scanner():
                 #logger=log
             )
 
-            log.info("✅ Modulo Vision AI pronto.")
+            log.info("Vision AI ready.")
             
         except ImportError as e:
-            log.error(f"❌ Errore nell'import di VisionAnalyzer: error={e}")
+            log.error(f"Error on setting up vision_engine, error={e}")
             self.is_refine = False
 
    
@@ -785,7 +778,7 @@ class Scanner():
             pending_videos,
             desc="Fallback YOLO",
             unit="video",
-            ncols=50,
+            ncols=100,
             bar_format="{desc}: {rate_fmt} [{bar}] {percentage:3.0f}% {n_fmt}/{total_fmt}"
         )
         pbar.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}")
@@ -935,13 +928,13 @@ class Scanner():
         self.clip_blip_video_dict = {}
         t_start = time.time()  # <--- SPOSTATO QUI: deve essere all'inizio per tutti
         if not self.results:
-            log.warning("Nessun risultato YOLO da passare a BLIP.")
+            log.warning("No YOLO result to process.")
             return
         
         clip_blip_res_path = Path(self.output_dir) / "clip_blip_res.json"
 
         if clip_blip_res_path.exists():
-            log.info("♻️  Caricamento analisi tecniche CLIP/BLIP esistenti...")
+            log.info("Clip/Blip Cache found. Resume...")
             self.clip_blip_video_dict = load_json(clip_blip_res_path)
         else:
             self.clip_blip_video_dict = {}
@@ -955,13 +948,13 @@ class Scanner():
         ]
 
         if not videos_needing_analysis:
-            log.info("☕ Tutti i video sono in cache o scartati. Salto caricamento Engine BLIP.")
+            log.info("All videos are in cache. No need loading Blip engine.")
             # Se non ci sono video nuovi, usciamo o processiamo solo la cache
             #t_start = time.time()
-            log.info(f"🚀 Inizio raffinamento CLIP-BLIP su num_video={len(self.results)}")
+            log.info(f"Start refine CLIP-BLIP on num_vid={len(self.results)}")
         else:
         # Carichiamo l'engine SOLO ORA che sappiamo di averne bisogno
-            log.info(f"🧠 Caricamento CLIP-BLIP Engine in VRAM per {len(videos_needing_analysis)} video...")
+            log.info(f"Loading CLIP-BLIP Engine to process num_vid={len(videos_needing_analysis)}.")
             from .clip_blip_engine import ClipBlipEngine
             self.clip_blip_engine = ClipBlipEngine(
                 settings=self.settings,
@@ -1059,7 +1052,7 @@ class Scanner():
                 "time": elapsed
             }
 
-        log.info(f"🏁 Raffinamento completato in {elapsed:.2f}s. Video_validi={len(self.clip_blip_results)}/{len(self.results)}")
+        log.info(f"Refine complete in {elapsed:.2f}s. Valid_vids={len(self.clip_blip_results)}/{len(self.results)}")
   
     
     def _get_arbitration_queue(self):
@@ -1140,18 +1133,18 @@ class Scanner():
         
         # Separatore
         log.info("-" * 50)
-        log.info("           RIEPILOGO ANALISI FINALE")
+        log.info("           Results")
         log.info("-" * 50)
         
         # Statistiche principali (usiamo il trigger '=' per i colori)
-        log.info(f"⏱️  Tempo totale={total_time:.2f}s")
-        log.info(f"🎥 Video processati={total_videos}")
+        log.info(f"⏱️  Total_time={total_time:.2f}s")
+        log.info(f"🎥 Processed num_video={total_videos}")
         
-        log.info("Suddivisione categorie:")
+        log.info("Category")
         
         for cat, count in stats.items():
             # Usiamo il trigger '='. Il logger colorerà la categoria in Cyan e il numero in Giallo
-            log.info(f"  - categoria={cat.capitalize():<12} | conteggio={count}")
+            log.info(f"  - category={cat.capitalize():<12} | count={count}")
         
         log.info("-" * 50)
 
@@ -1168,7 +1161,7 @@ class Scanner():
             # 1. Recuperiamo il riferimento 'pulito' (es: checks/00.jpg)
             reference_img = self._get_reference_path(cam_id) # Utility che cerca cam_id.jpg/png
             if not reference_img:
-                log.debug(f"Cam_id={cam_id}] Nessun riferimento in /checks, salto il controllo.")
+                log.debug(f"Cam_id={cam_id}] No image found in folder=/checks for this camera.")
                 continue
 
             # 2. Cerchiamo un'immagine NVR scattata di notte
@@ -1189,7 +1182,7 @@ class Scanner():
             
             # 3. Se abbiamo entrambi i file, interroghiamo il Vision Engine
             if night_sample:
-                log.info(f"Cam_id={cam_id}] Confronto riferimento con immagine_NVR={Path(night_sample).name}")
+                log.info(f"Cam_id={cam_id}] comparison with image={Path(night_sample).name}")
                 
                 # Mandiamo la lista [img1, img2] come richiesto
                 status = self.vision_engine.analyze_cleanliness(
@@ -1198,7 +1191,7 @@ class Scanner():
                 )
                 results[cam_id] = status
             else:
-                log.warning(f"Cam_id={cam_id}] Nessuna immagine NVR notturna trovata nell'indice.")
+                log.warning(f"Cam_id={cam_id}] No night nvr image found in folder={self.input_dir}")
                 results[cam_id] = "unknown"
 
         return results
@@ -1240,7 +1233,7 @@ class Scanner():
 
     def _fallback_with_vision(self, vision_queue):
         if not vision_queue:
-            log.warning("Nessun risultato YOLO da raffinare.")
+            log.debug("No results to process.")
             return
         
         vision_cache_file = Path(self.output_dir) / "vision_scan_res.json"
@@ -1256,7 +1249,7 @@ class Scanner():
         existing_paths = {str(r["video_path"]) for r in self.vision_results}
        
 
-        msg_start = f"Avvio Arbitrato Vision su {len(vision_queue)} video dubbi"
+        msg_start = f"Start vision arbitration on num_vid={len(vision_queue)}"
         log.info(msg_start)
 
         # 2. Barra di progressione per i casi critici
@@ -1264,7 +1257,7 @@ class Scanner():
             vision_queue, 
             desc="⚖️  Vision Arbitration", 
             unit="it", 
-            ncols=80,
+            ncols=100,
             bar_format="{desc}: {rate_fmt} [{bar}] {percentage:3.0f}% {n_fmt}/{total_fmt} {elapsed}"
         )
         pbar.write(f"[{time.strftime('%H:%M:%S')}] - ℹ️ {msg_start}")
@@ -1277,16 +1270,16 @@ class Scanner():
         for video_data in pbar:
             video_path = video_data.get("video_path")
              # --- PRINT TATTICO 1: Ingresso ---
-            pbar.write(f"DEBUG 🔍: Invio a Vision Engine -> {video_path}")
-            pbar.write(f"DEBUG DATA 📦: {json.dumps(video_data, indent=2, default=str)}") # Usiamo json.dumps per vederlo ordinato
+            # pbar.write(f"DEBUG 🔍: Invio a Vision Engine -> {video_path}")
+            # pbar.write(f"DEBUG DATA 📦: {json.dumps(video_data, indent=2, default=str)}") # Usiamo json.dumps per vederlo ordinato
             # 3. Chiamata a Qwen solo per questo video
             report_vision = self.vision_engine.refine_single_video(video_data)
             
             if report_vision:
                 # 4. SOSTITUZIONE CHIRURGICA
                 # Cerchiamo il vecchio report di BLIP e lo rimpiazziamo con quello di Vision
-                pbar.write(f"DEBUG ✅: Risposta ricevuta per {video_path}")
-                pbar.write(f"DEBUG 🧠: Verdetto: {report_vision.get('category')} (Conf: {report_vision.get('confidence')})")
+                # pbar.write(f"DEBUG ✅: Risposta ricevuta per {video_path}")
+                # pbar.write(f"DEBUG 🧠: Verdetto: {report_vision.get('category')} (Conf: {report_vision.get('confidence')})")
                 for i, r in enumerate(self.clip_blip_results):
                     if r["video_path"] == video_path:
                         self.clip_blip_results[i] = report_vision

@@ -27,10 +27,10 @@ def load_json(full_path):
             return json.load(f)
     except FileNotFoundError:
         # Usiamo il logger se disponibile, altrimenti log
-        log.critical(f"❌ ERRORE: File non trovato in {full_path}")
+        log.critical(f"Not found file={full_path}")
         return None
     except json.JSONDecodeError:
-        log.critical(f"❌ ERRORE: Il file {full_path} non è un JSON valido.")
+        log.critical(f"File={full_path} is not a valid JSON.")
         return None
 
 def save_json(data, full_path):
@@ -46,14 +46,14 @@ def save_json(data, full_path):
             json.dump(data, f, indent=4, ensure_ascii=False)
         return True
     except Exception as e:
-        log.critical(f"❌ ERRORE durante il salvataggio in {full_path}: {e}")
+        log.critical(f"Error during save on path={full_path}. err={e}")
         return False
 
 def get_video_capture(video_path):
     """Apre un video e restituisce l'oggetto cv2.VideoCapture."""
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
-        log.warning(f"ERRORE: Impossibile aprire il video {video_path}")
+        log.warning(f"Error is not possible open vid={video_path}")
         return None
     return cap
 
@@ -369,21 +369,21 @@ def validate_ollama_setup(vision_settings):
     try:
         response = requests.get(url_tags, timeout=3)
         if response.status_code != 200:
-            log.info(f"❌ Server Ollama risponde con errore {response.status_code}")
+            log.info(f"Ollama Server response with error={response.status_code}")
             return False
         
         # Opzionale: controlla se il modello è presente nella lista locale
         models_list = [m['name'] for m in response.json().get('models', [])]
         if model_required not in models_list:
-            log.info(f"⚠️ Attenzione: il modello {model_required} non risulta tra quelli scaricati.")
+            log.warning(f"Model={model_required} is not reachable. Did you forget to download/activate it?")
             # Non blocchiamo necessariamente, Ollama potrebbe fare il pull automatico, 
             # ma è buono saperlo.
             
-        log.info(f"✅ Connessione a Ollama ({ip}:{port}) stabilita. Modello target: {model_required}")
+        log.info(f"✅ Connect to Ollama ({ip}:{port}). Model={model_required}")
         return True
 
     except requests.exceptions.ConnectionError:
-        log.info(f"❌ Errore Fatale: Ollama è spento su {ip}:{port}.")
+        log.info(f"Ollama is not reachable on {ip}:{port}.")
         return False
     
 
@@ -403,14 +403,14 @@ def fetch_coords_logic(city_name):
         if loc:
             return {"lat": loc.latitude, "lon": loc.longitude}
     except Exception:
-        print(f"⚠️ Internet assente. Cerco '{city_name}' nel database locale...")
+        log.critical(f"No internet access. Searchig city='{city_name}' in local db.")
 
     # LIVELLO 2: FALLBACK OFFLINE (Astral Database)
     try:
         city_data = lookup(city_name, database())
         return {"lat": city_data.latitude, "lon": city_data.longitude}
     except KeyError:
-        print(f"⚠️ Città '{city_name}' non trovata offline. Fallback su Roma.")
+        log.critical(f"City='{city_name}' not found offline. Fallback on Rome")
         return {"lat": 41.89, "lon": 12.49} # Default universale
     
 

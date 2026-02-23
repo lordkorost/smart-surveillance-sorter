@@ -69,7 +69,7 @@ class ClipBlipEngine:
         # Questa funzione restituirà lat/lon dalla cache o ricalcolate
         self.lat, self.lon = get_smart_coordinates(self.city_name)
         
-        print(f"🚀 Sistema avviato per {self.city_name} (Lat: {self.lat}, Lon: {self.lon})")
+        log.info(f"🚀 Blip start on city={self.city_name} (Lat: {self.lat}, Lon: {self.lon})")
         
         
         # Genera dinamicamente la mappa partendo dai settings di YOLO
@@ -109,7 +109,7 @@ class ClipBlipEngine:
     def scan_single_video(self,video_data):
         frames = video_data.get("frames", [])
         if not frames:
-            log.info("  (Nessun frame)")
+            log.debug(f"  (No frame found for video={video_data.get('video_path')})")
             return {}
         
         # --- 🚀 RISOLUZIONE ALLA RADICE (FUORI DAL FOR) ---
@@ -227,7 +227,7 @@ class ClipBlipEngine:
 
             # Verifica dinamica: addio orari fissi!
             is_night = is_night_astronomic(dt, self.lat, self.lon)
-            print(f"DEBUG: Video Time: {dt.strftime('%H:%M:%S')} | Località: {self.city_name} | Stato: {is_night}")
+            #print(f"DEBUG: Video Time: {dt.strftime('%H:%M:%S')} | Località: {self.city_name} | Stato: {is_night}")
             if is_night:
                 if frame.get("category") == "person":
                     final_scores["PERSON"] += self.YOLO_NIGHT_BOOST

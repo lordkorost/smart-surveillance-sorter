@@ -51,7 +51,7 @@ class YoloEngine:
         """Carica il modello solo se non è già presente in VRAM."""
         if self.model is None:
             yolo_cfg = self.settings.get("yolo_settings", {})
-            log.info("🔥 [Lazy Loading] Inizializzazione YOLO Engine in corso...")
+            log.info("[Lazy Loading] YOLO Engine ...")
             # Chiamiamo la tua funzione originale
             self.model = load_smart_yolo(
                 model_name=yolo_cfg.get("model_path", "yolov8l"), 
@@ -288,7 +288,7 @@ class YoloEngine:
             current_stride = self._get_next_stride(frame_idx, fps, found_valid_target, cam_cfg)
 
             if current_stride != prev_stride:
-                fase = "PROTEZIONE/DETECTION" if current_stride <= stride_std else "VELOCITÀ CROCIERA"
+                #fase = "PROTEZIONE/DETECTION" if current_stride <= stride_std else "VELOCITÀ CROCIERA"
                 #print(f"[{video_path.name}] Frame {frame_idx}: Cambio stride a {current_stride} ({fase})")
                 prev_stride = current_stride
 
@@ -453,7 +453,7 @@ class YoloEngine:
         subtle shadows or distant objects, as described in the engine’s
         documentation [1].
         """
-        log.info("🕵️ Inizio fase FALLBACK per video non identificati...")
+        log.info("Start FALLBACK phase for videos not recognize in prev steps.")
         
         fallback_targets = self._get_fallback_targets(current_results)
         if not fallback_targets:
@@ -479,14 +479,14 @@ class YoloEngine:
             
             # 2. Se YOLO ha dei sospetti, mandiamo solo quelli alla Vision AI
             for suspect in suspicious_frames:
-                log.debug(f"🔍 Fallback: Vision AI controlla sospetto in video={suspect['video_name']}")
+                log.debug(f"🔍 Fallback: Vision AI check suspect in video={suspect['video_name']}")
                 
                 # Chiamiamo la Vision AI (usiamo il motore che abbiamo già)
                 report = self.vision_engine.refine_single_video(suspect)
                 
                 # Se la Vision AI conferma (es. category != "nothing")
                 if report and report.get("category") != "nothing":
-                    log.debug(f"✨ RECUPERATO: video={item['video_name']} classificato come category={report['category']}")
+                    log.debug(f"Found video={item['video_name']} category={report['category']}")
                     current_results.append(report)
                     break # Trovato uno, passiamo al prossimo video
 
@@ -542,7 +542,7 @@ class YoloEngine:
         
         if not results or len(results[0].boxes) == 0:
             # Aggiungi questo per il debug
-            log.debug(f"🔍 YOLO Fallback: Nessun target trovato in img={image_path.name}")
+            log.debug(f"🔍 YOLO Fallback: Nothing found on img={image_path.name}")
             return None
 
         # Prendiamo la detenzione con confidenza maggiore tra quelle trovate
