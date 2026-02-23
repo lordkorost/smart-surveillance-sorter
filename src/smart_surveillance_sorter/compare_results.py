@@ -1,7 +1,10 @@
 import argparse
-import json
+#import json
 import os
 from pathlib import Path
+
+from smart_surveillance_sorter.constants import FINAL_REPORT, GROUND_TRUTH
+from smart_surveillance_sorter.utils import load_json
 
 def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
     def _print(msg): log.info(msg) if log else print(msg)
@@ -13,8 +16,8 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
 
     if session_dir:
         s_path = Path(session_dir)
-        path_gt = s_path / "ground_truth.json"
-        path_res = s_path / "classification_results.json"
+        path_gt = s_path / GROUND_TRUTH
+        path_res = s_path / FINAL_REPORT
     
     # Se l'utente specifica i file esplicitamente, questi vincono sulla directory
     if gt_file:
@@ -29,14 +32,21 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
 
     _print(f"📊 Confronto in corso...\n📖 GT: {path_gt}\n🤖 AI: {path_res}")
 
-    # --- CARICAMENTO E NORMALIZZAZIONE ---
-    try:
-        with open(path_gt, 'r', encoding='utf-8') as f:
-            gt_list = json.load(f)
-        with open(path_res, 'r', encoding='utf-8') as f:
-            res_data = json.load(f)
-    except Exception as e:
-        _err(f"Errore caricamento JSON: {e}")
+    # # --- CARICAMENTO E NORMALIZZAZIONE ---
+    # try:
+    #     with open(path_gt, 'r', encoding='utf-8') as f:
+    #         gt_list = json.load(f)
+    #     with open(path_res, 'r', encoding='utf-8') as f:
+    #         res_data = json.load(f)
+    # except Exception as e:
+    #     _err(f"Errore caricamento JSON: {e}")
+    #     return
+    gt_list = load_json(path_gt)
+    res_data = load_json(path_res)
+
+    # Controlliamo che entrambi siano stati caricati correttamente
+    if gt_list is None or res_data is None:
+        _err("Errore caricamento JSON: uno o entrambi i file sono mancanti o corrotti.")
         return
 
     # Normalizzazione GT
@@ -86,7 +96,7 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
     # --- OUTPUT TABELLA ---
     # --- CALCOLO E OUTPUT METRICHE PROFESSIONALI ---
     # Questa tabella sostituisce quella vecchia perché contiene già TP, FP e FN
-    header = f"{'CATEGORIA':<12} | {'TP':<5} | {'FP':<5} | {'FN':<5} | {'PRECISION':<10} | {'RECALL':<10}"
+    header = f"{'CATEGORY':<12} | {'TP':<5} | {'FP':<5} | {'FN':<5} | {'PRECISION':<10} | {'RECALL':<10}"
     _print(header)
     _print("-" * 70)
     

@@ -3,11 +3,12 @@ import sys
 from pathlib import Path
 import time
 from smart_surveillance_sorter.compare_results import compare_results
+from smart_surveillance_sorter.constants import FINAL_REPORT, GROUND_TRUTH
 from smart_surveillance_sorter.generate_ground_truth import check_duplicates_with_log, genera_ground_truth
 from smart_surveillance_sorter.logger import get_logger
 from smart_surveillance_sorter.scanners.scanner import Scanner
-from smart_surveillance_sorter.utils import check_dir, save_json
-from colorama import Fore, Style
+from smart_surveillance_sorter.utils import check_dir, cleanup, save_json
+#from colorama import Fore, Style
 import argparse
 
 def parse_args():
@@ -99,9 +100,10 @@ def main():
         log.info(f"Compare mode")
         
         # Se non vengono passati --gt o --res, usiamo i default nella outputDir
-        gt_path = args.gt if args.gt else Path(output_dir) / "ground_truth.json"
-        res_path = args.res if args.res else Path(output_dir) / "classification_results.json"
-        
+        # gt_path = args.gt if args.gt else Path(output_dir) / "ground_truth.json"
+        # res_path = args.res if args.res else Path(output_dir) / "classification_results.json"
+        gt_path = args.gt if args.gt else Path(output_dir) / GROUND_TRUTH
+        res_path = args.res if args.res else Path(output_dir) / FINAL_REPORT
         try:
             # Chiamiamo la funzione di confronto (assicurati di averla importata)
             # Passiamo None a session_dir perché stiamo già risolvendo i percorsi qui
@@ -111,7 +113,13 @@ def main():
             log.error(f"Error during compare  e={e}")
             sys.exit(1)
     
-    log.info(f"Scanner start: input-folder={input_dir} | output-folder={args.output_dir} | Mode={args.mode} | Refine={args.is_refine} | Engine={args.engine} | Fallback={args.is_fallback} | Test={args.is_test}")
+    log.info(
+            f"Scanner start: input-folder={input_dir} | "
+            f"output-folder={args.output_dir} | "
+            f"Mode={args.mode} | Refine={args.is_refine} | "
+            f"Engine={args.engine} | Fallback={args.is_fallback} | "
+            f"Test={args.is_test}"
+        )
     # --- 2. IL TRUCCO DELLO SPLAT (**) ---
     # --- LOGICA SCANNER ---
     # Prepariamo i parametri per lo splat
@@ -138,6 +146,7 @@ def main():
     finally:
         if 'scanner' in locals():
             scanner._print_final_summary(time.time() - start_time)
+        cleanup()
 
 
 if __name__ == "__main__":

@@ -141,6 +141,23 @@
             "person": 0.5,
             "vehicle": 0.55,
             "animal": 0.30
+        },
+        "blip_rules": {
+            "VETO_THRESHOLD": 0.2,
+            "SIGNIFICANCE_THRESHOLD": 0.2,
+            "PERSON_PRIORITY_THRESHOLD": 0.25,
+            "PERSON_BOOST_TOLERANCE": 0.45,
+            "DELTA_THRESHOLD": {
+                "PERSON": 0.25,
+                "ANIMAL": 0.45,
+                "VEHICLE": 0.2
+            },
+            "DAY_ANIMAL_MIN_CONF": 0.20,
+            "DAY_ANIMAL_MARGIN": 0.05,
+            "BLIP_BOOST_PERSON": 0.35,
+            "BLIP_BOOST_OTHER": 0.1,
+            "FINAL_WEIGHT_CROP": 0.7,
+            "FINAL_WEIGHT_FRAME": 0.3
         }
     },
     "06": {
@@ -161,6 +178,12 @@
             "person": 0.5,
             "vehicle": 0.55,
             "animal": 0.30
+        },
+        "blip_rules": {
+                "FAKE_WEIGHTS": {
+                "GROUND": 0.2,
+                "GARDEN": 0.2
+            }
         }
     },
     "07": {

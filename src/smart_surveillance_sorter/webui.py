@@ -8,7 +8,8 @@ from pathlib import Path
 
 # Import dal tuo progetto
 from smart_surveillance_sorter.constants import CAMERAS_JSON, SETTINGS_JSON, MODELS_DIR, PROMPTS_JSON
-from smart_surveillance_sorter.log_config import configure_logger
+#from smart_surveillance_sorter.log_config import configure_logger
+from smart_surveillance_sorter.logger import get_logger
 from smart_surveillance_sorter.scanners.scanner import Scanner
 from smart_surveillance_sorter.scanners.vision_helpers import build_dynamic_prompt
 from smart_surveillance_sorter.utils import load_json, save_json, validate_ollama_setup
@@ -299,8 +300,8 @@ def save_comprehensive_settings(*args):
         return f"❌ Errore nel salvataggio: {str(e)}"
 
 # Usiamo debug=True di default per la UI o lo aggiorniamo nel run_process
-configure_logger(debug=True) 
-log = logging.getLogger(__name__)
+log = get_logger(debug=True) 
+#log = logging.getLogger(__name__)
 
 def run_process(input_path, output_path, mode, model_name, use_refine, use_fallback, test_mode, engine, device,is_clean_check):
     """Avvia lo Scanner e riporta i log alla UI."""

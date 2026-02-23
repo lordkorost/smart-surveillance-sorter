@@ -1,9 +1,9 @@
-import os
+#import os
 import time
 import subprocess
 import argparse
 import logging
-from pathlib import Path
+#from pathlib import Path
 
 # Configurazione log base
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -34,7 +34,7 @@ def run_loop():
     while True:
         try:
             # In questa (se main.py è nella stessa cartella del sorter):
-            import sys
+            #import sys
             from pathlib import Path
 
             # Ottieni il path assoluto della cartella dove si trova questo script (sorter)

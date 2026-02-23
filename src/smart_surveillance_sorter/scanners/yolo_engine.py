@@ -2,7 +2,7 @@ from datetime import datetime
 import json
 import logging
 from pathlib import Path
-import shutil
+#import shutil
 from typing import Optional
 
 import cv2
@@ -140,7 +140,7 @@ class YoloEngine:
                 else:
                     best_det["crop_path"] = None
             except Exception as e:
-                log.critical(f"⚠️ Errore durante il ritaglio dell'immagine NVR: error={e}")
+                log.critical(f"Error during cropping NVR image: error={e}")
                 best_det["crop_path"] = None
             # ------------------------------
 

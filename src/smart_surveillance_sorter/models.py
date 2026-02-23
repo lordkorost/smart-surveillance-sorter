@@ -1,7 +1,7 @@
 import logging
 import torch
-import os
-from pathlib import Path
+#import os
+#from pathlib import Path
 from ultralytics import YOLO
 from smart_surveillance_sorter.constants import MODELS_DIR
 log = logging.getLogger(__name__) 

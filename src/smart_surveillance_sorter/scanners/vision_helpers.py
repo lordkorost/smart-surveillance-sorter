@@ -1,10 +1,13 @@
+import logging
+
+
 LABEL_TO_CAT = {
         "person": "PERSON", "people": "PERSON",
         "dog": "ANIMAL", "cat": "ANIMAL", "animal": "ANIMAL",
         "car": "VEHICLE", "truck": "VEHICLE", "vehicle": "VEHICLE"
     }
 
-
+log = logging.getLogger(__name__) 
 def build_dynamic_prompt(prompts_config, cam_cfg, mode="full", has_crop=False, is_fallback=False):
     
 
@@ -33,32 +36,61 @@ def build_dynamic_prompt(prompts_config, cam_cfg, mode="full", has_crop=False, i
             hierarchy_lines.append(f"{idx}. {cls}: {desc_text}, output '{cls.lower()}'.")
         
         hierarchy_lines.append(f"{len(active_classes)+1}. NOTHING: If none of the above are present, output 'nothing'.")
-        
-        # 5. Riempiamo il template
+
+        # 5. Riempiamo il template (Usiamo i .get per ogni componente del prompt)
+        shared = prompts_config.get("shared_components", {})
+        modules = prompts_config.get("modules", {})
+
         context = {
-            "system_instruction": prompts_config["shared_components"]["system_instruction"],
+            "system_instruction": shared.get("system_instruction", "You are an AI Analyst."),
             "desc": cam_cfg.get("desc", "Outdoor area"),
             "hierarchy": "\n".join(hierarchy_lines),
-            "rules": prompts_config["shared_components"]["mandatory_rules"],
+            "rules": shared.get("mandatory_rules", "Follow the output format strictly."),
             "allowed_outputs": " | ".join([c.lower() for c in active_classes] + ["nothing"])
         }
 
-        # Recuperiamo il dizionario dei template dalla configurazione passata
+        # Recuperiamo i template (Default a dizionario vuoto per evitare crash)
         all_templates = prompts_config.get("templates", {})
 
         if is_fallback:
             template = all_templates.get("fallback")
-            context["fallback_header"] = prompts_config["modules"]["fallback_header"]
+            context["fallback_header"] = modules.get("fallback_header", "")
         elif has_crop:
             template = all_templates.get("with_crop")
-            context["crop_header"] = prompts_config["modules"]["analyst_mission_crop"]
+            context["crop_header"] = modules.get("analyst_mission_crop", "")
         else:
-            # Qui usiamo il template standard
             template = all_templates.get("standard")
 
-        # Gestione errore se il template non esiste nel JSON
+        # 6. Gestione errore se il template è None o stringa vuota
         if not template:
-            raise ValueError("Template non trovato nel file prompts.json")
+            log.error(f"Missing template Fallback/Crop/Standard in prompts.json")
+            raise ValueError("Prompt config incomplete: check prompts.json")
+        
+        # # 5. Riempiamo il template
+        # context = {
+        #     "system_instruction": prompts_config["shared_components"]["system_instruction"],
+        #     "desc": cam_cfg.get("desc", "Outdoor area"),
+        #     "hierarchy": "\n".join(hierarchy_lines),
+        #     "rules": prompts_config["shared_components"]["mandatory_rules"],
+        #     "allowed_outputs": " | ".join([c.lower() for c in active_classes] + ["nothing"])
+        # }
+
+        # # Recuperiamo il dizionario dei template dalla configurazione passata
+        # all_templates = prompts_config.get("templates", {})
+
+        # if is_fallback:
+        #     template = all_templates.get("fallback")
+        #     context["fallback_header"] = prompts_config["modules"]["fallback_header"]
+        # elif has_crop:
+        #     template = all_templates.get("with_crop")
+        #     context["crop_header"] = prompts_config["modules"]["analyst_mission_crop"]
+        # else:
+        #     # Qui usiamo il template standard
+        #     template = all_templates.get("standard")
+
+        # # Gestione errore se il template non esiste nel JSON
+        # if not template:
+        #     raise ValueError("Template non trovato nel file prompts.json")
 
         return template.format(**context)
 

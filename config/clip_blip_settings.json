@@ -25,7 +25,6 @@
     "FINAL_WEIGHT_CROP": 0.7,
     "FINAL_WEIGHT_FRAME": 0.3,
     "PERSON_PRIORITY_THRESHOLD": 0.25,
-    "PERSON_FAKE_RELATIVE": 1.1,
     "DELTA_THRESHOLD" : {
             "PERSON": 0.25,
             "ANIMAL": 0.45,
@@ -43,14 +42,8 @@
         "1": 0.50,
         "default": 0.40
     },
-    "NIGHT_HOURS":{
-        "sunrise": 7,
-        "sunset": 17,
-        "day_start": 0,
-        "midnight":24
-    },
+    "FAKE_WEIGHTS": {},
     "YOLO_NIGHT_BOOST": 0.3,
-    "yolo_res_json":"yolo_scan_res.json",
-    "STATIC_MOVEMENT_THRESHOLD": 25
+    "yolo_res_json":"yolo_scan_res.json"
 
 }

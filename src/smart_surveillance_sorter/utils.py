@@ -1,15 +1,23 @@
 from datetime import datetime
 import json
 import logging
-import os
+#import os
 import re
-import socket
+#import socket
 import requests
-import sys
+#import sys
 import cv2
 from pathlib import Path
 from smart_surveillance_sorter.constants import PROJECT_ROOT
-from colorama import Fore, Style
+#from colorama import Fore, Style
+import json
+from astral.geocoder import database, lookup
+from constants import COORDS_CACHE_JSON
+from astral import Observer
+from astral.sun import sun
+from datetime import timedelta
+import pytz
+from smart_surveillance_sorter.logger import log_resource_usage
 log = logging.getLogger(__name__) 
 LABEL_TO_CAT = {
         "person": "PERSON", "people": "PERSON",
@@ -18,12 +26,13 @@ LABEL_TO_CAT = {
     }
 
 def load_json(full_path):
- 
+    
     if not isinstance(full_path, Path):
         full_path = PROJECT_ROOT / full_path
-        
+    #log.debug(f"📂 File da caricare {full_path}")    
     try:
         with open(full_path, 'r', encoding='utf-8') as f:
+            #log.debug(f"📂 File caricato con successo: {full_path}")
             return json.load(f)
     except FileNotFoundError:
         # Usiamo il logger se disponibile, altrimenti log
@@ -41,6 +50,7 @@ def save_json(data, full_path):
         full_path = PROJECT_ROOT / full_path
         
     try:
+        #log.debug(f"Save file in path={full_path}")
         full_path.parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
@@ -92,9 +102,10 @@ def parse_filename_dynamic(file_path, storage_settings):
     Estrae i metadati dal nome del file usando il template del config.
     """
     stem = file_path.stem
-    template = storage_settings["filename_template"]
-    ts_format = storage_settings["timestamp_format"]
-
+    # template = storage_settings["filename_template"]
+    # ts_format = storage_settings["timestamp_format"]
+    template = storage_settings.get("filename_template", "{camera}_{timestamp}")
+    ts_format = storage_settings.get("timestamp_format", "%Y%m%d_%H%M%S")
     # Trasformiamo il template umano in Regex
     # Sostituiamo i tag con gruppi di cattura nominati
     pattern = template.replace("{nvr_name}", "(?P<nvr_name>.*?)")
@@ -208,7 +219,13 @@ def get_target_ids(model, settings, mode, camera_ignore_labels):
     
     # 3. Costruiamo la lista di etichette "candidate" dai gruppi attivi
     candidate_labels = []
-    groups_config = settings["yolo_settings"]["detection_groups"]
+    #groups_config = settings["yolo_settings"]["detection_groups"]
+    # 1. Recupera yolo_settings (se manca, usa un dizionario vuoto {})
+    yolo_conf = settings.get("yolo_settings", {})
+
+    # 2. Recupera detection_groups (se manca, usa una lista o dict vuoto a seconda di cosa ti aspetti)
+    groups_config = yolo_conf.get("detection_groups", [])
+
     for group in active_groups:
         candidate_labels.extend(groups_config.get(group, []))
     
@@ -260,6 +277,20 @@ def calculate_score(category, conf, vision_answer, scoring_settings):
             
     return base
 
+
+def cleanup():
+    """Funzione dedicata alla pulizia profonda della memoria."""
+    import gc
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+    except ImportError:
+        pass
+    # Se vuoi essere super pulito, puoi aggiungere un log
+    log_resource_usage(log, "Free memory")
 
 def get_safe_path(base_dir, camera_name, category, structure_type):
     """
@@ -387,12 +418,6 @@ def validate_ollama_setup(vision_settings):
         return False
     
 
-
-import json
-import socket
-from astral.geocoder import database, lookup
-from constants import COORDS_CACHE_JSON
-
 def fetch_coords_logic(city_name):
     # LIVELLO 1: PROVA ONLINE (Geopy)
     try:
@@ -417,39 +442,52 @@ def fetch_coords_logic(city_name):
 def get_smart_coordinates(city_from_settings):
     update_needed = False
 
-    # 1. Carichiamo la cache se esiste
-    if COORDS_CACHE_JSON.exists():
-        try:
-            with open(COORDS_CACHE_JSON, "r") as f:
-                cache = json.load(f)
+    # # 1. Carichiamo la cache se esiste
+    # if COORDS_CACHE_JSON.exists():
+    #     try:
+    #         with open(COORDS_CACHE_JSON, "r") as f:
+    #             cache = json.load(f)
             
-            if cache.get("city_name") == city_from_settings:
-                return cache["lat"], cache["lon"]
-            else:
-                update_needed = True # Città cambiata nel settings.json
-        except Exception:
-            update_needed = True
-    else:
-        update_needed = True
+    #         if cache.get("city_name") == city_from_settings:
+    #             return cache["lat"], cache["lon"]
+    #         else:
+    #             update_needed = True # Città cambiata nel settings.json
+    #     except Exception:
+    #         update_needed = True
+    # else:
+    #     update_needed = True
 
+    # 1. Carichiamo la cache (se il file non esiste o è corrotto, avremo un dizionario vuoto)
+    cache = load_json(COORDS_CACHE_JSON) or {}
+
+    # 2. Verifichiamo se la città è la stessa
+    # 2. Verifichiamo se la città è la stessa e se le coordinate esistono
+    if cache.get("city_name") == city_from_settings:
+        lat, lon = cache.get("lat"), cache.get("lon")
+        if lat is not None and lon is not None:
+            return lat, lon
+    
+    # 3. Se arriviamo qui (città diversa o dati mancanti), serve aggiornare
+    update_needed = True
+        
+
+    # 2. Se serve, cerchiamo le nuove coordinate
     # 2. Se serve, cerchiamo le nuove coordinate
     if update_needed:
         coords = fetch_coords_logic(city_from_settings)
         
-        with open(COORDS_CACHE_JSON, "w") as f:
-            json.dump({
-                "city_name": city_from_settings,
-                "lat": coords["lat"],
-                "lon": coords["lon"]
-            }, f, indent=4)
+        # Prepariamo i dati da salvare
+        new_cache_data = {
+            "city_name": city_from_settings,
+            "lat": coords["lat"],
+            "lon": coords["lon"]
+        }
+        
+        # Usiamo la tua funzione centralizzata invece di with open
+        save_json(new_cache_data, COORDS_CACHE_JSON)
             
         return coords["lat"], coords["lon"]
     
-
-from astral import Observer
-from astral.sun import sun
-from datetime import timedelta
-import pytz
 
 def is_night_astronomic(dt_frame, lat, lon):
     # Observer usa solo matematica locale

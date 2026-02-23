@@ -1,10 +1,10 @@
 import logging
-import time
+#import time
 from pathlib import Path
 from collections import defaultdict
 from ollama import generate
 
-from smart_surveillance_sorter.constants import CHECKS_DIR, PROMPTS_JSON
+from smart_surveillance_sorter.constants import PROMPTS_JSON
 
 # Importiamo le tue utility esterne
 # Assicurati che build_dynamic_prompt e calculate_score siano in utils.py
@@ -325,7 +325,7 @@ class VisionEngine:
             answer = "uncertain" # Default
 
             # Logica specifica per la pulizia
-            if any(word in full_response for word in ["clean", "perfetta"]):
+            if any(word in full_response for word in ["clean", "perfect"]):
                 answer = "clean"
             elif any(word in full_response for word in ["dirty", "dust"]):
                 answer = "dirty"
