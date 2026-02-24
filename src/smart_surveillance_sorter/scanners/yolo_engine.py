@@ -2,9 +2,18 @@ from datetime import datetime
 import json
 import logging
 from pathlib import Path
-#import shutil
+import shutil
+from typing import Optional
+from datetime import datetime
+import json
+import logging
+from pathlib import Path
 from typing import Optional
 
+import cv2
+from smart_surveillance_sorter.models import load_smart_yolo
+from smart_surveillance_sorter.utils import  get_crop_coordinates, get_target_ids, get_video_capture
+from .yolo_helpers import extract_frames_with_cache
 import cv2
 from smart_surveillance_sorter.models import load_smart_yolo
 from smart_surveillance_sorter.utils import  get_crop_coordinates, get_target_ids, get_video_capture
@@ -37,14 +46,14 @@ class YoloEngine:
         #aspetta a caricare il modello solo se serve
         self.model = None
         self.name_to_id = None
-        #yolo_cfg                = self.settings.get("yolo_settings", {})
-        # carica il modello yolo
-        # self.model = load_smart_yolo(
-        #     model_name=yolo_cfg.get("model_path", "yolov8l"), 
-        #     device=self.device
-        # )
+        yolo_cfg                = self.settings.get("yolo_settings", {})
+        #carica il modello yolo
+        self.model = load_smart_yolo(
+            model_name=yolo_cfg.get("model_path", "yolov8l"), 
+            device=self.device
+        )
 
-        # self.name_to_id = {v: k for k, v in self.model.names.items()}
+        self.name_to_id = {v: k for k, v in self.model.names.items()}
         
         
     def _ensure_model_loaded(self):
@@ -65,7 +74,7 @@ class YoloEngine:
     
             min_confidence = 0.60
             min_area_ratio = 0.002 
-            self._ensure_model_loaded()
+            #self._ensure_model_loaded()
             res = self.model(str(image_path), classes=[0], verbose=False, device=self.device)[0]
             class_names = res.names
             best_det = None
@@ -172,7 +181,7 @@ class YoloEngine:
         ignore_labels = cam_cfg.get("filters", {}).get("ignore_labels", [])
         thresholds = cam_cfg.get("thresholds", {})
         self.frames_dir = frames_dir
-        self._ensure_model_loaded()
+        #self._ensure_model_loaded()
         final_target_ids = get_target_ids(
             model=self.model, 
             settings=self.settings, 
@@ -223,8 +232,10 @@ class YoloEngine:
         prev_stride = stride_std
 
         #log.debug(f"Video={video_path.name} ha FPS={fps}")
-        
-        # ------------------------------------------------------------------
+        print(f"--- ANALISI VIDEO: {video_path.name} ---")
+        print(f"CONFIG CAMERA {cam_id}: {cam_cfg}")
+        print(f"THRESHOLDS APPLICATI: {thresholds}")
+                # ------------------------------------------------------------------
         # 4️⃣ Loop di Analisi
         # ------------------------------------------------------------------
         while True:
@@ -236,14 +247,16 @@ class YoloEngine:
             # Siamo sul frame 'frame_idx'
             found_valid_target = False
 
-            # ANALISI YOLO
             yolo_results = self.model.predict(
-                source=frame, 
-                classes=final_target_ids, 
-                verbose=False, 
-                conf=0.20,
-                device=self.device 
-            )[0]
+            source=frame,           # Torniamo al frame originale BGR
+            classes=final_target_ids, 
+            verbose=False, 
+            conf=0.20,              # Vediamo TUTTO quello che vedi
+            imgsz=1280,             # FORZA 1280 (Risoluzione doppia)
+            device=self.device,
+            #half=True
+           
+        )[0]
 
             if len(yolo_results.boxes) > 0:
                 for box in yolo_results.boxes:
@@ -252,6 +265,24 @@ class YoloEngine:
                     label = self.model.names[cls_id]
                     group = label_to_group.get(label)
                     
+
+
+                   
+                    target_thresh = thresholds.get(group, 0.50)
+                    # Nel loop dove analizzi la box
+                    # Sostituisci il tuo IF con questo:
+                    if group in ['person', 'animal']:
+                        print(f"   DEBUG VERO: Trovata label '{label}' che appartiene al gruppo '{group}'")
+                        print(f"   DEBUG: Frame {frame_idx} | Oggetto a {box.xyxy[0].tolist()}")
+                                        # Logica di stampa pulita
+                    if conf >= target_thresh and label=="person":
+                        print(f"   [OK] Persona trovata a conf {conf:.3f} (supera soglia {target_thresh})")
+                    elif label=="person":
+                        # Stampiamo il KO solo se è una "quasi-persona" (sopra 0.15) 
+                        # per non intasare il log con falsi positivi minimi
+                        if conf > 0.15:
+                            print(f"   [KO] Persona trovata a conf {conf:.3f} ma scartata (soglia {target_thresh})")
+                        
                     if not group or conf < thresholds.get(group, 0.50):
                         continue
                     

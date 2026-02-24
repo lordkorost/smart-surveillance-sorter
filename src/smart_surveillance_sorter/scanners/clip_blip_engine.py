@@ -90,9 +90,18 @@ class ClipBlipEngine:
         self.DAY_ANIMAL_MARGIN = cb_conf.get("DAY_ANIMAL_MARGIN", 0.05)
         self.DAY_ANIMAL_MIN_CONF = cb_conf.get("DAY_ANIMAL_MIN_CONF", 0.20)
         
-        self.ANIMAL_AGG_THRESHOLDS = cb_conf.get("ANIMAL_AGG_THRESHOLDS", {"1": 0.45, "2": 0.40, "default": 0.35})
-        self.VEHICLE_AGG_THRESHOLDS = cb_conf.get("VEHICLE_AGG_THRESHOLDS", {"1": 0.50, "default": 0.40})
-      
+        # self.ANIMAL_AGG_THRESHOLDS = cb_conf.get("ANIMAL_AGG_THRESHOLDS", {"1": 0.45, "2": 0.40, "default": 0.35})
+        # self.VEHICLE_AGG_THRESHOLDS = cb_conf.get("VEHICLE_AGG_THRESHOLDS", {"1": 0.50, "default": 0.40})
+
+        # --- Soglie Dinamiche Animali ---
+        self.ANIMAL_START_THRESHOLD = cb_conf.get("ANIMAL_START_THRESHOLD", 0.45)
+        self.ANIMAL_STEP_REDUCTION = cb_conf.get("ANIMAL_STEP_REDUCTION", 0.05)
+        self.ANIMAL_MIN_THRESHOLD = cb_conf.get("ANIMAL_MIN_THRESHOLD", 0.15)
+
+        # --- Soglie Dinamiche Veicoli ---
+        self.VEHICLE_START_THRESHOLD = cb_conf.get("VEHICLE_START_THRESHOLD", 0.50)
+        self.VEHICLE_STEP_REDUCTION = cb_conf.get("VEHICLE_STEP_REDUCTION", 0.05)
+        self.VEHICLE_MIN_THRESHOLD = cb_conf.get("VEHICLE_MIN_THRESHOLD", 0.20)
       
         # self.priority_hierarchy = ["PERSON", "ANIMAL", "VEHICLE"] #da prendere da settings
         
@@ -132,14 +141,6 @@ class ClipBlipEngine:
             similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)
             return {cls: float(similarity[0, i]) for i, cls in enumerate(texts)}
         
-    # def scan_videos(self):
-    #     # self.yolo_res è la lista di dizionari caricata dal JSON
-    #     for video_data in self.yolo_res:
-    #         video_dict = self._scan_single_video(video_data)
-    #         self.results.update(video_dict)
-
-    #     with open("risultati_finali_clipblip.json", "w") as f:
-    #         json.dump(self.results, f, indent=4)
 
     def scan_single_video(self,video_data):
         frames = video_data.get("frames", [])
@@ -258,8 +259,10 @@ class ClipBlipEngine:
             }
             max_fake_score = max(fake_scores_dict.values())
             # Determiniamo la best_class (Usiamo SIGNIFICANCE_THRESHOLD al posto dello 0.1 fisso)
-            best_class = yolo_category if final_scores[yolo_category] > active_rules["SIGNIFICANCE_THRESHOLD"] else "OTHERS"
-            
+            # best_class = yolo_category if final_scores[yolo_category] > active_rules["SIGNIFICANCE_THRESHOLD"] else "OTHERS"
+            # Se è una persona, usiamo la soglia fissa di significatività per le persone
+            current_sig_thresh = self.SIGNIFICANCE_THRESHOLD if yolo_category == "PERSON" else active_rules["SIGNIFICANCE_THRESHOLD"]
+            best_class = yolo_category if final_scores[yolo_category] > current_sig_thresh else "OTHERS"
 
             # Dentro il ciclo video/frame
             dt = datetime.fromisoformat(frame.get("timestamp")) 
@@ -276,9 +279,16 @@ class ClipBlipEngine:
             best_score_cls  = max(final_scores, key=final_scores.get)
             best_score_val  = final_scores[best_score_cls]
 
-            # USIAMO ACTIVE_RULES ANCHE QUI!
-            if final_scores["PERSON"] >= active_rules["PERSON_PRIORITY_THRESHOLD"] and \
-               max_fake_score < (final_scores["PERSON"] + active_rules["PERSON_BOOST_TOLERANCE"]):
+            # # USIAMO ACTIVE_RULES ANCHE QUI!
+            # if final_scores["PERSON"] >= active_rules["PERSON_PRIORITY_THRESHOLD"] and \
+            #    max_fake_score < (final_scores["PERSON"] + active_rules["PERSON_BOOST_TOLERANCE"]):
+            #     best_class = "PERSON"
+            # --- 2. Determinazione Label PERSON (Usa valori self fisssi per stabilità) ---
+            # Usiamo self.PERSON_PRIORITY_THRESHOLD invece di active_rules
+            # Usiamo self.PERSON_BOOST_TOLERANCE invece di active_rules
+
+            if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD and \
+            max_fake_score < (final_scores["PERSON"] + self.PERSON_BOOST_TOLERANCE):
                 best_class = "PERSON"
             elif(is_night):
                 best_class = self._calculate_night_category(best_score_cls, best_score_val, max_fake_score, final_scores, active_rules)
@@ -315,10 +325,15 @@ class ClipBlipEngine:
     # 1) Funzione che decide la categoria per le ore di NOTTE
     def _calculate_night_category(self, best_score_cls, best_score_val, max_fake_score, final_scores: dict, rules: dict) -> str:
         # 1. PRIORITA' PERSON (Calibrata per QuickGELU e notte)
-        # Usiamo rules["PERSON_PRIORITY_THRESHOLD"] (default 0.25)
-        if final_scores["PERSON"] >= rules["PERSON_PRIORITY_THRESHOLD"]:
-            # Usiamo la tolleranza dinamica (es. 0.45 o 0.50) dal JSON/Default
-            if max_fake_score < (final_scores["PERSON"] + rules["PERSON_BOOST_TOLERANCE"]):
+        # # Usiamo rules["PERSON_PRIORITY_THRESHOLD"] (default 0.25)
+        # if final_scores["PERSON"] >= rules["PERSON_PRIORITY_THRESHOLD"]:
+        #     # Usiamo la tolleranza dinamica (es. 0.45 o 0.50) dal JSON/Default
+        #     if max_fake_score < (final_scores["PERSON"] + rules["PERSON_BOOST_TOLERANCE"]):
+        #         return "PERSON"
+        # 1. PRIORITA' PERSON (Usiamo i valori fissi self)
+        if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD:
+            # Usiamo la tolleranza fissa di sistema
+            if max_fake_score < (final_scores["PERSON"] + self.PERSON_BOOST_TOLERANCE):
                 return "PERSON"
 
         # 2. LOGICA PER GLI ALTRI (ANIMAL/VEHICLE)
@@ -332,27 +347,7 @@ class ClipBlipEngine:
                 return "OTHERS"
         
         return best_score_cls
-    # def _calculate_night_category(self,best_score_cls, best_score_val, max_fake_score, final_scores: dict) -> str:
-    #     # 1. PRIORITA' PERSON (Calibrata per QuickGELU e notte)
-    #     # Se YOLO + Boost arrivano a PERSON_PRIORITY_THRESHOLD (0.25)
-    #     if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD:
-    #         # Usiamo la tolleranza di +0.45 che abbiamo deciso.
-    #         # In questo caso: 0.40 + 0.45 = 0.85. 
-    #         # Siamo quasi a 0.88! Se vuoi salvarlo proprio tutto, usa +0.50
-    #         if max_fake_score < (final_scores["PERSON"] + 0.50):
-    #             return "PERSON"
-
-    #     # 2. LOGICA PER GLI ALTRI (ANIMAL/VEHICLE)
-    #     # Se il fake score è alto, serve un margine per vincere
-    #     if max_fake_score > self.VETO_THRESHOLD:
-    #         # Per gli animali useremo un margine piccolo (es. 0.05 o 0.10) come deciso prima
-    #         delta_threshold = self.DELTA_THRESHOLD.get(best_score_cls, 0.2)
-    #         if (best_score_val - max_fake_score) > delta_threshold:
-    #             return best_score_cls
-    #         else:
-    #             return "OTHERS"
-        
-    #     return best_score_cls
+   
 
 
     # -------------------------------------------------------------
@@ -365,10 +360,20 @@ class ClipBlipEngine:
         rules: dict # <--- Nuovo parametro
     ) -> str:
         
-        # --- LOGICA PERSONE: NON TOCCATA ---
+        # # --- LOGICA PERSONE: NON TOCCATA ---
+        # if best_score_cls == "PERSON":
+        #     if max_fake_score > rules["VETO_THRESHOLD"]:
+        #         delta_threshold = rules["DELTA_THRESHOLD"].get("PERSON", 0.25)
+        #         best_class = "PERSON" if (best_score_val - max_fake_score > delta_threshold) else "OTHERS"
+        #     else:
+        #         best_class = "PERSON"
+        #     return best_class
+        # --- LOGICA PERSONE: BLINDATA SU SELF ---
         if best_score_cls == "PERSON":
-            if max_fake_score > rules["VETO_THRESHOLD"]:
-                delta_threshold = rules["DELTA_THRESHOLD"].get("PERSON", 0.25)
+            # Usiamo il VETO_THRESHOLD di sistema per coerenza
+            if max_fake_score > self.VETO_THRESHOLD:
+                # Usiamo il delta fisso definito nel self.DELTA_THRESHOLD originale
+                delta_threshold = self.DELTA_THRESHOLD.get("PERSON", 0.25)
                 best_class = "PERSON" if (best_score_val - max_fake_score > delta_threshold) else "OTHERS"
             else:
                 best_class = "PERSON"
@@ -392,105 +397,7 @@ class ClipBlipEngine:
             return "OTHERS"
 
         return "OTHERS"
-    # def _calculate_day_category(
-    #     self,
-    #     best_score_cls,
-    #     best_score_val,
-    #     max_fake_score
-    # ) -> str:
-        
-    #     # --- LOGICA PERSONE: NON TOCCATA (Torna ai tuoi 189 TP) ---
-    #     if best_score_cls == "PERSON":
-    #         if max_fake_score > self.VETO_THRESHOLD:
-    #             # Usiamo il delta che avevi prima (es. 0.25)
-    #             delta_threshold = self.DELTA_THRESHOLD.get("PERSON", 0.25)
-    #             best_class = "PERSON" if (best_score_val - max_fake_score > delta_threshold) else "OTHERS"
-    #         else:
-    #             best_class = "PERSON"
-    #         return best_class
-
-    #     # --- LOGICA ANIMALI: CORRETTA PER IL TEST COMPETITIVO ---
-    #     if best_score_cls == "ANIMAL":
-    #         # Qui sta il trucco: nel test competitivo i punteggi sono bassi.
-    #         # Un distacco di 0.05/0.10 è già un segnale forte contro il legno.
-    #         margin = best_score_val - max_fake_score
-            
-    #         # Abbassiamo drasticamente il requisito del distacco (da 0.45 a 0.05)
-    #         # e la confidenza base (da 0.70 a 0.20)
-    #         if best_score_val > self.DAY_ANIMAL_MIN_CONF and margin > self.DAY_ANIMAL_MARGIN:
-    #             return "ANIMAL"
-    #         else:
-    #             return "OTHERS"
-
-    #     # --- LOGICA VEICOLI: (Come prima) ---
-    #     if best_score_cls == "VEHICLE":
-    #         delta_threshold = self.DELTA_THRESHOLD.get("VEHICLE", 0.2)
-    #         if best_score_val - max_fake_score > delta_threshold:
-    #             return "VEHICLE"
-    #         return "OTHERS"
-
-    #     return "OTHERS"
-    
-
-    # def _decide_video_category(self, video_dict):
-    #     """
-    #     Prende in input video_dict = { "path/to/video.mp4": { "frames": [...] } }
-    #     Ritorna la stringa della categoria finale.
-    #     """
-    #     # Estraiamo i dati (visto che c'è un solo video nel dict)
-    #     video_path = list(video_dict.keys())[0]
-    #     frames = video_dict[video_path]["frames"]
-        
-    #     # Inizializziamo i contatori per questo singolo video
-    #     animal_sum = 0
-    #     vehicle_sum = 0
-    #     count = 0
-    #     person_present = False
-
-    #     # 1. Ciclo sui frame per accumulare i punteggi
-    #     for frame_data in frames:
-    #         label = frame_data["label"]
-            
-    #         if label == "PERSON":
-    #             person_present = True
-    #             # Se c'è una persona, possiamo anche fermarci qui se vuoi
-    #             # ma continuiamo per sicurezza nel caso servissero i log
-    #             continue
-
-    #         if label == "ANIMAL":
-    #             animal_sum += frame_data["final_scores"]["ANIMAL"]
-    #             count += 1
-    #         elif label == "VEHICLE":
-    #             vehicle_sum += frame_data["final_scores"]["VEHICLE"]
-    #             count += 1
-
-    #     # 2. Logica di decisione finale
-        
-    #     # PRIORITA' PERSON ASSOLUTA
-    #     if person_present:
-    #         return "PERSON"
-
-    #     if count == 0:
-    #         return "OTHERS"
-
-    #     # Calcola medie
-    #     avg_animal = animal_sum / count
-    #     avg_vehicle = vehicle_sum / count
-
-        
-    #     # Determiniamo la categoria dominante
-    #     if avg_animal >= avg_vehicle:
-    #         # AGGIUNGI str() QUI SOTTO
-    #         threshold = self.ANIMAL_AGG_THRESHOLDS.get(str(count), self.ANIMAL_AGG_THRESHOLDS.get("default", 0.35))
-            
-    #         return "ANIMAL" if avg_animal > threshold else "OTHERS"
-
-    #     else:
-    #         # E AGGIUNGI str() ANCHE QUI
-    #         threshold = self.VEHICLE_AGG_THRESHOLDS.get(str(count), self.VEHICLE_AGG_THRESHOLDS.get("default", 0.40))
-            
-    #         return "VEHICLE" if avg_vehicle > threshold else "OTHERS"
-
+  
 
     def _decide_video_category(self, video_dict, rules: dict):
         video_path = list(video_dict.keys())[0]
@@ -504,83 +411,46 @@ class ClipBlipEngine:
         animal_scores = [f["final_scores"]["ANIMAL"] for f in frames if f["label"] == "ANIMAL"]
         vehicle_scores = [f["final_scores"]["VEHICLE"] for f in frames if f["label"] == "VEHICLE"]
 
-        # 3. Decisione ANIMAL
+        #3. ANIMAL
         if animal_scores:
             avg_animal = sum(animal_scores) / len(animal_scores)
-            agg_rules = rules.get("ANIMAL_AGG_THRESHOLDS", self.ANIMAL_AGG_THRESHOLDS)
-            # Soglia basata su quanti frame animali abbiamo trovato
-            threshold = agg_rules.get(str(len(animal_scores)), agg_rules.get("default", 0.35))
+            # Calcoliamo la soglia dinamica invece di cercarla nel dizionario
+            threshold = self._get_dynamic_threshold(len(animal_scores), "ANIMAL", rules)
             
             if avg_animal > threshold:
                 return "ANIMAL"
 
-        # 4. Decisione VEHICLE
+        # 4. VEHICLE
         if vehicle_scores:
             avg_vehicle = sum(vehicle_scores) / len(vehicle_scores)
-            agg_rules = rules.get("VEHICLE_AGG_THRESHOLDS", self.VEHICLE_AGG_THRESHOLDS)
-            threshold = agg_rules.get(str(len(vehicle_scores)), agg_rules.get("default", 0.40))
+            threshold = self._get_dynamic_threshold(len(vehicle_scores), "VEHICLE", rules)
             
             if avg_vehicle > threshold:
                 return "VEHICLE"
 
         return "OTHERS"
-    # def _decide_video_category(self, video_dict, rules: dict): # <--- Aggiunto rules
-    #     """
-    #     Prende in input video_dict = { "path/to/video.mp4": { "frames": [...] } }
-    #     Ritorna la stringa della categoria finale.
-    #     """
-    #     # Estraiamo i dati (visto che c'è un solo video nel dict)
-    #     video_path = list(video_dict.keys())[0]
-    #     frames = video_dict[video_path]["frames"]
+
+        # # 3. Decisione ANIMAL
+        # if animal_scores:
+        #     avg_animal = sum(animal_scores) / len(animal_scores)
+        #     agg_rules = rules.get("ANIMAL_AGG_THRESHOLDS", self.ANIMAL_AGG_THRESHOLDS)
+        #     # Soglia basata su quanti frame animali abbiamo trovato
+        #     threshold = agg_rules.get(str(len(animal_scores)), agg_rules.get("default", 0.35))
+            
+        #     if avg_animal > threshold:
+        #         return "ANIMAL"
+
+        # # 4. Decisione VEHICLE
+        # if vehicle_scores:
+        #     avg_vehicle = sum(vehicle_scores) / len(vehicle_scores)
+        #     agg_rules = rules.get("VEHICLE_AGG_THRESHOLDS", self.VEHICLE_AGG_THRESHOLDS)
+        #     threshold = agg_rules.get(str(len(vehicle_scores)), agg_rules.get("default", 0.40))
+            
+        #     if avg_vehicle > threshold:
+        #         return "VEHICLE"
+
         
-    #     # Inizializziamo i contatori per questo singolo video
-    #     animal_sum = 0
-    #     vehicle_sum = 0
-    #     count = 0
-    #     person_present = False
-
-    #     # 1. Ciclo sui frame per accumulare i punteggi
-    #     for frame_data in frames:
-    #         label = frame_data["label"]
-            
-    #         if label == "PERSON":
-    #             person_present = True
-    #             continue
-
-    #         if label == "ANIMAL":
-    #             animal_sum += frame_data["final_scores"]["ANIMAL"]
-    #             count += 1
-    #         elif label == "VEHICLE":
-    #             vehicle_sum += frame_data["final_scores"]["VEHICLE"]
-    #             count += 1
-
-    #     # 2. Logica di decisione finale
-        
-    #     # PRIORITA' PERSON ASSOLUTA
-    #     if person_present:
-    #         return "PERSON"
-
-    #     if count == 0:
-    #         return "OTHERS"
-
-    #     # Calcola medie
-    #     avg_animal = animal_sum / count
-    #     avg_vehicle = vehicle_sum / count
-
-    #     # Determiniamo la categoria dominante
-    #     if avg_animal >= avg_vehicle:
-    #         # USIAMO rules["ANIMAL_AGG_THRESHOLDS"]
-    #         agg_rules = rules.get("ANIMAL_AGG_THRESHOLDS", self.ANIMAL_AGG_THRESHOLDS)
-    #         threshold = agg_rules.get(str(count), agg_rules.get("default", 0.35))
-            
-    #         return "ANIMAL" if avg_animal > threshold else "OTHERS"
-
-    #     else:
-    #         # USIAMO rules["VEHICLE_AGG_THRESHOLDS"]
-    #         agg_rules = rules.get("VEHICLE_AGG_THRESHOLDS", self.VEHICLE_AGG_THRESHOLDS)
-    #         threshold = agg_rules.get(str(count), agg_rules.get("default", 0.40))
-            
-    #         return "VEHICLE" if avg_vehicle > threshold else "OTHERS"
+   
 
 
     
@@ -618,7 +488,33 @@ class ClipBlipEngine:
             "DELTA_THRESHOLD": {**self.DELTA_THRESHOLD, **custom.get("DELTA_THRESHOLD", {})},
 
             # Soglie di Aggregazione Video finale
-            "ANIMAL_AGG_THRESHOLDS": custom.get("ANIMAL_AGG_THRESHOLDS", self.ANIMAL_AGG_THRESHOLDS),
-            "VEHICLE_AGG_THRESHOLDS": custom.get("VEHICLE_AGG_THRESHOLDS", self.VEHICLE_AGG_THRESHOLDS),
+            # --- NUOVA Logica di Aggregazione Dinamica ---
+            # Animali
+            "ANIMAL_START_THRESHOLD": custom.get("ANIMAL_START_THRESHOLD", self.ANIMAL_START_THRESHOLD),
+            "ANIMAL_STEP_REDUCTION": custom.get("ANIMAL_STEP_REDUCTION", self.ANIMAL_STEP_REDUCTION),
+            "ANIMAL_MIN_THRESHOLD": custom.get("ANIMAL_MIN_THRESHOLD", self.ANIMAL_MIN_THRESHOLD),
+            
+            # Veicoli
+            "VEHICLE_START_THRESHOLD": custom.get("VEHICLE_START_THRESHOLD", self.VEHICLE_START_THRESHOLD),
+            "VEHICLE_STEP_REDUCTION": custom.get("VEHICLE_STEP_REDUCTION", self.VEHICLE_STEP_REDUCTION),
+            "VEHICLE_MIN_THRESHOLD": custom.get("VEHICLE_MIN_THRESHOLD", self.VEHICLE_MIN_THRESHOLD),
             "FAKE_WEIGHTS": custom.get("FAKE_WEIGHTS", {})
         }
+    
+    def _get_dynamic_threshold(self, count, category, rules):
+        prefix = f"{category.upper()}_"
+        
+        # Valori di default coerenti con il tuo __init__
+        default_start = 0.45 if category == "ANIMAL" else 0.50
+        
+        start = rules.get(f"{prefix}START_THRESHOLD", default_start)
+        step = rules.get(f"{prefix}STEP_REDUCTION", 0.05)
+        min_t = rules.get(f"{prefix}MIN_THRESHOLD", 0.15)
+        
+        # Se per errore count è 0, lo trattiamo come 1
+        safe_count = max(1, count)
+        
+        # Calcolo soglia
+        threshold = start - (safe_count - 1) * step
+        
+        return max(min_t, threshold)

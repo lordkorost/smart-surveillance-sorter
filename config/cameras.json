@@ -22,9 +22,9 @@
             ]
         },
         "thresholds": {
-            "person": 0.5,
+            "person": 0.4,
             "vehicle": 0.55,
-            "animal": 0.3
+            "animal": 0.35
         }
     },
     "01": {
@@ -42,10 +42,18 @@
             "ignore_labels": []
         },
         "thresholds": {
-            "person": 0.5,
+            "person": 0.4,
             "vehicle": 0.55,
-            "animal": 0.30
-        }
+            "animal": 0.35
+        },
+        "blip_rules": {
+            "FAKE_WEIGHTS": {
+                "GROUND": 0.3,   
+                "GARDEN": 0.4,   
+                "SHOE": 0.3,     
+                "WOOD": 0.5      
+            }
+         }
     },
     "02": {
         "name": "Parcheggio",
@@ -70,9 +78,9 @@
         "desc": "Parking area",
         "dynamic_stride": true,
         "thresholds": {
-            "person": 0.5,
+            "person": 0.4,
             "vehicle": 0.55,
-            "animal": 0.30
+            "animal": 0.35
         }
     },
     "03": {
@@ -98,9 +106,9 @@
         "desc": "Balcony area, with garden underneath",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.5,
+            "person": 0.4,
             "vehicle": 0.55,
-            "animal": 0.3
+            "animal": 0.35
         }
     },
     "04": {
@@ -118,9 +126,9 @@
         "desc": "Balcony area, with garden underneath. There are some garden gnomes on the lawn.",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.5,
+            "person": 0.4,
             "vehicle": 0.55,
-            "animal": 0.30
+            "animal": 0.35
         }
     },
     "05": {
@@ -138,27 +146,17 @@
         "desc": "Garden area. There are some garden gnomes on the lawn.",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.5,
+            "person": 0.4,
             "vehicle": 0.55,
-            "animal": 0.30
+            "animal": 0.35
         },
         "blip_rules": {
-            "VETO_THRESHOLD": 0.2,
-            "SIGNIFICANCE_THRESHOLD": 0.2,
-            "PERSON_PRIORITY_THRESHOLD": 0.25,
-            "PERSON_BOOST_TOLERANCE": 0.45,
-            "DELTA_THRESHOLD": {
-                "PERSON": 0.25,
-                "ANIMAL": 0.45,
-                "VEHICLE": 0.2
-            },
-            "DAY_ANIMAL_MIN_CONF": 0.20,
-            "DAY_ANIMAL_MARGIN": 0.05,
-            "BLIP_BOOST_PERSON": 0.35,
-            "BLIP_BOOST_OTHER": 0.1,
-            "FINAL_WEIGHT_CROP": 0.7,
-            "FINAL_WEIGHT_FRAME": 0.3
+                "FAKE_WEIGHTS": {
+                "GROUND": 0.2,
+                "GARDEN": 0.2
+            }
         }
+      
     },
     "06": {
         "name": "Giardino Cancello",
@@ -175,9 +173,9 @@
         "desc": "Garden area, street visible through the gate.",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.5,
+            "person": 0.4,
             "vehicle": 0.55,
-            "animal": 0.30
+            "animal": 0.35
         },
         "blip_rules": {
                 "FAKE_WEIGHTS": {
@@ -209,9 +207,17 @@
         "desc": "Entrance door",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.5,
+            "person": 0.4,
             "vehicle": 0.55,
             "animal": 0.35
-        }
+        },
+        "blip_rules": {
+            "FAKE_WEIGHTS": {
+                "GROUND": 0.3,   
+                "GARDEN": 0.4,   
+                "SHOE": 0.3,     
+                "WOOD": 0.5      
+            }
+         }
     }
 }

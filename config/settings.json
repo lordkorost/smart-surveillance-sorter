@@ -55,11 +55,6 @@
             "stride_fast": 20,
             "pre_roll_sec": 25,
             "cooldown_sec": 5
-        },
-        "thresholds": {
-            "person": 0.5,
-            "vehicle": 0.55,
-            "animal": 0.30
         }
     },
     "vision_settings": {

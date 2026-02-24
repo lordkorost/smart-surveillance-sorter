@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import time
 
-#import torch
+import torch
 from smart_surveillance_sorter.constants import CAMERAS_JSON, CHECKS_DIR, CLIPBLIP_CACHE, FINAL_REPORT, FRAME_DIR, LENS_HEALTH, PROJECT_ROOT, SETTINGS_JSON, VISION_CACHE, YOLO_CACHE
 import logging
 from pathlib import Path

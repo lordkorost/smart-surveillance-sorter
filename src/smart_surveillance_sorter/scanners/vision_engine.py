@@ -1,5 +1,5 @@
 import logging
-#import time
+import time
 from pathlib import Path
 from collections import defaultdict
 from ollama import generate
