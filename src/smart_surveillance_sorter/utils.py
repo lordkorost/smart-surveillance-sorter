@@ -68,67 +68,67 @@ def get_video_capture(video_path):
     return cap
 
 
-def parse_filename(path, template, ts_format):
-    """
-    Estrae camera_id (stringa) e timestamp (datetime) da file Reolink.
-    Formato: "NVR Name_ID_YYYYMMDDHHMMSS.mp4"
-    """
-    stem = path.stem
+# def parse_filename(path, template, ts_format):
+#     """
+#     Estrae camera_id (stringa) e timestamp (datetime) da file Reolink.
+#     Formato: "NVR Name_ID_YYYYMMDDHHMMSS.mp4"
+#     """
+#     stem = path.stem
     
-    # Trasformiamo il template in Regex (scappiamo i caratteri speciali come _)
-    # Usiamo re.escape per gestire eventuali punti o trattini nel template dell'utente
-    pattern = re.escape(template)
-    pattern = pattern.replace(r"\{nvr_name\}", "(?P<nvr_name>.*?)")
-    pattern = pattern.replace(r"\{camera_id\}", "(?P<camera_id>.*?)")
-    pattern = pattern.replace(r"\{timestamp\}", "(?P<timestamp>\\d+)")
+#     # Trasformiamo il template in Regex (scappiamo i caratteri speciali come _)
+#     # Usiamo re.escape per gestire eventuali punti o trattini nel template dell'utente
+#     pattern = re.escape(template)
+#     pattern = pattern.replace(r"\{nvr_name\}", "(?P<nvr_name>.*?)")
+#     pattern = pattern.replace(r"\{camera_id\}", "(?P<camera_id>.*?)")
+#     pattern = pattern.replace(r"\{timestamp\}", "(?P<timestamp>\\d+)")
     
-    match = re.search(f"^{pattern}$", stem)
-    if not match:
-        return None, None
+#     match = re.search(f"^{pattern}$", stem)
+#     if not match:
+#         return None, None
         
-    try:
-        data = match.groupdict()
-        cam_id = data.get("camera_id")
-        timestamp_str = data.get("timestamp")
+#     try:
+#         data = match.groupdict()
+#         cam_id = data.get("camera_id")
+#         timestamp_str = data.get("timestamp")
         
-        timestamp = datetime.strptime(timestamp_str, ts_format)
-        return cam_id, timestamp
-    except (ValueError, IndexError, TypeError):
-        return None, None
+#         timestamp = datetime.strptime(timestamp_str, ts_format)
+#         return cam_id, timestamp
+#     except (ValueError, IndexError, TypeError):
+#         return None, None
     
 
-def parse_filename_dynamic(file_path, storage_settings):
-    """
-    Estrae i metadati dal nome del file usando il template del config.
-    """
-    stem = file_path.stem
-    # template = storage_settings["filename_template"]
-    # ts_format = storage_settings["timestamp_format"]
-    template = storage_settings.get("filename_template", "{camera}_{timestamp}")
-    ts_format = storage_settings.get("timestamp_format", "%Y%m%d_%H%M%S")
-    # Trasformiamo il template umano in Regex
-    # Sostituiamo i tag con gruppi di cattura nominati
-    pattern = template.replace("{nvr_name}", "(?P<nvr_name>.*?)")
-    pattern = pattern.replace("{camera_id}", "(?P<camera_id>.*?)")
-    pattern = pattern.replace("{timestamp}", "(?P<timestamp>\\d+)")
+# def parse_filename_dynamic(file_path, storage_settings):
+#     """
+#     Estrae i metadati dal nome del file usando il template del config.
+#     """
+#     stem = file_path.stem
+#     # template = storage_settings["filename_template"]
+#     # ts_format = storage_settings["timestamp_format"]
+#     template = storage_settings.get("filename_template", "{camera}_{timestamp}")
+#     ts_format = storage_settings.get("timestamp_format", "%Y%m%d_%H%M%S")
+#     # Trasformiamo il template umano in Regex
+#     # Sostituiamo i tag con gruppi di cattura nominati
+#     pattern = template.replace("{nvr_name}", "(?P<nvr_name>.*?)")
+#     pattern = pattern.replace("{camera_id}", "(?P<camera_id>.*?)")
+#     pattern = pattern.replace("{timestamp}", "(?P<timestamp>\\d+)")
     
-    # Aggiungiamo i limiti di inizio e fine stringa per sicurezza
-    pattern = f"^{pattern}$"
+#     # Aggiungiamo i limiti di inizio e fine stringa per sicurezza
+#     pattern = f"^{pattern}$"
 
-    match = re.search(pattern, stem)
-    if not match:
-        return None, None
+#     match = re.search(pattern, stem)
+#     if not match:
+#         return None, None
 
-    try:
-        data = match.groupdict()
-        cam_id = data.get("camera_id")
-        ts_str = data.get("timestamp")
+#     try:
+#         data = match.groupdict()
+#         cam_id = data.get("camera_id")
+#         ts_str = data.get("timestamp")
         
-        # Conversione timestamp
-        timestamp = datetime.strptime(ts_str, ts_format)
-        return cam_id, timestamp
-    except (ValueError, TypeError):
-        return None, None
+#         # Conversione timestamp
+#         timestamp = datetime.strptime(ts_str, ts_format)
+#         return cam_id, timestamp
+#     except (ValueError, TypeError):
+#         return None, None
     
 
 def get_camera_by_filename(filename, cameras_dict):

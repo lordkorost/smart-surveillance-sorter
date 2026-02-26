@@ -17,7 +17,6 @@ def run_loop():
     parser.add_argument("--device", default="cuda", help="Device (cuda/cpu)")
     parser.add_argument("--interval", type=int, default=60, help="Seconds between folder scan to search new videos added")
     parser.add_argument("--test", action="store_true", help="Enable (DEBUG) log and copy instead move videos and images")
-   
     parser.add_argument("--refine", action="store_true", help="Activate refine step after YOLO")
     parser.add_argument("--blip", action="store_true", help="BLIP engine for refine step (default)")
     parser.add_argument("--vision", action="store_true", help="Vision (ollama) engine for refine step")

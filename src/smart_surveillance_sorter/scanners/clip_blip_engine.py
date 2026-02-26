@@ -1,3 +1,21 @@
+"""
+ClipBlipEngine v2 — Sistema di scoring semplificato
+====================================================
+
+Principi:
+  - PERSON ha priorità assoluta (soglia bassa, fake penalty leggera)
+  - Un solo flusso decisionale per frame (no if annidati multipli)
+  - Tutti i parametri in clip_blip_settings_v2.json, documentati
+  - Fix falsi negativi: bbox_size_bonus per oggetti piccoli (teste angolate)
+
+Rispetto alla v1:
+  - Eliminati: PERSON_FAKE_RELATIVE, PERSON_BOOST_TOLERANCE, DELTA_THRESHOLD,
+               PERSON_PRIORITY_THRESHOLD, DAY_ANIMAL_MIN_CONF, DAY_ANIMAL_MARGIN,
+               ANIMAL_AGG_THRESHOLDS, VEHICLE_AGG_THRESHOLDS
+  - Sostituiti da: FAKE_PENALTY_WEIGHT per classe + THRESHOLD per classe
+  - _calculate_day_category e _calculate_night_category → unico _decide_frame_label
+"""
+
 import logging
 import torch
 from datetime import datetime
@@ -7,514 +25,381 @@ from open_clip import create_model_and_transforms, tokenize
 from smart_surveillance_sorter.constants import CLIP_BLIP_JSON
 from smart_surveillance_sorter.utils import get_smart_coordinates, is_night_astronomic, load_json
 
-log = logging.getLogger(__name__) 
+log = logging.getLogger(__name__)
+
 
 class ClipBlipEngine:
-    def __init__(self, settings, cameras_config, mode,device):
+    def __init__(self, settings, cameras_config, mode, device):
         self.clip_blip_settings = load_json(CLIP_BLIP_JSON)
         self.DEVICE = device
-      
         self.mode = mode
-       
         self.settings = settings
         self.ch_configs = cameras_config
 
-
-
-        # 2. Silenzia i logger interni di Hugging Face
         logging.getLogger("transformers").setLevel(logging.ERROR)
         logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 
-        # --- Modello CLIP ---
-        # --- Modello CLIP ---
-        # Usiamo .get() con dei fallback (valori di default) sensati
-        clip_m_name = self.clip_blip_settings.get('clip_model', 'ViT-B/32')
-        clip_pre = self.clip_blip_settings.get('clip_pretrained', 'openai')
+        # --- CLIP ---
+        clip_m_name = self.clip_blip_settings.get("clip_model", "ViT-L-14")
+        clip_pre = self.clip_blip_settings.get("clip_pretrained", "openai")
+        self.clip_model, self.preprocess, _ = create_model_and_transforms(clip_m_name, pretrained=clip_pre)
+        self.clip_model.to(self.DEVICE).eval()
 
-        self.clip_model, self.preprocess, _ = create_model_and_transforms(
-            clip_m_name,
-            pretrained=clip_pre
-        )
-        self.clip_model.to(self.DEVICE)
-        self.clip_model.eval()
-
-        # --- Modello BLIP ---
-        # Recuperiamo il nome del modello una volta sola
-        blip_m_name = self.clip_blip_settings.get('blip_model', 'Salesforce/blip-image-captioning-base')
-
-        # 1. Carichiamo la configurazione
+        # --- BLIP ---
+        blip_m_name = self.clip_blip_settings.get("blip_model", "Salesforce/blip-image-captioning-base")
         config = BlipConfig.from_pretrained(blip_m_name)
-        config.tie_word_embeddings = False 
-        
-        # 2. Carichiamo il processor
+        config.tie_word_embeddings = False
         self.blip_processor = BlipProcessor.from_pretrained(blip_m_name)
+        self.blip_model = BlipForConditionalGeneration.from_pretrained(blip_m_name, config=config).to(self.DEVICE).eval()
 
-        # 3. Carichiamo il modello
-        self.blip_model = BlipForConditionalGeneration.from_pretrained(
-            blip_m_name, 
-            config=config
-        ).to(self.DEVICE)
-        self.blip_model.eval()
-        
-        cb_conf = self.clip_blip_settings  # Usiamo cb_conf per evitare conflitti con 'settings'
+        cb = self.clip_blip_settings
 
-        self.MAIN_CLASSES = cb_conf.get("MAIN_CLASSES", ["Person", "Others"])
-        self.FAKE_KEYS = cb_conf.get("FAKE_KEYS", ["mannequin", "statue", "poster"])
-        self.BLIP_KEYWORDS = cb_conf.get("BLIP_KEYWORDS", ["person", "man", "woman", "child"])
+        # Classi principali e dizionari di supporto
+        self.MAIN_CLASSES  = cb.get("MAIN_CLASSES", ["PERSON", "ANIMAL", "VEHICLE"])
+        self.FAKE_KEYS     = cb.get("FAKE_KEYS", {})
+        self.BLIP_KEYWORDS = cb.get("BLIP_KEYWORDS", {})
 
-        # Soglie di confidenza e significatività
-      # Soglie di confidenza e significatività
-        self.VETO_THRESHOLD = cb_conf.get("VETO_THRESHOLD", 0.2)
-        self.SIGNIFICANCE_THRESHOLD = cb_conf.get("SIGNIFICANCE_THRESHOLD", 0.2)
+        # --- Parametri v2 (semplificati) ---
 
-        # Pesi e Boost
-        self.BLIP_BOOST_PERSON = cb_conf.get("BLIP_BOOST_PERSON", 0.35)
-        self.BLIP_BOOST_OTHER = cb_conf.get("BLIP_BOOST_OTHER", 0.1)
-        self.FINAL_WEIGHT_CROP = cb_conf.get("FINAL_WEIGHT_CROP", 0.7)
-        self.FINAL_WEIGHT_FRAME = cb_conf.get("FINAL_WEIGHT_FRAME", 0.3)
+        # Soglia minima di score CLIP perché un frame sia "significativo"
+        # (evita che frame completamente vuoti guidino la decisione)
+        self.SIGNIFICANCE_THRESHOLD = cb.get("SIGNIFICANCE_THRESHOLD", 0.15)
 
-        # Logica Anti-Falsi e Priorità
-        self.PERSON_PRIORITY_THRESHOLD = cb_conf.get("PERSON_PRIORITY_THRESHOLD", 0.25)
-        # self.PERSON_FAKE_RELATIVE = cb_conf.get("PERSON_FAKE_RELATIVE", 1.1)
-        
-        # ATTENZIONE: Qui DELTA_THRESHOLD deve essere un dizionario di default
-        self.DELTA_THRESHOLD = cb_conf.get("DELTA_THRESHOLD", {
-            "PERSON": 0.25,
-            "ANIMAL": 0.45,
-            "VEHICLE": 0.2
-        })
+        # Pesi crop vs frame intero nel calcolo dello score CLIP
+        self.FINAL_WEIGHT_CROP  = cb.get("FINAL_WEIGHT_CROP", 0.7)
+        self.FINAL_WEIGHT_FRAME = cb.get("FINAL_WEIGHT_FRAME", 0.3)
 
-        # Parametri Notturni e Animali (Questi erano già quasi tutti corretti)
-        self.YOLO_NIGHT_BOOST = cb_conf.get("YOLO_NIGHT_BOOST", 0.3)
-        self.PERSON_BOOST_TOLERANCE = cb_conf.get("PERSON_BOOST_TOLERANCE", 0.45)
-        self.DAY_ANIMAL_MARGIN = cb_conf.get("DAY_ANIMAL_MARGIN", 0.05)
-        self.DAY_ANIMAL_MIN_CONF = cb_conf.get("DAY_ANIMAL_MIN_CONF", 0.20)
-        
-        # self.ANIMAL_AGG_THRESHOLDS = cb_conf.get("ANIMAL_AGG_THRESHOLDS", {"1": 0.45, "2": 0.40, "default": 0.35})
-        # self.VEHICLE_AGG_THRESHOLDS = cb_conf.get("VEHICLE_AGG_THRESHOLDS", {"1": 0.50, "default": 0.40})
+        # Boost BLIP quando la caption contiene keyword di quella classe
+        self.BLIP_BOOST = cb.get("BLIP_BOOST", {"PERSON": 0.35, "ANIMAL": 0.10, "VEHICLE": 0.10})
 
-        # --- Soglie Dinamiche Animali ---
-        self.ANIMAL_START_THRESHOLD = cb_conf.get("ANIMAL_START_THRESHOLD", 0.45)
-        self.ANIMAL_STEP_REDUCTION = cb_conf.get("ANIMAL_STEP_REDUCTION", 0.05)
-        self.ANIMAL_MIN_THRESHOLD = cb_conf.get("ANIMAL_MIN_THRESHOLD", 0.15)
+        # Soglia di score finale (dopo boost e penalty) per classificare un frame
+        # PERSON: valore basso = preferiamo avere falsi positivi a falsi negativi
+        self.THRESHOLD = cb.get("THRESHOLD", {"PERSON": 0.15, "ANIMAL": 0.35, "VEHICLE": 0.30})
 
-        # --- Soglie Dinamiche Veicoli ---
-        self.VEHICLE_START_THRESHOLD = cb_conf.get("VEHICLE_START_THRESHOLD", 0.50)
-        self.VEHICLE_STEP_REDUCTION = cb_conf.get("VEHICLE_STEP_REDUCTION", 0.05)
-        self.VEHICLE_MIN_THRESHOLD = cb_conf.get("VEHICLE_MIN_THRESHOLD", 0.20)
-      
-        # self.priority_hierarchy = ["PERSON", "ANIMAL", "VEHICLE"] #da prendere da settings
-        
-        # self.lat, self.lon = get_smart_coordinates(self.settings.get("city","Roma"))
-        # 1. Recupera il nome della città dai settings
+        # Quanto i fake score penalizzano lo score finale di ogni classe
+        # Valore basso = classe favorita (fake non la penalizzano molto)
+        # Valore alto  = classe penalizzata dai fake
+        self.FAKE_PENALTY_WEIGHT = cb.get("FAKE_PENALTY_WEIGHT", {"PERSON": 0.3, "ANIMAL": 0.5, "VEHICLE": 0.6})
+
+        # Fix falsi negativi: bonus persona se bbox è piccolo (testa nell'angolo)
+        # BBOX_SMALL_RATIO: se bbox_area / frame_area < questa soglia → oggetto piccolo
+        # BBOX_SMALL_PERSON_BONUS: bonus aggiunto allo score PERSON
+        self.BBOX_SMALL_RATIO        = cb.get("BBOX_SMALL_RATIO", 0.04)   # < 4% del frame
+        self.BBOX_SMALL_PERSON_BONUS = cb.get("BBOX_SMALL_PERSON_BONUS", 0.15)
+
+        # Boost notturno per PERSON (la notte è più difficile per CLIP)
+        self.YOLO_NIGHT_BOOST = cb.get("YOLO_NIGHT_BOOST", 0.30)
+
+        # Soglie aggregazione video: quanti frame servono e con che score medio
+        # per classificare l'intero video come ANIMAL o VEHICLE
+        self.ANIMAL_START_THRESHOLD   = cb.get("ANIMAL_START_THRESHOLD", 0.45)
+        self.ANIMAL_STEP_REDUCTION    = cb.get("ANIMAL_STEP_REDUCTION", 0.05)
+        self.ANIMAL_MIN_THRESHOLD     = cb.get("ANIMAL_MIN_THRESHOLD", 0.15)
+        self.VEHICLE_START_THRESHOLD  = cb.get("VEHICLE_START_THRESHOLD", 0.50)
+        self.VEHICLE_STEP_REDUCTION   = cb.get("VEHICLE_STEP_REDUCTION", 0.05)
+        self.VEHICLE_MIN_THRESHOLD    = cb.get("VEHICLE_MIN_THRESHOLD", 0.20)
+
+        # Coordinate per calcolo notte astronomica
         self.city_name = self.settings.get("city", "Roma")
-        
-        # 2. Chiama la logica smart (quella che controlla il JSON in config/)
-        # Questa funzione restituirà lat/lon dalla cache o ricalcolate
         self.lat, self.lon = get_smart_coordinates(self.city_name)
-        
-        log.info(f"🚀 Blip start on city={self.city_name} (Lat: {self.lat}, Lon: {self.lon})")
-        
-        
-        # Genera dinamicamente la mappa partendo dai settings di YOLO
+        log.info(f"🚀 ClipBlipEngine v2 — city={self.city_name} ({self.lat}, {self.lon})")
+
+        # Mappa label YOLO → classe principale
         self.label_to_main_class = {}
         groups = self.settings.get("yolo_settings", {}).get("detection_groups", {})
-
         for main_cls, labels in groups.items():
             for label in labels:
-                #if label is None:
-                    #print(f"DEBUG CRITICO: Trovata label NONE nel gruppo {main_cls}!")
                 self.label_to_main_class[label.lower()] = main_cls
 
-                self.results = {}
+        self.results = {}
 
+    # ------------------------------------------------------------------
+    # CLIP helpers
+    # ------------------------------------------------------------------
 
-    def _get_clip_score(self,image_tensor, texts):
+    def _get_clip_score(self, image_tensor, texts):
         with torch.no_grad():
-            image_features = self.clip_model.encode_image(image_tensor)
-            text_tokens = tokenize(texts).to(self.DEVICE)
-            text_features = self.clip_model.encode_text(text_tokens)
+            img_feat  = self.clip_model.encode_image(image_tensor)
+            txt_feat  = self.clip_model.encode_text(tokenize(texts).to(self.DEVICE))
+            img_feat /= img_feat.norm(dim=-1, keepdim=True)
+            txt_feat /= txt_feat.norm(dim=-1, keepdim=True)
+            sim = (100.0 * img_feat @ txt_feat.T).softmax(dim=-1)
+            return {cls: float(sim[0, i]) for i, cls in enumerate(texts)}
 
-            image_features /= image_features.norm(dim=-1, keepdim=True)
-            text_features /= text_features.norm(dim=-1, keepdim=True)
+    # ------------------------------------------------------------------
+    # Scoring per singolo frame — unico punto decisionale
+    # ------------------------------------------------------------------
 
-            similarity = (100.0 * image_features @ text_features.T).softmax(dim=-1)
-            return {cls: float(similarity[0, i]) for i, cls in enumerate(texts)}
-        
+    def _score_frame(self, frame, active_rules, is_night):
+        """
+        Calcola lo score finale per un frame e restituisce la label.
 
-    def scan_single_video(self,video_data):
+        Flusso:
+          1. CLIP score (crop pesato + frame intero)
+          2. BLIP boost (keyword nella caption)
+          3. Fake penalty (sottrai fake_score * peso)
+          4. Bbox small bonus (fix teste piccole)
+          5. Night boost (PERSON di notte)
+          6. Confronta con soglia → label
+        """
+        yolo_category = frame.get("category", "").upper()
+        current_main_class = [yolo_category] if yolo_category in self.MAIN_CLASSES else self.MAIN_CLASSES
+
+        frame_path = frame.get("frame_path")
+        crop_path  = frame.get("crop_path")
+        bbox       = frame.get("bbox")  # [x1, y1, x2, y2] in pixel assoluti
+
+        # --- Immagini ---
+        crop_img  = self.preprocess(Image.open(crop_path).convert("RGB")).unsqueeze(0).to(self.DEVICE)
+        frame_img = self.preprocess(Image.open(frame_path).convert("RGB")).unsqueeze(0).to(self.DEVICE) if frame_path else crop_img
+
+        # --- BLIP caption ---
+        raw_img = Image.open(crop_path).convert("RGB")
+        blip_inputs = self.blip_processor(images=raw_img, return_tensors="pt").to(self.DEVICE)
+        caption = self.blip_processor.decode(self.blip_model.generate(**blip_inputs)[0], skip_special_tokens=True)
+
+        # --- CLIP scores su crop e frame ---
+        fake_prompts = [desc for descs in self.FAKE_KEYS.values() for desc in descs]
+        all_prompts  = current_main_class + fake_prompts
+
+        clip_crop  = self._get_clip_score(crop_img, all_prompts)
+        clip_frame = self._get_clip_score(frame_img, all_prompts)
+
+        # Pesi crop/frame (sovrascrivibili per camera)
+        w_crop  = active_rules["FINAL_WEIGHT_CROP"]
+        w_frame = active_rules["FINAL_WEIGHT_FRAME"]
+
+        # --- Fake scores (pesati per camera se specificato) ---
+        fake_weights = active_rules.get("FAKE_WEIGHTS", {})
+        fake_scores = {
+            fk: max(clip_crop[d] for d in descs) * fake_weights.get(fk, 1.0)
+            for fk, descs in self.FAKE_KEYS.items()
+        }
+        max_fake_score = max(fake_scores.values()) if fake_scores else 0.0
+
+        # --- Score finale per ogni classe ---
+        final_scores = {cls: 0.0 for cls in self.MAIN_CLASSES}
+
+        for cls in current_main_class:
+            # 1. Base: media pesata crop + frame
+            base = w_crop * clip_crop.get(cls, 0.0) + w_frame * clip_frame.get(cls, 0.0)
+
+            # 2. BLIP boost se caption contiene keyword
+            blip_boost = active_rules["BLIP_BOOST"].get(cls, 0.0)
+            has_keyword = any(k.lower() in caption.lower() for k in self.BLIP_KEYWORDS.get(cls, []))
+            blip_bonus = blip_boost if has_keyword else 0.0
+
+            # 3. Fake penalty (più alta per classi non prioritarie)
+            penalty_weight = active_rules["FAKE_PENALTY_WEIGHT"].get(cls, 0.7)
+            fake_penalty = max_fake_score * penalty_weight
+
+            final_scores[cls] = max(0.0, base + blip_bonus - fake_penalty)
+
+        # 4. Bbox small bonus → fix falsi negativi (testa nell'angolino)
+        # if bbox and yolo_category == "PERSON":
+        #     bbox_bonus = self._get_bbox_small_bonus(bbox, frame_path, active_rules)
+        #     final_scores["PERSON"] += bbox_bonus
+        if bbox and yolo_category == "PERSON" and final_scores["PERSON"] > 0.05:
+            bbox_bonus = self._get_bbox_small_bonus(bbox, frame_path, active_rules)
+            final_scores["PERSON"] += bbox_bonus
+
+        # 5. Night boost per PERSON
+        if is_night and yolo_category == "PERSON":
+            final_scores["PERSON"] += active_rules["YOLO_NIGHT_BOOST"]
+
+        # --- Decisione label ---
+        label = self._decide_frame_label(final_scores, yolo_category, active_rules)
+
+        return {
+            "clip_crop":      clip_crop,
+            "clip_frame":     clip_frame,
+            "blip_caption":   caption,
+            "fake_scores":    fake_scores,
+            "max_fake_score": max_fake_score,
+            "final_scores":   final_scores,
+            "label":          label,
+            "bbox":           bbox,
+        }
+
+    def _get_bbox_small_bonus(self, bbox, frame_path, active_rules):
+        """
+        Se il bbox della persona occupa meno di BBOX_SMALL_RATIO del frame,
+        aggiunge un bonus allo score PERSON.
+        Questo corregge i falsi negativi dove si vede solo la testa in un angolo.
+        """
+        try:
+            with Image.open(frame_path) as img:
+                fw, fh = img.size
+            x1, y1, x2, y2 = bbox
+            bbox_area  = max(0, x2 - x1) * max(0, y2 - y1)
+            frame_area = fw * fh
+            if frame_area == 0:
+                return 0.0
+            ratio = bbox_area / frame_area
+            threshold = active_rules.get("BBOX_SMALL_RATIO", self.BBOX_SMALL_RATIO)
+            bonus     = active_rules.get("BBOX_SMALL_PERSON_BONUS", self.BBOX_SMALL_PERSON_BONUS)
+            return bonus if ratio < threshold else 0.0
+        except Exception:
+            return 0.0
+
+    def _decide_frame_label(self, final_scores, yolo_category, active_rules):
+        """
+        Regola semplice:
+          - Scorre le classi in ordine di priorità (PERSON > VEHICLE > ANIMAL)
+          - La prima che supera la sua soglia vince
+          - PERSON ha soglia bassa → priorità massima
+        """
+        thresholds = active_rules["THRESHOLD"]
+        priority   = ["PERSON", "VEHICLE", "ANIMAL"]
+
+        for cls in priority:
+            if cls not in final_scores:
+                continue
+            # Considera solo la classe rilevata da YOLO (o tutte se YOLO non ha match)
+            if yolo_category in self.MAIN_CLASSES and cls != yolo_category:
+                continue
+            if final_scores[cls] >= thresholds.get(cls, 0.3):
+                return cls
+
+        return "OTHERS"
+
+    # ------------------------------------------------------------------
+    # Scan singolo video
+    # ------------------------------------------------------------------
+
+    def scan_single_video(self, video_data):
         frames = video_data.get("frames", [])
         if not frames:
-            log.debug(f"  (No frame found for video={video_data.get('video_path')})")
+            log.debug(f"  (Nessun frame per video={video_data.get('video_path')})")
             return {}
-        
-        # --- 🚀 RISOLUZIONE ALLA RADICE (FUORI DAL FOR) ---
+
+        # Fast-track NVR: se il NVR stesso ha già classificato come persona, fiducia piena
         is_nvr = video_data.get("resolved_by") == "nvr_image"
         has_yolo_person = any(f.get("category") == "person" for f in frames)
-        # Se il video è NVR e YOLO ha trovato persone (anche solo una)
         if is_nvr and has_yolo_person:
-            #print(f"  [NVR FAST-TRACK] Video {video_data.get("video_path")} validato istantaneamente via YOLO")
-            
-            # Prendiamo il primo frame utile per popolare il report
             best_f = next(f for f in frames if f.get("category") == "person")
-            
             frame_res = {
-                "clip_crop": {"PERSON": 1.0, "ANIMAL": 0.0, "VEHICLE": 0.0},
-                "clip_frame": {"PERSON": 1.0, "ANIMAL": 0.0, "VEHICLE": 0.0},
-                "blip_caption": f"yolo_nvr_validated_conf_{best_f.get('confidence'):.2f}",
-                "blip_scores": {"PERSON": 0, "ANIMAL": 0, "VEHICLE": 0},
-                "final_scores": {"PERSON": 1.0, "ANIMAL": 0.0, "VEHICLE": 0.0},
-                "fake_scores": {},
+                "clip_crop":    {"PERSON": 1.0, "ANIMAL": 0.0, "VEHICLE": 0.0},
+                "clip_frame":   {"PERSON": 1.0, "ANIMAL": 0.0, "VEHICLE": 0.0},
+                "blip_caption": f"yolo_nvr_validated_conf_{best_f.get('confidence', 0):.2f}",
+                "fake_scores":  {},
                 "max_fake_score": 0.0,
-                "label": "PERSON",
-                "bbox": best_f.get("bbox")  # <--- AGGIUNTA QUI
+                "final_scores": {"PERSON": 1.0, "ANIMAL": 0.0, "VEHICLE": 0.0},
+                "label":        "PERSON",
+                "bbox":         best_f.get("bbox"),
             }
-            
-            return {
-                video_data.get("video_path"): {
-                    "frames": [frame_res],
-                    "video_category": "PERSON"
-                }
-            }
-            
-        #ignore labels
-        camera_id = video_data.get("camera_id")
-        cam_config = self.ch_configs.get(camera_id, {})
-        ignore_labels = cam_config.get("filters", {}).get("ignore_labels", [])
-        # 1. Otteniamo le regole (Custom o Default è trasparente per noi)
-        active_rules = self._get_active_blip_rules(camera_id)
-        # Identifica quali macro-classi (PERSON, VEHICLE, ANIMAL) disabilitare
-        classes_to_ignore = set()
-        for label in ignore_labels:
-            # if label is None:
-            #     print("DEBUG SCANNER: Trovata una label nulla/vuota in ignore_labels!")
-            main_cls = self.label_to_main_class.get(label.lower())
-            if main_cls:
-                classes_to_ignore.add(main_cls)
+            video_path = video_data.get("video_path")
+            return {video_path: {"frames": [frame_res], "video_category": "PERSON"}}
 
+        # Regole attive (default + override per camera)
+        camera_id    = video_data.get("camera_id")
+        cam_config   = self.ch_configs.get(camera_id, {})
+        
+        active_rules = self._get_active_rules(camera_id)
+        # ignore_labels = cam_config.get("filters", {}).get("ignore_labels", [])
+        # classes_to_ignore = {
+        #     self.label_to_main_class[lbl.lower()]
+        #     for lbl in ignore_labels
+        #     if lbl.lower() in self.label_to_main_class
+        # }
+
+        ignore_classes = set(cam_config.get("filters", {}).get("ignore_classes", []))
 
         frames_list = []
         for frame in frames:
-            # 1. Recuperiamo la categoria suggerita da YOLO per questo specifico frame
-            yolo_category = frame.get("category", "").upper() # es: "ANIMAL"
-            # Qui sta il trucco: chiediamo a CLIP di scegliere tra 
-            # la categoria di YOLO e tutte le classi di disturbo (Fake Keys)
-            fake_labels = [desc for descs in self.FAKE_KEYS.values() for desc in descs]
-            test_labels = [yolo_category] + fake_labels
+            yolo_category = frame.get("category", "").upper()
+            #print(f"DEBUG: category={yolo_category}, classes_to_ignore={ignore_classes}")
+            if yolo_category in ignore_classes:
+                continue
 
-            
-            # usiamo il set completo come fallback, altrimenti usiamo solo quella di YOLO
-            current_main_class = [yolo_category] if yolo_category in self.MAIN_CLASSES else self.MAIN_CLASSES
-            
-            frame_path = frame.get("frame_path")
-            crop_path = frame.get("crop_path")
-            current_bbox = frame.get("bbox")
-            
-            # --- Preprocess immagini ---
-            img = Image.open(crop_path).convert("RGB")
-            crop_img = self.preprocess(img).unsqueeze(0).to(self.DEVICE)
-            frame_img = self.preprocess(Image.open(frame_path).convert("RGB")).unsqueeze(0).to(self.DEVICE) if frame_path else crop_img
-        
-            # --- BLIP caption ---
-            blip_inputs = self.blip_processor(images=img, return_tensors="pt").to(self.DEVICE)
-            blip_ids = self.blip_model.generate(**blip_inputs)
-            caption = self.blip_processor.decode(blip_ids[0], skip_special_tokens=True)
-
-            # --- Calcolo CLIP (Solo sulla classe YOLO!) ---
-            clip_scores_crop = self._get_clip_score(crop_img, test_labels)
-            clip_scores_frame = self._get_clip_score(frame_img, test_labels)
-
-            # Inizializziamo final_scores solo per le classi presenti in clip_scores
-            # Le altre classi (non rilevate da YOLO) rimarranno a 0.0
-            final_scores = {cls: 0.0 for cls in self.MAIN_CLASSES}
-
-            # --- Calcolo Score Finali (Crop + Frame) ---
-            for cls in current_main_class:
-                # Usiamo i pesi dinamici (FINAL_WEIGHT_CROP e FINAL_WEIGHT_FRAME)
-                final_scores[cls] = (active_rules["FINAL_WEIGHT_CROP"] * clip_scores_crop.get(cls, 0.0) + 
-                                    active_rules["FINAL_WEIGHT_FRAME"] * clip_scores_frame.get(cls, 0.0))
-                
-                # BLIP boost (Usa BLIP_KEYWORDS e i boost dinamici)
-                # Nota: Uso .get(cls, []) per sicurezza sulle keywords
-                if any(k.lower() in caption.lower() for k in self.BLIP_KEYWORDS.get(cls, [])):
-                    boost = active_rules["BLIP_BOOST_PERSON"] if cls == "PERSON" else active_rules["BLIP_BOOST_OTHER"]
-                    final_scores[cls] += boost
-
-            # --- Fake scores (Sempre contro la classe di YOLO) ---
-            # Qui usiamo self.FAKE_KEYS (che sono i nomi delle categorie fake)
-            fake_prompts = [desc for descs in self.FAKE_KEYS.values() for desc in descs]
-            all_prompts = current_main_class + fake_prompts
-            all_scores = self._get_clip_score(crop_img, all_prompts)
-            
-            # fake_scores_dict = {fk: max([all_scores[d] for d in descs]) for fk, descs in self.FAKE_KEYS.items()}
-            # max_fake_score = max(fake_scores_dict.values())
-            # --- Fake scores pesati ---
-            # Prendiamo i pesi dal JSON (default 1.0 se non specificati)
-            fake_weights = active_rules.get("FAKE_WEIGHTS", {}) 
-            
-            # Moltiplichiamo lo score di ogni categoria fake per il suo peso
-            fake_scores_dict = {
-                fk: max([all_scores[d] for d in descs]) * fake_weights.get(fk, 1.0) 
-                for fk, descs in self.FAKE_KEYS.items()
-            }
-            max_fake_score = max(fake_scores_dict.values())
-            # Determiniamo la best_class (Usiamo SIGNIFICANCE_THRESHOLD al posto dello 0.1 fisso)
-            # best_class = yolo_category if final_scores[yolo_category] > active_rules["SIGNIFICANCE_THRESHOLD"] else "OTHERS"
-            # Se è una persona, usiamo la soglia fissa di significatività per le persone
-            current_sig_thresh = self.SIGNIFICANCE_THRESHOLD if yolo_category == "PERSON" else active_rules["SIGNIFICANCE_THRESHOLD"]
-            best_class = yolo_category if final_scores[yolo_category] > current_sig_thresh else "OTHERS"
-
-            # Dentro il ciclo video/frame
-            dt = datetime.fromisoformat(frame.get("timestamp")) 
-
-            # Verifica dinamica: addio orari fissi!
+            dt       = datetime.fromisoformat(frame.get("timestamp"))
             is_night = is_night_astronomic(dt, self.lat, self.lon)
-            
-            if is_night:
-                if frame.get("category") == "person":
-                    # Usiamo il boost dinamico (aggiungilo al metodo _get_active_blip_rules)
-                    final_scores["PERSON"] += active_rules.get("YOLO_NIGHT_BOOST", self.YOLO_NIGHT_BOOST)
-                   
 
-            best_score_cls  = max(final_scores, key=final_scores.get)
-            best_score_val  = final_scores[best_score_cls]
+            frame_res = self._score_frame(frame, active_rules, is_night)
+            frames_list.append(frame_res)
 
-            # # USIAMO ACTIVE_RULES ANCHE QUI!
-            # if final_scores["PERSON"] >= active_rules["PERSON_PRIORITY_THRESHOLD"] and \
-            #    max_fake_score < (final_scores["PERSON"] + active_rules["PERSON_BOOST_TOLERANCE"]):
-            #     best_class = "PERSON"
-            # --- 2. Determinazione Label PERSON (Usa valori self fisssi per stabilità) ---
-            # Usiamo self.PERSON_PRIORITY_THRESHOLD invece di active_rules
-            # Usiamo self.PERSON_BOOST_TOLERANCE invece di active_rules
-
-            if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD and \
-            max_fake_score < (final_scores["PERSON"] + self.PERSON_BOOST_TOLERANCE):
-                best_class = "PERSON"
-            elif(is_night):
-                best_class = self._calculate_night_category(best_score_cls, best_score_val, max_fake_score, final_scores, active_rules)
-            else:
-                best_class = self._calculate_day_category(best_score_cls, best_score_val, max_fake_score, active_rules)
-
-            frame_res = {
-                "clip_crop": clip_scores_crop,
-                "clip_frame": clip_scores_frame,
-                "blip_caption": caption,
-                "blip_scores": all_scores, #blip_scores,
-                "final_scores": final_scores,
-                "fake_scores": fake_scores_dict,
-                "max_fake_score": max_fake_score,
-                "label": best_class,
-                "bbox": current_bbox # <--- AGGIUNGILA QUI!
-            }
-            frames_list.append(frame_res)      # aggiungi il frame alla lista
-
-        video_dict = {video_data.get("video_path"): { "frames": frames_list }}
-
-        video_cat = self._decide_video_category(video_dict,active_rules)
-
-        # 2. Ottieni il path (la chiave del dizionario)
-        video_path = list(video_dict.keys())[0]
-
-        # 3. Aggiungi la categoria dentro il dizionario di quel video
-        video_dict[video_path]["video_category"] = video_cat
+        video_path = video_data.get("video_path")
+        video_dict = {video_path: {"frames": frames_list}}
+        video_dict[video_path]["video_category"] = self._decide_video_category(frames_list, active_rules)
 
         return video_dict
 
+    # ------------------------------------------------------------------
+    # Aggregazione video
+    # ------------------------------------------------------------------
 
-    # -------------------------------------------------------------
-    # 1) Funzione che decide la categoria per le ore di NOTTE
-    def _calculate_night_category(self, best_score_cls, best_score_val, max_fake_score, final_scores: dict, rules: dict) -> str:
-        # 1. PRIORITA' PERSON (Calibrata per QuickGELU e notte)
-        # # Usiamo rules["PERSON_PRIORITY_THRESHOLD"] (default 0.25)
-        # if final_scores["PERSON"] >= rules["PERSON_PRIORITY_THRESHOLD"]:
-        #     # Usiamo la tolleranza dinamica (es. 0.45 o 0.50) dal JSON/Default
-        #     if max_fake_score < (final_scores["PERSON"] + rules["PERSON_BOOST_TOLERANCE"]):
-        #         return "PERSON"
-        # 1. PRIORITA' PERSON (Usiamo i valori fissi self)
-        if final_scores["PERSON"] >= self.PERSON_PRIORITY_THRESHOLD:
-            # Usiamo la tolleranza fissa di sistema
-            if max_fake_score < (final_scores["PERSON"] + self.PERSON_BOOST_TOLERANCE):
-                return "PERSON"
-
-        # 2. LOGICA PER GLI ALTRI (ANIMAL/VEHICLE)
-        # Se il fake score è alto, serve un margine per vincere
-        if max_fake_score > rules["VETO_THRESHOLD"]:
-            # Recuperiamo il delta specifico per la classe dal dizionario rules
-            delta_threshold = rules["DELTA_THRESHOLD"].get(best_score_cls, 0.2)
-            if (best_score_val - max_fake_score) > delta_threshold:
-                return best_score_cls
-            else:
-                return "OTHERS"
-        
-        return best_score_cls
-   
-
-
-    # -------------------------------------------------------------
-    # 1) Funzione che decide la categoria per le ore di GUIRNO
-    def _calculate_day_category(
-        self,
-        best_score_cls,
-        best_score_val,
-        max_fake_score,
-        rules: dict # <--- Nuovo parametro
-    ) -> str:
-        
-        # # --- LOGICA PERSONE: NON TOCCATA ---
-        # if best_score_cls == "PERSON":
-        #     if max_fake_score > rules["VETO_THRESHOLD"]:
-        #         delta_threshold = rules["DELTA_THRESHOLD"].get("PERSON", 0.25)
-        #         best_class = "PERSON" if (best_score_val - max_fake_score > delta_threshold) else "OTHERS"
-        #     else:
-        #         best_class = "PERSON"
-        #     return best_class
-        # --- LOGICA PERSONE: BLINDATA SU SELF ---
-        if best_score_cls == "PERSON":
-            # Usiamo il VETO_THRESHOLD di sistema per coerenza
-            if max_fake_score > self.VETO_THRESHOLD:
-                # Usiamo il delta fisso definito nel self.DELTA_THRESHOLD originale
-                delta_threshold = self.DELTA_THRESHOLD.get("PERSON", 0.25)
-                best_class = "PERSON" if (best_score_val - max_fake_score > delta_threshold) else "OTHERS"
-            else:
-                best_class = "PERSON"
-            return best_class
-
-      
-        if best_score_cls == "ANIMAL":
-            margin = best_score_val - max_fake_score
-            check1 = best_score_val > rules["DAY_ANIMAL_MIN_CONF"]
-            check2 = margin > rules["DAY_ANIMAL_MARGIN"]
-            if check1 and check2:
-                return "ANIMAL"
-            else:
-                print(f"DEBUG: Cane scartato! Conf OK: {check1} ({best_score_val} > {rules['DAY_ANIMAL_MIN_CONF']}), Margin OK: {check2} ({margin} > {rules['DAY_ANIMAL_MARGIN']})")
-                return "OTHERS"
-        # --- LOGICA VEICOLI: ---
-        if best_score_cls == "VEHICLE":
-            delta_threshold = rules["DELTA_THRESHOLD"].get("VEHICLE", 0.2)
-            if best_score_val - max_fake_score > delta_threshold:
-                return "VEHICLE"
-            return "OTHERS"
-
-        return "OTHERS"
-  
-
-    def _decide_video_category(self, video_dict, rules: dict):
-        video_path = list(video_dict.keys())[0]
-        frames = video_dict[video_path]["frames"]
-        
-        # 1. Check immediato per le persone (Priorità Massima)
-        if any(f["label"] == "PERSON" for f in frames):
+    def _decide_video_category(self, frames_list, active_rules):
+        """
+        Priorità: PERSON > VEHICLE > ANIMAL
+        PERSON: basta UN frame con label PERSON
+        ANIMAL/VEHICLE: score medio > soglia dinamica (diminuisce con più frame)
+        """
+        # 1. Persona: basta un frame
+        if any(f["label"] == "PERSON" for f in frames_list):
             return "PERSON"
 
-        # 2. Raggruppiamo gli score per categoria
-        animal_scores = [f["final_scores"]["ANIMAL"] for f in frames if f["label"] == "ANIMAL"]
-        vehicle_scores = [f["final_scores"]["VEHICLE"] for f in frames if f["label"] == "VEHICLE"]
-
-        #3. ANIMAL
-        if animal_scores:
-            avg_animal = sum(animal_scores) / len(animal_scores)
-            # Calcoliamo la soglia dinamica invece di cercarla nel dizionario
-            threshold = self._get_dynamic_threshold(len(animal_scores), "ANIMAL", rules)
-            
-            if avg_animal > threshold:
-                return "ANIMAL"
-
-        # 4. VEHICLE
+        # 2. Veicolo (priorità su animale)
+        vehicle_scores = [f["final_scores"]["VEHICLE"] for f in frames_list if f["label"] == "VEHICLE"]
         if vehicle_scores:
-            avg_vehicle = sum(vehicle_scores) / len(vehicle_scores)
-            threshold = self._get_dynamic_threshold(len(vehicle_scores), "VEHICLE", rules)
-            
-            if avg_vehicle > threshold:
+            threshold = self._get_dynamic_threshold(len(vehicle_scores), "VEHICLE", active_rules)
+            if (sum(vehicle_scores) / len(vehicle_scores)) > threshold:
                 return "VEHICLE"
+
+        # 3. Animale
+        animal_scores = [f["final_scores"]["ANIMAL"] for f in frames_list if f["label"] == "ANIMAL"]
+        if animal_scores:
+            threshold = self._get_dynamic_threshold(len(animal_scores), "ANIMAL", active_rules)
+            if (sum(animal_scores) / len(animal_scores)) > threshold:
+                return "ANIMAL"
 
         return "OTHERS"
 
-        # # 3. Decisione ANIMAL
-        # if animal_scores:
-        #     avg_animal = sum(animal_scores) / len(animal_scores)
-        #     agg_rules = rules.get("ANIMAL_AGG_THRESHOLDS", self.ANIMAL_AGG_THRESHOLDS)
-        #     # Soglia basata su quanti frame animali abbiamo trovato
-        #     threshold = agg_rules.get(str(len(animal_scores)), agg_rules.get("default", 0.35))
-            
-        #     if avg_animal > threshold:
-        #         return "ANIMAL"
+    def _get_dynamic_threshold(self, count, category, rules):
+        """Soglia che scende all'aumentare dei frame: più evidenza → soglia più bassa."""
+        prefix  = category.upper()
+        start   = rules.get(f"{prefix}_START_THRESHOLD", 0.45)
+        step    = rules.get(f"{prefix}_STEP_REDUCTION", 0.05)
+        min_t   = rules.get(f"{prefix}_MIN_THRESHOLD", 0.15)
+        return max(min_t, start - (max(1, count) - 1) * step)
 
-        # # 4. Decisione VEHICLE
-        # if vehicle_scores:
-        #     avg_vehicle = sum(vehicle_scores) / len(vehicle_scores)
-        #     agg_rules = rules.get("VEHICLE_AGG_THRESHOLDS", self.VEHICLE_AGG_THRESHOLDS)
-        #     threshold = agg_rules.get(str(len(vehicle_scores)), agg_rules.get("default", 0.40))
-            
-        #     if avg_vehicle > threshold:
-        #         return "VEHICLE"
+    # ------------------------------------------------------------------
+    # Regole attive (default + override per camera)
+    # ------------------------------------------------------------------
 
-        
-   
-
-
-    
-    def _get_active_blip_rules(self, camera_id):
+    def _get_active_rules(self, camera_id):
         """
-        Ritorna un dizionario con le regole di raffinamento.
-        Sovrascrive i default dell'init solo se presenti nel JSON della telecamera.
+        Ritorna le regole attive per la camera specificata.
+        Ogni valore nel JSON della camera sovrascrive il default globale.
         """
-        cam_config = self.ch_configs.get(camera_id, {})
-        custom = cam_config.get("blip_rules", {})
+        custom = self.ch_configs.get(camera_id, {}).get("blip_rules", {})
 
-    
+        def c(key, default):
+            return custom.get(key, default)
 
         return {
-            # Soglie di base
-            "VETO_THRESHOLD": custom.get("VETO_THRESHOLD", self.VETO_THRESHOLD),
-            "SIGNIFICANCE_THRESHOLD": custom.get("SIGNIFICANCE_THRESHOLD", self.SIGNIFICANCE_THRESHOLD),
-            
-            # Pesi per il calcolo final_scores (Crop vs Frame)
-            "FINAL_WEIGHT_CROP": custom.get("FINAL_WEIGHT_CROP", self.FINAL_WEIGHT_CROP),
-            "FINAL_WEIGHT_FRAME": custom.get("FINAL_WEIGHT_FRAME", self.FINAL_WEIGHT_FRAME),
+            "SIGNIFICANCE_THRESHOLD": c("SIGNIFICANCE_THRESHOLD", self.SIGNIFICANCE_THRESHOLD),
+            "FINAL_WEIGHT_CROP":      c("FINAL_WEIGHT_CROP",      self.FINAL_WEIGHT_CROP),
+            "FINAL_WEIGHT_FRAME":     c("FINAL_WEIGHT_FRAME",     self.FINAL_WEIGHT_FRAME),
 
-            # Boost di BLIP (Keywords)
-            "BLIP_BOOST_PERSON": custom.get("BLIP_BOOST_PERSON", self.BLIP_BOOST_PERSON),
-            "BLIP_BOOST_OTHER": custom.get("BLIP_BOOST_OTHER", self.BLIP_BOOST_OTHER),
+            # Dict — merge: default + override camera
+            "BLIP_BOOST":         {**self.BLIP_BOOST,         **c("BLIP_BOOST", {})},
+            "THRESHOLD":          {**self.THRESHOLD,          **c("THRESHOLD", {})},
+            "FAKE_PENALTY_WEIGHT":{**self.FAKE_PENALTY_WEIGHT,**c("FAKE_PENALTY_WEIGHT", {})},
 
-            # Logica Persone (Notte e Priorità)
-            "YOLO_NIGHT_BOOST": custom.get("YOLO_NIGHT_BOOST", self.YOLO_NIGHT_BOOST),
-            "PERSON_PRIORITY_THRESHOLD": custom.get("PERSON_PRIORITY_THRESHOLD", self.PERSON_PRIORITY_THRESHOLD),
-            "PERSON_BOOST_TOLERANCE": custom.get("PERSON_BOOST_TOLERANCE", self.PERSON_BOOST_TOLERANCE),
+            "YOLO_NIGHT_BOOST": c("YOLO_NIGHT_BOOST", self.YOLO_NIGHT_BOOST),
 
-            # Logica Animali e Veicoli (Giorno e Veto)
-            "DAY_ANIMAL_MIN_CONF": custom.get("DAY_ANIMAL_MIN_CONF", self.DAY_ANIMAL_MIN_CONF),
-            "DAY_ANIMAL_MARGIN": custom.get("DAY_ANIMAL_MARGIN", self.DAY_ANIMAL_MARGIN),
-            "DELTA_THRESHOLD": {**self.DELTA_THRESHOLD, **custom.get("DELTA_THRESHOLD", {})},
+            # Fix teste piccole
+            "BBOX_SMALL_RATIO":        c("BBOX_SMALL_RATIO",        self.BBOX_SMALL_RATIO),
+            "BBOX_SMALL_PERSON_BONUS": c("BBOX_SMALL_PERSON_BONUS", self.BBOX_SMALL_PERSON_BONUS),
 
-            # Soglie di Aggregazione Video finale
-            # --- NUOVA Logica di Aggregazione Dinamica ---
-            # Animali
-            "ANIMAL_START_THRESHOLD": custom.get("ANIMAL_START_THRESHOLD", self.ANIMAL_START_THRESHOLD),
-            "ANIMAL_STEP_REDUCTION": custom.get("ANIMAL_STEP_REDUCTION", self.ANIMAL_STEP_REDUCTION),
-            "ANIMAL_MIN_THRESHOLD": custom.get("ANIMAL_MIN_THRESHOLD", self.ANIMAL_MIN_THRESHOLD),
-            
-            # Veicoli
-            "VEHICLE_START_THRESHOLD": custom.get("VEHICLE_START_THRESHOLD", self.VEHICLE_START_THRESHOLD),
-            "VEHICLE_STEP_REDUCTION": custom.get("VEHICLE_STEP_REDUCTION", self.VEHICLE_STEP_REDUCTION),
-            "VEHICLE_MIN_THRESHOLD": custom.get("VEHICLE_MIN_THRESHOLD", self.VEHICLE_MIN_THRESHOLD),
-            "FAKE_WEIGHTS": custom.get("FAKE_WEIGHTS", {})
+            # Aggregazione video
+            "ANIMAL_START_THRESHOLD":  c("ANIMAL_START_THRESHOLD",  self.ANIMAL_START_THRESHOLD),
+            "ANIMAL_STEP_REDUCTION":   c("ANIMAL_STEP_REDUCTION",   self.ANIMAL_STEP_REDUCTION),
+            "ANIMAL_MIN_THRESHOLD":    c("ANIMAL_MIN_THRESHOLD",    self.ANIMAL_MIN_THRESHOLD),
+            "VEHICLE_START_THRESHOLD": c("VEHICLE_START_THRESHOLD", self.VEHICLE_START_THRESHOLD),
+            "VEHICLE_STEP_REDUCTION":  c("VEHICLE_STEP_REDUCTION",  self.VEHICLE_STEP_REDUCTION),
+            "VEHICLE_MIN_THRESHOLD":   c("VEHICLE_MIN_THRESHOLD",   self.VEHICLE_MIN_THRESHOLD),
+
+            # Pesi fake per camera (sovrascrive completamente se presente)
+            "FAKE_WEIGHTS": c("FAKE_WEIGHTS", {}),
         }
-    
-    def _get_dynamic_threshold(self, count, category, rules):
-        prefix = f"{category.upper()}_"
-        
-        # Valori di default coerenti con il tuo __init__
-        default_start = 0.45 if category == "ANIMAL" else 0.50
-        
-        start = rules.get(f"{prefix}START_THRESHOLD", default_start)
-        step = rules.get(f"{prefix}STEP_REDUCTION", 0.05)
-        min_t = rules.get(f"{prefix}MIN_THRESHOLD", 0.15)
-        
-        # Se per errore count è 0, lo trattiamo come 1
-        safe_count = max(1, count)
-        
-        # Calcolo soglia
-        threshold = start - (safe_count - 1) * step
-        
-        return max(min_t, threshold)

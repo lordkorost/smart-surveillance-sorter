@@ -99,8 +99,9 @@ def extract_frames_with_cache(
         # -------- Record Unico per Frame + Crop --------
         saved_frames.append({
             "category": cat,
+            "yolo_label": det.get("label", ""),
             "frame_path": str(out_path),
-            "crop_path": str(out_path_crop), # <--- Legati insieme
+            "crop_path": str(out_path_crop),
             "confidence": det["confidence"],
             "yolo_reliable": det.get("yolo_reliable", False), # Portiamoci dietro il flag per la Vision
             "bbox": det["bbox"],

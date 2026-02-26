@@ -129,31 +129,23 @@ class VisionEngine:
         
         # Allineamento con il tuo settings.json ("scoring_system")
         scoring_cfg = self.settings.get("scoring_system", {})
-        #weights = scoring_cfg.get("weights", {})
-        #thresholds = scoring_cfg.get("thresholds", {})
-
+     
         for frame in frames:
             category = frame["category"]
             conf = frame["confidence"]
             img_path = frame["frame_path"]
-            #crop_path = frame.get("crop_path")
-
-            # Analisi Multi-Image
+        
             image_inputs = [img_path]
-            # if crop_path and Path(crop_path).exists():
-            #     image_inputs.append(crop_path)
-            #print(category,conf,image_inputs)
-            # vision_answer = self.query_vision_model(prompt, image_inputs)
+        
             result = self.query_vision_model(prompt, image_inputs)
-            #print(result)
-            #vision_answer = result.get("label", "nothing")
+       
             thinking = result.get("thinking", "")
             vision_answer = result.get("label", "others").lower()
             if vision_answer == "nothing": vision_answer = "others" # Bridge per sicurezza    
             # Salviamo il thinking nel record del video per il log finale
             video_data["thinking"] = thinking
             # --- PRIORITÀ PERSONA ---
-            # --- LOGICA DENTRO IL CICLO FRAME ---
+         
 
             # 1. Se Vision dice Persona, chiudiamo subito (Massima Priorità)
             if vision_answer == "person":
@@ -311,8 +303,6 @@ class VisionEngine:
             )
             
 
-          
-           
             # 2. Prendi il testo (già in minuscolo)
             full_response = response.get('response', '').lower().strip()
             thinking_content = response.get('thinking', '') 

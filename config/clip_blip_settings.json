@@ -1,46 +1,66 @@
 {
+    "_doc": "clip_blip_settings_v2.json — Parametri motore ClipBlip v2. Ogni parametro è documentato.",
+
     "clip_model": "ViT-L-14",
     "clip_pretrained": "openai",
     "blip_model": "Salesforce/blip-image-captioning-base",
-    "MAIN_CLASSES":[
-        "PERSON",
-        "ANIMAL",
-        "VEHICLE"
-    ],
-    "FAKE_KEYS" : {
-        "SHOE": ["a photo of a shoe or footwear"],
-        "WOOD": ["a photo of a piece of wood or a stick"],
+
+    "MAIN_CLASSES": ["PERSON", "ANIMAL", "VEHICLE"],
+
+    "_doc_FAKE_KEYS": "Descrizioni testuali per CLIP delle categorie 'rumore'. CLIP le usa per capire se il crop è un falso positivo.",
+    "FAKE_KEYS": {
+        "SHOE":   ["a photo of a shoe or footwear"],
+        "WOOD":   ["a photo of a piece of wood or a stick"],
         "GARDEN": ["a photo of a garden object or debris"],
         "GROUND": ["a photo of the ground"]
     },
-    "BLIP_KEYWORDS" : {
-        "PERSON": ["person", "people", "human", "officer", "man", "woman", "child","girl", "boy"],
+
+    "_doc_BLIP_KEYWORDS": "Keyword cercate nella caption BLIP. Se trovate, aggiungono BLIP_BOOST allo score.",
+    "BLIP_KEYWORDS": {
+        "PERSON":  ["person", "people", "human", "officer", "man", "woman", "child", "girl", "boy"],
         "VEHICLE": ["car", "truck", "bike", "motorcycle", "bus"],
-        "ANIMAL": ["cat", "dog", "horse", "bird", "bear"]
+        "ANIMAL":  ["cat", "dog", "horse", "bird", "bear"]
     },
-    "VETO_THRESHOLD" : 0.2,
-    "SIGNIFICANCE_THRESHOLD": 0.2,
-    "BLIP_BOOST_PERSON": 0.35,
-    "BLIP_BOOST_OTHER": 0.1,
-    "FINAL_WEIGHT_CROP": 0.7,
+
+    "_doc_FINAL_WEIGHT": "Peso del crop (ritaglio YOLO) vs frame intero nel calcolo score CLIP. Somma = 1.0",
+    "FINAL_WEIGHT_CROP":  0.7,
     "FINAL_WEIGHT_FRAME": 0.3,
-    "PERSON_PRIORITY_THRESHOLD": 0.25,
-    "DELTA_THRESHOLD" : {
-            "PERSON": 0.25,
-            "ANIMAL": 0.45,
-            "VEHICLE": 0.2
+
+    "_doc_BLIP_BOOST": "Bonus aggiunto allo score se BLIP caption contiene keyword della classe. PERSON alto = favorisce le persone.",
+    "BLIP_BOOST": {
+        "PERSON":  0.35,
+        "ANIMAL":  0.10,
+        "VEHICLE": 0.10
     },
-    "PERSON_BOOST_TOLERANCE":0.45,
-    "DAY_ANIMAL_MIN_CONF": 0.20,
-    "DAY_ANIMAL_MARGIN":0.05,
-    "ANIMAL_START_THRESHOLD": 0.45,
-    "ANIMAL_STEP_REDUCTION": 0.05,
-    "ANIMAL_MIN_THRESHOLD": 0.15,
+
+    "_doc_THRESHOLD": "Soglia minima di score finale per classificare un frame come quella classe. PERSON bassa = preferiamo falsi positivi a falsi negativi.",
+    "THRESHOLD": {
+        "PERSON":  0.15,
+        "ANIMAL":  0.22,
+        "VEHICLE": 0.30
+    },
+
+    "_doc_FAKE_PENALTY_WEIGHT": "Quanto i fake score penalizzano la classe. Basso = classe favorita (fake non la penalizzano). Alto = classe molto penalizzata dai fake. PERSON basso = priorità massima.",
+    "FAKE_PENALTY_WEIGHT": {
+        "PERSON":  0.3,
+        "ANIMAL":  0.5,
+        "VEHICLE": 0.6
+    },
+
+    "_doc_BBOX_SMALL": "Fix falsi negativi: se il bbox YOLO occupa meno di BBOX_SMALL_RATIO del frame (es. testa nell'angolino), aggiunge BBOX_SMALL_PERSON_BONUS allo score PERSON.",
+    "BBOX_SMALL_RATIO":        0.04,
+    "BBOX_SMALL_PERSON_BONUS": 0.15,
+
+    "_doc_YOLO_NIGHT_BOOST": "Boost aggiunto allo score PERSON durante le ore notturne (CLIP è meno preciso di notte).",
+    "YOLO_NIGHT_BOOST": 0.30,
+
+    "_doc_AGGREGATION": "Soglie per decidere la categoria dell'intero video (ANIMAL/VEHICLE). La soglia parte da START e scende di STEP per ogni frame positivo, fino a MIN. Più frame = soglia più bassa = più facile classificare.",
+    "ANIMAL_START_THRESHOLD":  0.25,
+    "ANIMAL_STEP_REDUCTION":   0.05,
+    "ANIMAL_MIN_THRESHOLD":    0.15,
+
     "VEHICLE_START_THRESHOLD": 0.50,
-    "VEHICLE_STEP_REDUCTION": 0.05,
-    "VEHICLE_MIN_THRESHOLD": 0.20,
-    "FAKE_WEIGHTS": {},
-    "YOLO_NIGHT_BOOST": 0.3,
-    "yolo_res_json":"yolo_scan_res.json"
+    "VEHICLE_STEP_REDUCTION":  0.05,
+    "VEHICLE_MIN_THRESHOLD":   0.20
 
 }

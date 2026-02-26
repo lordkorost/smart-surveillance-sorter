@@ -19,12 +19,13 @@
                 "bicycle",
                 "bus",
                 "train"
-            ]
+            ],
+            "ignore_classes": ["VEHICLE"] 
         },
         "thresholds": {
-            "person": 0.4,
+            "person": 0.49,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         }
     },
     "01": {
@@ -39,19 +40,21 @@
         "desc": "Entrance door, garden area",
         "dynamic_stride": false,
         "filters": {
-            "ignore_labels": []
+            "ignore_labels": [
+                
+            ]
         },
         "thresholds": {
-            "person": 0.4,
+            "person": 0.49,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         },
         "blip_rules": {
             "FAKE_WEIGHTS": {
-                "GROUND": 0.3,   
-                "GARDEN": 0.4,   
-                "SHOE": 0.3,     
-                "WOOD": 0.5      
+                "GROUND": 1.0,   
+                "GARDEN": 1.0,   
+                "SHOE": 1.0,     
+                "WOOD": 1.0      
             }
          }
     },
@@ -73,14 +76,15 @@
                 "bicycle",
                 "bus",
                 "train"
-            ]
+            ],
+            "ignore_classes": ["VEHICLE"] 
         },
         "desc": "Parking area",
         "dynamic_stride": true,
         "thresholds": {
-            "person": 0.4,
+            "person": 0.49,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         }
     },
     "03": {
@@ -101,14 +105,15 @@
                 "bicycle",
                 "bus",
                 "train"
-            ]
+            ],
+            "ignore_classes": ["VEHICLE"] 
         },
         "desc": "Balcony area, with garden underneath",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.4,
+            "person": 0.49,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         }
     },
     "04": {
@@ -121,14 +126,21 @@
         ],
         "priority": "person",
         "filters": {
-            "ignore_labels": []
+            "ignore_labels": [
+               
+            ]
         },
         "desc": "Balcony area, with garden underneath. There are some garden gnomes on the lawn.",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.4,
+            "person": 0.49,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
+        },
+        "thresholds_night": {
+            "person": 0.40, 
+            "vehicle": 0.55, 
+            "animal": 0.2
         }
     },
     "05": {
@@ -146,14 +158,14 @@
         "desc": "Garden area. There are some garden gnomes on the lawn.",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.4,
+            "person": 0.49,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         },
         "blip_rules": {
                 "FAKE_WEIGHTS": {
-                "GROUND": 0.2,
-                "GARDEN": 0.2
+                "GROUND": 1.0,
+                "GARDEN": 1.0
             }
         }
       
@@ -173,14 +185,14 @@
         "desc": "Garden area, street visible through the gate.",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.4,
+            "person": 0.49,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         },
         "blip_rules": {
                 "FAKE_WEIGHTS": {
-                "GROUND": 0.2,
-                "GARDEN": 0.2
+                "GROUND": 1.0,
+                "GARDEN": 1.0
             }
         }
     },
@@ -202,21 +214,22 @@
                 "bicycle",
                 "bus",
                 "train"
-            ]
+            ],
+            "ignore_classes": ["VEHICLE"] 
         },
         "desc": "Entrance door",
         "dynamic_stride": false,
         "thresholds": {
-            "person": 0.4,
+            "person": 0.49,
             "vehicle": 0.55,
-            "animal": 0.35
+            "animal": 0.30
         },
         "blip_rules": {
             "FAKE_WEIGHTS": {
-                "GROUND": 0.3,   
-                "GARDEN": 0.4,   
-                "SHOE": 0.3,     
-                "WOOD": 0.5      
+                "GROUND": 1.0,   
+                "GARDEN": 1.0,   
+                "SHOE": 1.0,     
+                "WOOD": 1.0      
             }
          }
     }
