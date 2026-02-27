@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta
+import json
 import logging
 from pathlib import Path
 import re
 import time
 
 from smart_surveillance_sorter.file_sorter import FileSorter
+from smart_surveillance_sorter.utils import save_json
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +93,7 @@ def associate_files(index,input_dir):
                 video_ts = video["timestamp"]
                 
                 # Calcolo del confine (Boundary)
-                MAX_DELTA_SECONDS=40
+                MAX_DELTA_SECONDS=180
                 upper_bound = video_ts + timedelta(seconds=MAX_DELTA_SECONDS)
                 
                 # Se c'è un video successivo, restringiamo il confine
@@ -121,11 +123,19 @@ def associate_files(index,input_dir):
                         img["assigned"] = True
                     
                     assoc_record["nvr_images"] = [c["path"] for c in candidates]
-                    #log.debug(f"Cam_id={cam_id} Video={video['path'].name} -> {len(candidates)} immagini associate")
-                
+                   
 
                 associations[cam_id].append(assoc_record)
-
+        index_path = input_dir / "index.json"
+        try:
+        
+            index_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(index_path, 'w', encoding='utf-8') as f:
+                json.dump(associations, f, indent=4, ensure_ascii=False,default=str)
+            
+        except Exception as e:
+            log.critical(f"Error during save on path={index_path}. err={e}")
+            
         return associations
 
 def parse_filename(path, template, ts_format):

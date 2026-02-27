@@ -275,7 +275,7 @@ class VisionEngine:
                 "category": answer,
                 "confidence": suspect["yolo_data"]["confidence"], # Recuperiamo la confidenza originale
                 "best_frame_path": str(img_path),
-                "engine": "fallback_nvr",
+                "engine": "vision",
                 "thinking": thinking, 
             }
         

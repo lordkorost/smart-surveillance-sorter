@@ -302,26 +302,4 @@ def get_pbar_prefix(desc: str = "Progress") -> str:
     """Genera il prefisso colorato con timestamp per tqdm."""
     ts = time.strftime('%H:%M:%S')
     # Usiamo lo spazio corretto per allinearci a "INFO    :"
-    return f"{ts} {LOG_GREEN}INFO   {LOG_RESET}: {desc}"
-# def get_cpu_usage() -> float:
-#     """Percentuale di CPU occupata."""
-#     return psutil.cpu_percent(interval=0.1)
-
-# def get_ram_usage() -> Dict[str, float]:
-#     """RAM totale, usata, libera in GiB."""
-#     vm = psutil.virtual_memory()
-#     return {
-#         "total": vm.total / (1024 ** 3),
-#         "used": vm.used / (1024 ** 3),
-#         "free": vm.available / (1024 ** 3),
-#     }
-
-# def get_gpu_usage() -> Dict[str, float]:
-#     """VRAM totale, usata, libera per la GPU più occupata."""
-#     gpus = GPUtil.getGPUs()
-#     if not gpus:
-#         return {"total": 0, "used": 0, "free": 0}
-#     gpu = max(gpus, key=lambda g: g.memoryUtil)  # scegli quella più occupata
-#     total = gpu.memoryTotal
-#     used = gpu.memoryUsed
-#     return {"total": total, "used": used, "free": total - used}
+    return f"{LOG_GREEN}{ts} INFO   {LOG_RESET}: {desc}"

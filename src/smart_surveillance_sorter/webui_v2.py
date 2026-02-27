@@ -237,7 +237,7 @@ def save_comprehensive_settings(*args):
     try:
         (city, priority, save_others, fn_temp, ts_format, struct,
          y_mod, y_dev, y_stride_sec, y_occ, y_gap,
-         warmup_sec, stride_fast, pre_roll_sec, cd_sec,
+         warmup_sec, stride_fast_sec, pre_roll_sec, cd_sec,
          v_mod, v_temp, o_ip, o_port, v_tk, v_tp,
          w_h, w_m, w_l, sc_p, sc_a, sc_v,
          cb_w_crop, cb_w_frame, cb_night_boost,
@@ -259,7 +259,7 @@ def save_comprehensive_settings(*args):
         data["yolo_settings"]["num_occurrence"]               = int(y_occ)
         data["yolo_settings"]["time_gap_sec"]                 = int(y_gap)
         data["yolo_settings"]["dynamic_stride_settings"]      = {
-            "warmup_sec": int(warmup_sec), "stride_fast": int(stride_fast),
+            "warmup_sec": int(warmup_sec), "stride_fast_sec": int(stride_fast_sec),
             "pre_roll_sec": int(pre_roll_sec), "cooldown_sec": int(cd_sec),
         }
         data["vision_settings"]["model_name"]  = v_mod
@@ -399,9 +399,12 @@ _rt_stop_event = threading.Event()
 
 
 def run_realtime(input_path, output_path, mode, model_name,
-                 use_refine, engine, use_fallback,
+                 #use_refine, 
+                 engine,
+                  # use_fallback,
                   # is_sort, 
-                  test_mode, device, interval):
+                  # test_mode, 
+                  device, interval):
     global _rt_thread, _rt_stop_event
 
     if _rt_thread and _rt_thread.is_alive():
@@ -431,7 +434,7 @@ def run_realtime(input_path, output_path, mode, model_name,
             cycle += 1
             log.info(f"─── Ciclo #{cycle} ───")
             try:
-                get_logger(debug=test_mode)
+                get_logger(debug=False)
                 # Aggiorna model/device nel settings.json
                 with open(SETTINGS_JSON, "r", encoding="utf-8") as f:
                     s = json.load(f)
@@ -443,8 +446,10 @@ def run_realtime(input_path, output_path, mode, model_name,
 
                 scanner = Scanner(
                     mode=mode, device=device or None,
-                    is_refine=use_refine, is_fallback=use_fallback,
-                    is_test=test_mode, engine=engine,
+                    is_refine=True, 
+                    #is_fallback=use_fallback,
+                    #is_test=test_mode, 
+                    engine=engine,
                     is_check_clean=False, 
                     #is_sort=is_sort,
                 )
@@ -588,7 +593,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                         gr.Markdown("_`blip`: CLIP+BLIP locale (veloce). `vision`: Ollama/Qwen (preciso)._")
 
             run_btn    = gr.Button("▶  START SCAN", variant="primary", size="lg")
-            output_log = gr.Textbox(label="Log Scanner", interactive=True, lines=22,
+            output_log = gr.Textbox(label="Log Scanner", interactive=False, lines=22,
                                      )
 
             run_btn.click(
@@ -609,9 +614,9 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                     rt_output = gr.Textbox(label="Output Directory (opzionale)")
                     rt_mode   = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="person")
                     rt_interval = gr.Slider(10, 300, step=10, value=60, label="Intervallo tra cicli (sec)")
-                    with gr.Row():
-                        rt_test   = gr.Checkbox(label="🧪 Test mode", value=False)
-                        #rt_nosort = gr.Checkbox(label="🚫 No Sort",   value=False)
+                    # with gr.Row():
+                    #     rt_test   = gr.Checkbox(label="🧪 Test mode", value=False)
+                    #     #rt_nosort = gr.Checkbox(label="🚫 No Sort",   value=False)
 
                 with gr.Column(scale=1):
                     rt_model  = gr.Dropdown(choices=get_available_models(), label="YOLO Model", value="yolov8l.pt")
@@ -619,9 +624,9 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                     with gr.Group():
                         gr.Markdown("### 🧠 Engines")
                         with gr.Row():
-                            rt_refine = gr.Checkbox(label="✨ Enable Refine", value=True)
+                            #rt_refine = gr.Checkbox(label="✨ Enable Refine", value=True)
                             rt_engine = gr.Radio(choices=["blip", "vision"], label="Engine", value="blip")
-                        rt_fallback = gr.Checkbox(label="🔍 Fallback", value=False)
+                        #rt_fallback = gr.Checkbox(label="🔍 Fallback", value=False)
 
             with gr.Row():
                 rt_start_btn = gr.Button("▶ Avvia Real-Time", variant="primary")
@@ -632,9 +637,12 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             rt_start_btn.click(
                 fn=run_realtime,
                 inputs=[rt_input, rt_output, rt_mode, rt_model,
-                        rt_refine, rt_engine, rt_fallback, 
+                        #rt_refine, 
+                        rt_engine, 
+                        #rt_fallback, 
                         #rt_nosort, 
-                        rt_test, rt_device, rt_interval],
+                        #rt_test, 
+                        rt_device, rt_interval],
                 outputs=rt_log,
                 queue=True,
             )
@@ -702,7 +710,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                         with gr.Row():
                             warmup_sec   = gr.Slider(1, 15, step=1, value=dss.get("warmup_sec", 5),
                                                      label="Warmup (sec)")
-                            stride_fast  = gr.Slider(12, 50, value=dss["stride_fast"],  label="Stride Fast (frame)")
+                            stride_fast_sec  = gr.Slider(12, 50, value=dss["stride_fast_sec"],  label="Stride Fast (frame)")
                             pre_roll_sec = gr.Slider(5, 30,  value=dss["pre_roll_sec"], label="Pre Roll (sec)")
                             cd_sec       = gr.Slider(1, 20,  value=dss["cooldown_sec"], label="Cooldown (sec)")
 
@@ -764,7 +772,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                         inputs=[
                             city, priority, save_others, fn_template, ts_format, struct_type,
                             y_mod, y_dev, y_stride_sec, y_occ, y_gap,
-                            warmup_sec, stride_fast, pre_roll_sec, cd_sec,
+                            warmup_sec, stride_fast_sec, pre_roll_sec, cd_sec,
                             v_mod, v_temp, ollama_ip, ollama_port, v_topk, v_topp,
                             w_high, w_mid, w_low, sc_p, sc_a, sc_v,
                             cb_weight_crop, cb_weight_frame, cb_night_boost,

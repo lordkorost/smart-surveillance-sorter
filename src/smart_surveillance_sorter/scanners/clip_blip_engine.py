@@ -102,7 +102,7 @@ class ClipBlipEngine:
         # Coordinate per calcolo notte astronomica
         self.city_name = self.settings.get("city", "Roma")
         self.lat, self.lon = get_smart_coordinates(self.city_name)
-        log.info(f"🚀 ClipBlipEngine v2 — city={self.city_name} ({self.lat}, {self.lon})")
+        log.info(f"🚀 ClipBlipEngine  — city={self.city_name} ({self.lat}, {self.lon})")
 
         # Mappa label YOLO → classe principale
         self.label_to_main_class = {}
@@ -195,10 +195,6 @@ class ClipBlipEngine:
 
             final_scores[cls] = max(0.0, base + blip_bonus - fake_penalty)
 
-        # 4. Bbox small bonus → fix falsi negativi (testa nell'angolino)
-        # if bbox and yolo_category == "PERSON":
-        #     bbox_bonus = self._get_bbox_small_bonus(bbox, frame_path, active_rules)
-        #     final_scores["PERSON"] += bbox_bonus
         if bbox and yolo_category == "PERSON" and final_scores["PERSON"] > 0.05:
             bbox_bonus = self._get_bbox_small_bonus(bbox, frame_path, active_rules)
             final_scores["PERSON"] += bbox_bonus
@@ -338,19 +334,19 @@ class ClipBlipEngine:
         if any(f["label"] == "PERSON" for f in frames_list):
             return "PERSON"
 
-        # 2. Veicolo (priorità su animale)
-        vehicle_scores = [f["final_scores"]["VEHICLE"] for f in frames_list if f["label"] == "VEHICLE"]
-        if vehicle_scores:
-            threshold = self._get_dynamic_threshold(len(vehicle_scores), "VEHICLE", active_rules)
-            if (sum(vehicle_scores) / len(vehicle_scores)) > threshold:
-                return "VEHICLE"
-
-        # 3. Animale
+        # 2. Animale
         animal_scores = [f["final_scores"]["ANIMAL"] for f in frames_list if f["label"] == "ANIMAL"]
         if animal_scores:
             threshold = self._get_dynamic_threshold(len(animal_scores), "ANIMAL", active_rules)
             if (sum(animal_scores) / len(animal_scores)) > threshold:
                 return "ANIMAL"
+            
+         # 3. Veicolo (priorità su animale)
+        vehicle_scores = [f["final_scores"]["VEHICLE"] for f in frames_list if f["label"] == "VEHICLE"]
+        if vehicle_scores:
+            threshold = self._get_dynamic_threshold(len(vehicle_scores), "VEHICLE", active_rules)
+            if (sum(vehicle_scores) / len(vehicle_scores)) > threshold:
+                return "VEHICLE"
 
         return "OTHERS"
 

@@ -25,17 +25,17 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, copy_wrong=No
         path_res = Path(res_file)
 
     if not path_gt or not path_res or not path_gt.exists() or not path_res.exists():
-        _err(f"File non trovati!\nGT: {path_gt}\nRES: {path_res}")
-        _err("Specifica una --dir valida o i percorsi diretti con --gt e --res")
+        _err(f"File not found!\nGT: {path_gt}\nRES: {path_res}")
+        _err("Use valid --dir or  path to files with --gt e --res")
         return
 
-    _print(f"📊 Confronto in corso...\n📖 GT: {path_gt}\n🤖 AI: {path_res}")
+    _print(f"📊 Compare...\n📖 GT: {path_gt}\n🤖 AI: {path_res}")
 
     gt_list = load_json(path_gt)
     res_data = load_json(path_res)
 
     if gt_list is None or res_data is None:
-        _err("Errore caricamento JSON: uno o entrambi i file sono mancanti o corrotti.")
+        _err("Error loading JSON: one or all files are missing or corrupt.")
         return
 
     gt_map = {os.path.basename(item["video_name"]): item["category"].upper() for item in gt_list}

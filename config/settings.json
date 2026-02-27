@@ -53,8 +53,8 @@
         "vid_stride_sec": 0.6,
         "dynamic_stride_settings": {
             "warmup_sec": 5,
-            "stride_fast": 25,
-            "pre_roll_sec": 25,
+            "stride_fast_sec": 1.0,
+            "pre_roll_sec": 20,
             "cooldown_sec": 5
         }
     },

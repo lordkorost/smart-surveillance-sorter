@@ -58,10 +58,10 @@ class YoloEngine:
     # Lazy loading
     # ------------------------------------------------------------------
 
-    def _ensure_model_loaded(self):
+    def ensure_model_loaded(self):
         """Carica il modello in VRAM solo se non è già presente."""
         if self.model is None:
-            log.info("[Lazy Loading] YOLO Engine ...")
+            #log.info("[Lazy Loading] YOLO Engine ...")
             self.model = load_smart_yolo(
                 model_name=self.yolo_cfg.get("model_path", "yolov8l"),
                 device=self.device,
@@ -83,27 +83,6 @@ class YoloEngine:
         return thresholds_night if is_night else thresholds_day
 
     # ------------------------------------------------------------------
-    # Helper: log YOLO su file JSONL
-    # ------------------------------------------------------------------
-
-    def _write_yolo_log(self, video_path: Path, cam_id: str,
-                        label: str, conf: float, bbox: list):
-        """Scrive una riga nel log dettagliato YOLO (yolo_detailed_log.jsonl)."""
-        entry = {
-            "timestamp":      datetime.now().isoformat(),
-            "video":          str(Path(video_path).name),
-            "camera":         cam_id,
-            "class_detected": label,
-            "confidence":     round(conf, 4),
-            "bbox":           bbox,
-        }
-        try:
-            with open("yolo_detailed_log.jsonl", "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry) + "\n")
-        except Exception as e:
-            log.warning(f"Errore scrittura yolo_log: {e}")
-
-    # ------------------------------------------------------------------
     # Scan immagine NVR (alta confidenza)
     # ------------------------------------------------------------------
 
@@ -117,7 +96,7 @@ class YoloEngine:
         MIN_CONFIDENCE = 0.60
         MIN_AREA_RATIO = 0.002
 
-        self._ensure_model_loaded()
+        self.ensure_model_loaded()
 
         res = self.model(str(image_path), classes=[0], verbose=False, device=self.device)[0]
         h, w = res.orig_shape
@@ -142,7 +121,7 @@ class YoloEngine:
                     "bbox":       [x1, y1, x2, y2],
                     "label":      label_name,
                 }
-                self._write_yolo_log(video_path, cam_id, label_name, conf, [x1, y1, x2, y2])
+                #self._write_yolo_log(video_path, cam_id, label_name, conf, [x1, y1, x2, y2])
 
         if not best_det:
             return None
@@ -199,7 +178,7 @@ class YoloEngine:
         cam_cfg       = self.cameras_config.get(str(cam_id), {})
         ignore_labels = cam_cfg.get("filters", {}).get("ignore_labels", [])
 
-        self._ensure_model_loaded()
+        self.ensure_model_loaded()
 
         final_target_ids = get_target_ids(
             model=self.model,
@@ -403,8 +382,10 @@ class YoloEngine:
             return stride_std
 
         # 3. Parametri dynamic stride
-        stride_fast  = dyn_settings.get("stride_fast", 25)
-        pre_roll_sec = dyn_settings.get("pre_roll_sec", 25)
+        # Dopo
+        stride_fast_sec = dyn_settings.get("stride_fast_sec", 1.0)
+        stride_fast = max(1, round(fps * stride_fast_sec))
+        pre_roll_sec = dyn_settings.get("pre_roll_sec", 20)
         cooldown_sec = dyn_settings.get("cooldown_sec", 5)
 
         # 4. Detection attiva → attenzione massima
@@ -495,7 +476,7 @@ class YoloEngine:
         if not best_det:
             return None
 
-        self._write_yolo_log(video_path, cam_id, label_name, max_conf, best_det["bbox"])
+        #self._write_yolo_log(video_path, cam_id, label_name, max_conf, best_det["bbox"])
 
         return {
             "camera_id":     cam_id,
@@ -506,42 +487,42 @@ class YoloEngine:
             "yolo_data":     best_det,
         }
 
-    # ------------------------------------------------------------------
-    # Fase fallback completa (YOLO + Vision su video non classificati)
-    # ------------------------------------------------------------------
+    # # ------------------------------------------------------------------
+    # # Fase fallback completa (YOLO + Vision su video non classificati)
+    # # ------------------------------------------------------------------
 
-    def run_fallback_phase(self, current_results: list) -> list:
-        """
-        Fase di fallback: rilancia YOLO a bassa confidenza sui video rimasti
-        in OTHERS, poi passa i sospetti alla Vision AI per conferma.
-        """
-        log.info("Start FALLBACK phase for videos not recognized in prev steps.")
+    # def run_fallback_phase(self, current_results: list) -> list:
+    #     """
+    #     Fase di fallback: rilancia YOLO a bassa confidenza sui video rimasti
+    #     in OTHERS, poi passa i sospetti alla Vision AI per conferma.
+    #     """
+    #     log.info("Start FALLBACK phase for videos not recognized in prev steps.")
 
-        fallback_targets = self._get_fallback_targets(current_results)
-        if not fallback_targets:
-            return current_results
+    #     fallback_targets = self._get_fallback_targets(current_results)
+    #     if not fallback_targets:
+    #         return current_results
 
-        for item in fallback_targets:
-            suspicious_frames = []
-            target_ids = self.yolo_engine.get_target_ids(item["camera_id"])
+    #     for item in fallback_targets:
+    #         suspicious_frames = []
+    #         target_ids = self.yolo_engine.get_target_ids(item["camera_id"])
 
-            for img_path in item["nvr_images"]:
-                detection = self.scan_fallback(img_path, target_ids)
-                if detection:
-                    suspicious_frames.append({
-                        "video_name": item["video_name"],
-                        "video_path": item["video_path"],
-                        "camera_id":  item["camera_id"],
-                        "frame_path": img_path,
-                        "yolo_data":  detection,
-                    })
+    #         for img_path in item["nvr_images"]:
+    #             detection = self.scan_fallback(img_path, target_ids)
+    #             if detection:
+    #                 suspicious_frames.append({
+    #                     "video_name": item["video_name"],
+    #                     "video_path": item["video_path"],
+    #                     "camera_id":  item["camera_id"],
+    #                     "frame_path": img_path,
+    #                     "yolo_data":  detection,
+    #                 })
 
-            for suspect in suspicious_frames:
-                log.debug(f"Fallback: Vision AI check suspect in video={suspect['video_name']}")
-                report = self.vision_engine.refine_single_video(suspect)
-                if report and report.get("category") != "nothing":
-                    log.debug(f"Found video={item['video_name']} category={report['category']}")
-                    current_results.append(report)
-                    break
+    #         for suspect in suspicious_frames:
+    #             log.debug(f"Fallback: Vision AI check suspect in video={suspect['video_name']}")
+    #             report = self.vision_engine.refine_single_video(suspect)
+    #             if report and report.get("category") != "nothing":
+    #                 log.debug(f"Found video={item['video_name']} category={report['category']}")
+    #                 current_results.append(report)
+    #                 break
 
-        return current_results
+    #     return current_results

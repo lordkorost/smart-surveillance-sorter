@@ -23,6 +23,7 @@ YOLO_CACHE ="yolo_scan_res.json"
 LENS_HEALTH = "lens_health.json"
 VISION_CACHE = "vision_scan_res.json"
 CLIPBLIP_CACHE = "clip_blip_res.json"
+CLIPBLIP_FALLBACK_CACHE = "clip_blip_fallback_res.json"
 FINAL_REPORT = "classification_results.json"
 GROUND_TRUTH ="ground_truth.json"
 # File specifici
