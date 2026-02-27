@@ -4,7 +4,7 @@
         "prompts_path": "config/prompts.json",
         "models_dir": "models"
     },
-    "city":"Rosarno",
+    "city": "Rosarno",
     "classification_settings": {
         "priority_hierarchy": [
             "person",
@@ -50,16 +50,12 @@
                 "bus"
             ]
         },
-        "vid_stride": 12,
+        "vid_stride_sec": 0.6,
         "dynamic_stride_settings": {
-            "stride_fast": 20,
-            "pre_roll_sec": 25,
+            "warmup_sec": 5,
+            "stride_fast_sec": 1.0,
+            "pre_roll_sec": 20,
             "cooldown_sec": 5
-        },
-        "thresholds": {
-            "person": 0.5,
-            "vehicle": 0.55,
-            "animal": 0.30
         }
     },
     "vision_settings": {

@@ -1,11 +1,12 @@
 import argparse
 import os
+import shutil
 from pathlib import Path
 
 from smart_surveillance_sorter.constants import FINAL_REPORT, GROUND_TRUTH
 from smart_surveillance_sorter.utils import load_json
 
-def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
+def compare_results(session_dir=None, gt_file=None, res_file=None, copy_wrong=None, log=None):
     def _print(msg): log.info(msg) if log else print(msg)
     def _err(msg): log.error(msg) if log else print(f"❌ {msg}")
 
@@ -18,31 +19,27 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
         path_gt = s_path / GROUND_TRUTH
         path_res = s_path / FINAL_REPORT
     
-    # Se l'utente specifica i file esplicitamente, questi vincono sulla directory
     if gt_file:
         path_gt = Path(gt_file)
     if res_file:
         path_res = Path(res_file)
 
     if not path_gt or not path_res or not path_gt.exists() or not path_res.exists():
-        _err(f"File non trovati!\nGT: {path_gt}\nRES: {path_res}")
-        _err("Specifica una --dir valida o i percorsi diretti con --gt e --res")
+        _err(f"File not found!\nGT: {path_gt}\nRES: {path_res}")
+        _err("Use valid --dir or  path to files with --gt e --res")
         return
 
-    _print(f"📊 Confronto in corso...\n📖 GT: {path_gt}\n🤖 AI: {path_res}")
+    _print(f"📊 Compare...\n📖 GT: {path_gt}\n🤖 AI: {path_res}")
 
     gt_list = load_json(path_gt)
     res_data = load_json(path_res)
 
-    # Controlliamo che entrambi siano stati caricati correttamente
     if gt_list is None or res_data is None:
-        _err("Errore caricamento JSON: uno o entrambi i file sono mancanti o corrotti.")
+        _err("Error loading JSON: one or all files are missing or corrupt.")
         return
 
-    # Normalizzazione GT
     gt_map = {os.path.basename(item["video_name"]): item["category"].upper() for item in gt_list}
 
-    # Normalizzazione Risultati AI
     if isinstance(res_data, list):
         res_map = {os.path.basename(item["video_name"]): item["category"].upper() for item in res_data}
     else:
@@ -51,41 +48,30 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
     # --- CALCOLO STATISTICHE ---
     categories = ["PERSON", "VEHICLE", "ANIMAL", "OTHERS"]
     stats = {cat: {"FP": 0, "FN": 0, "TP": 0} for cat in categories}
-    all_videos = set(gt_map.keys()).intersection(set(res_map.keys()))
+    all_videos = set(gt_map.keys()).union(set(res_map.keys()))
     discrepancies = []
 
     for video in all_videos:
         actual = gt_map.get(video, "OTHERS")
         predicted = res_map.get(video, "OTHERS")
 
-        # Se sono uguali (entrambi OTHERS o entrambi PERSON, ecc.), è un successo
         if actual == predicted:
-            # Contiamo il successo solo per le categorie "interessanti"
             if actual in stats:
                 stats[actual]["TP"] += 1
-            continue  # Passiamo al prossimo video, niente errori qui
+            continue
 
-        # Se arriviamo qui, c'è una discrepanza
-        
-        # Caso 1: L'AI ha visto qualcosa (es. PERSON) in un video che era OTHERS
         if actual == "OTHERS" and predicted in stats:
             stats[predicted]["FP"] += 1
             discrepancies.append((video, actual, predicted))
-            
-        # Caso 2: L'AI non ha visto nulla (OTHERS) in un video che era importante (es. ANIMAL)
         elif predicted == "OTHERS" and actual in stats:
             stats[actual]["FN"] += 1
             discrepancies.append((video, actual, predicted))
-            
-        # Caso 3: Scambio di identità (es. GT dice PERSON, AI dice VEHICLE)
         elif actual in stats and predicted in stats:
             stats[actual]["FN"] += 1
             stats[predicted]["FP"] += 1
             discrepancies.append((video, actual, predicted))
 
     # --- OUTPUT TABELLA ---
-    # --- CALCOLO E OUTPUT METRICHE PROFESSIONALI ---
-    # Questa tabella sostituisce quella vecchia perché contiene già TP, FP e FN
     header = f"{'CATEGORY':<12} | {'TP':<5} | {'FP':<5} | {'FN':<5} | {'PRECISION':<10} | {'RECALL':<10}"
     _print(header)
     _print("-" * 70)
@@ -94,17 +80,12 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
     
     for cat in categories:
         s = stats[cat]
-        # Precision: Quanti dei rilevati sono corretti?
         precision = (s["TP"] / (s["TP"] + s["FP"]) * 100) if (s["TP"] + s["FP"]) > 0 else 0
-        # Recall: Quanti dei presenti sono stati rilevati?
         recall = (s["TP"] / (s["TP"] + s["FN"]) * 100) if (s["TP"] + s["FN"]) > 0 else 0
-        
         _print(f"{cat:<12} | {s['TP']:<5} | {s['FP']:<5} | {s['FN']:<5} | {precision:>9.1f}% | {recall:>8.1f}%")
-        
-        # Non contiamo OTHERS nella media delle performance AI
         if cat != "OTHERS":
             cat_accuracies.append(recall)
-       # --- RIEPILOGO FINALE ---
+
     avg_recall = sum(cat_accuracies) / len(cat_accuracies) if cat_accuracies else 0
     total_videos = len(all_videos)
     total_tp = sum(s["TP"] for s in stats.values())
@@ -114,19 +95,53 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
     _print(f"{'Global accuracy (with Others):':<45} {global_acc:>6.2f}%")
     _print(f"{'RECALL on real category:':<45} {avg_recall:>6.2f}%")
     _print("-" * 70)
-    # --- DETTAGLIO ERRORI (Messo qui per non interrompere le tabelle) ---
+
     if discrepancies:
         _print("Difference list:")
         for video, actual, predicted in sorted(discrepancies):
             _print(f"Video={video:<40} | GT={actual:<10} | PREDICT={predicted:<10}")
 
- 
+    # --- COPIA VIDEO SBAGLIATI ---
+    if copy_wrong and discrepancies:
+        source_dir = path_gt.parent
+        
+        # Sottocartelle per tipo di errore: GT_ANIMAL/PRED_OTHERS etc.
+        wrong_root = Path(copy_wrong)
+        copied = 0
+        not_found = 0
+
+        _print(f"\n📂 Copio {len(discrepancies)} video sbagliati in {wrong_root}...")
+
+        for video_name, actual, predicted in discrepancies:
+            # Sottocartella GT_X__PRED_Y per organizzare per tipo di errore
+            sub_dir = wrong_root / f"GT_{actual}__PRED_{predicted}"
+            sub_dir.mkdir(parents=True, exist_ok=True)
+
+            candidates = list(source_dir.rglob(video_name))
+            if candidates:
+                src = candidates[0]
+                dst = sub_dir / video_name  # filename originale intatto
+                try:
+                    shutil.copy2(src, dst)
+                    copied += 1
+                except Exception as e:
+                    _print(f"  ⚠️ Errore copia {video_name}: {e}")
+            else:
+                _print(f"  ⚠️ Video non trovato: {video_name}")
+                not_found += 1
+
+        _print(f"  ✅ Copiati {copied}/{len(discrepancies)} video")
+        if not_found:
+            _print(f"  ⚠️ Non trovati: {not_found}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compare GT with AI.")
     parser.add_argument("--dir", type=str, help="Input directory, search ground_truth.json and classification_results.json")
     parser.add_argument("--gt", type=str, help="Path to file ground_truth.json")
     parser.add_argument("--res", type=str, help="Path to file classification_results.json")
+    parser.add_argument("--copy-wrong", type=str, metavar="DEST_DIR",
+                        help="Se specificato, copia i video sbagliati in questa cartella (organizzati per tipo di errore)")
     args = parser.parse_args()
     
-    compare_results(session_dir=args.dir, gt_file=args.gt, res_file=args.res)
+    compare_results(session_dir=args.dir, gt_file=args.gt, res_file=args.res, copy_wrong=args.copy_wrong)

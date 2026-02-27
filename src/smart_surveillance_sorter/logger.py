@@ -5,59 +5,9 @@ import os
 import time
 import psutil
 import GPUtil
-from datetime import datetime
-from typing import Dict, Optional, Tuple, Union
-
-# # ------------------------------------------
-# # 1. Formattatore (timestamp + livello + messaggio)
-# # ------------------------------------------
-# class ColorFormatter(logging.Formatter):
-#     COLORS = {
-#         'DEBUG': '\033[94m',      # blue
-#         'INFO': '\033[92m',       # green
-#         'WARNING': '\033[93m',    # yellow
-#         'ERROR': '\033[91m',      # red
-#         'CRITICAL': '\033[95m',   # magenta
-#         'RESET': '\033[0m',
-#     }
-
-#     def format(self, record: logging.LogRecord) -> str:
-#         color = self.COLORS.get(record.levelname, '')
-#         reset = self.COLORS['RESET']
-#         fmt = f"{color}[{record.levelname}] {record.asctime} {record.message}{reset}"
-#         record.message = fmt
-#         return super().format(record)
+from typing import Dict, Tuple, Union
 
 
-# def get_logger(name: str = __name__, debug: bool = False) -> logging.Logger:
-#     """
-#     Returns a logger that prints to console.
-#     If `debug=True` the level is set to DEBUG, otherwise INFO.
-#     """
-#     logger = logging.getLogger(name)
-#     if logger.handlers:
-#         return logger  # already configured
-
-#     level = logging.DEBUG if debug else logging.INFO
-#     logger.setLevel(level)
-
-#     # Console handler
-#     ch = logging.StreamHandler()
-#     ch.setLevel(level)
-
-#     fmt = "%(message)s"
-#     formatter = ColorFormatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
-#     formatter.converter = time.gmtime   # to use UTC in timestamps
-
-#     ch.setFormatter(formatter)
-#     logger.addHandler(ch)
-
-#     # Prevent duplicate messages in child modules
-#     logger.propagate = False
-#     return logger
-
-import logging
-import time
 import re
 
 import torch
@@ -155,13 +105,29 @@ def get_logger(name: str = None, debug: bool = False) -> logging.Logger:
         fh.setFormatter(file_formatter)
         logger.addHandler(fh)
         
-        logger.debug(f"--- LOG DEBUG ROTANTE ATTIVATO: {log_filename} (Max 5 file) ---")
+        logger.debug(f"--- LOG DEBUG ROTATE {log_filename} (Max 5 file) ---")
 
+    # # Blocca il rumore di fondo delle librerie esterne
+    # for lib in ["httpx", "httpcore", "urllib3", "huggingface_hub", "timm"]:
+    #     logging.getLogger(lib).setLevel(logging.WARNING)
     # Blocca il rumore di fondo delle librerie esterne
-    for lib in ["httpx", "httpcore", "urllib3", "huggingface_hub", "timm"]:
-        logging.getLogger(lib).setLevel(logging.WARNING)
+    # Usiamo ERROR invece di WARNING per essere ancora più drastici
+    # Liste delle librerie che vogliamo zittire totalmente
+    external_libs = [
+        "httpx", "httpcore", "urllib3", "huggingface_hub", 
+        "timm", "transformers", "open_clip", "ultralytics", "onnxruntime"
+    ]
+    
+    for lib_name in external_libs:
+        ext_logger = logging.getLogger(lib_name)
+        ext_logger.setLevel(logging.ERROR) # Passa solo se esplode tutto
+        ext_logger.propagate = False       # <--- IMPEDISCE di inviare log al tuo Root Logger
 
-    logger.propagate = True
+    # Blocca i Warning di sistema (quelli di Torch/AMD/Flash Attention/GELU)
+    import warnings
+    warnings.filterwarnings("ignore")
+
+    logger.propagate = False
     return logger
 
 # ------------------------------------------------------------------
@@ -179,23 +145,50 @@ def get_ram_info() -> Dict[str, float]:
         "used":  vm.used       / (1024 ** 3),
         "free":  vm.available  / (1024 ** 3),
     }
+import os
 
-# ------------------------------------------------------------------
-# 1.2  GPU (CUDA)
-# ------------------------------------------------------------------
 def get_gpu_info() -> Dict[str, float]:
-    """VRAM totale, usata, libera (in GiB) della GPU più occupata."""
-    gpus = GPUtil.getGPUs()
-    if not gpus:
-        return {"total": 0.0, "used": 0.0, "free": 0.0}
+    """
+    Rilevamento VRAM Universale: 
+    1. Prova AMD (Linux sysfs card1/card0/renderD128)
+    2. Prova NVIDIA (GPUtil)
+    3. Ritorna 0.0 se non trova nulla
+    """
+    # --- 1. TEST AMD (Linux) ---
+    # Proviamo i percorsi comuni in ordine di probabilità per GPU dedicate
+    amd_paths = [
+        "/sys/class/drm/card1/device", 
+        "/sys/class/drm/renderD128/device",
+        "/sys/class/drm/card0/device"
+    ]
+    
+    for base_path in amd_paths:
+        vram_used_p = os.path.join(base_path, "mem_info_vram_used")
+        vram_total_p = os.path.join(base_path, "mem_info_vram_total")
+        
+        if os.path.exists(vram_used_p) and os.path.exists(vram_total_p):
+            try:
+                with open(vram_used_p, 'r') as f:
+                    used = int(f.read().strip()) / (1024**3)
+                with open(vram_total_p, 'r') as f:
+                    total = int(f.read().strip()) / (1024**3)
+                return {"total": total, "used": used, "free": total - used}
+            except:
+                continue
 
-    # Se vuoi più di una GPU, puoi iterare e sommare
-    gpu = max(gpus, key=lambda g: g.memoryUtil)  # GPU con più VRAM usata
-    total = gpu.memoryTotal / 1024      # da MB a GB
-    used  = gpu.memoryUsed  / 1024
-    free  = total - used
-    return {"total": total, "used": used, "free": free}
+    # --- 2. TEST NVIDIA (GPUtil) ---
+    try:
+        import GPUtil
+        gpus = GPUtil.getGPUs()
+        if gpus:
+            gpu = max(gpus, key=lambda g: g.memoryUtil)
+            t = gpu.memoryTotal / 1024
+            u = gpu.memoryUsed / 1024
+            return {"total": t, "used": u, "free": t - u}
+    except (ImportError, Exception):
+        pass
 
+    return {"total": 0.0, "used": 0.0, "free": 0.0}
 # ------------------------------------------------------------------
 # 1.3  Rileva device (CPU vs CUDA)
 # ------------------------------------------------------------------
@@ -237,25 +230,76 @@ def log_device_status(log: logging.Logger, device_str: str, torch_dev: torch.dev
         )
     log.info(msg)
 
-# def get_cpu_usage() -> float:
-#     """Percentuale di CPU occupata."""
-#     return psutil.cpu_percent(interval=0.1)
 
-# def get_ram_usage() -> Dict[str, float]:
-#     """RAM totale, usata, libera in GiB."""
-#     vm = psutil.virtual_memory()
-#     return {
-#         "total": vm.total / (1024 ** 3),
-#         "used": vm.used / (1024 ** 3),
-#         "free": vm.available / (1024 ** 3),
-#     }
 
-# def get_gpu_usage() -> Dict[str, float]:
-#     """VRAM totale, usata, libera per la GPU più occupata."""
-#     gpus = GPUtil.getGPUs()
-#     if not gpus:
-#         return {"total": 0, "used": 0, "free": 0}
-#     gpu = max(gpus, key=lambda g: g.memoryUtil)  # scegli quella più occupata
-#     total = gpu.memoryTotal
-#     used = gpu.memoryUsed
-#     return {"total": total, "used": used, "free": total - used}
+def get_system_stats() -> Dict:
+    """Raccoglie tutte le statistiche hardware in un unico dizionario."""
+    # 1. CPU & RAM (Universale)
+    vm = psutil.virtual_memory()
+    stats = {
+        "cpu_usage": psutil.cpu_percent(interval=None), # interval=None non blocca l'esecuzione
+        "ram_total": vm.total / (1024 ** 3),
+        "ram_used": vm.used / (1024 ** 3),
+        "ram_free": vm.available / (1024 ** 3),
+        "gpu_load": 0.0,
+        "vram_total": 0.0,
+        "vram_used": 0.0,
+    }
+
+    # 2. GPU AMD (Linux)
+    amd_base = "/sys/class/drm/card1/device" # La tua card1
+    if not os.path.exists(amd_base):
+        amd_base = "/sys/class/drm/card0/device"
+
+    if os.path.exists(os.path.join(amd_base, "mem_info_vram_used")):
+        try:
+            with open(os.path.join(amd_base, "mem_info_vram_used"), 'r') as f:
+                stats["vram_used"] = int(f.read().strip()) / (1024**3)
+            with open(os.path.join(amd_base, "mem_info_vram_total"), 'r') as f:
+                stats["vram_total"] = int(f.read().strip()) / (1024**3)
+            # % Utilizzo GPU AMD
+            busy_path = os.path.join(amd_base, "gpu_busy_percent")
+            if os.path.exists(busy_path):
+                with open(busy_path, 'r') as f:
+                    stats["gpu_load"] = float(f.read().strip())
+            return stats
+        except: pass
+
+    # 3. GPU NVIDIA (Win/Linux)
+    try:
+        gpus = GPUtil.getGPUs()
+        if gpus:
+            gpu = max(gpus, key=lambda g: g.memoryUtil)
+            stats["vram_total"] = gpu.memoryTotal / 1024
+            stats["vram_used"] = gpu.memoryUsed / 1024
+            stats["gpu_load"] = gpu.load * 100
+            return stats
+    except: pass
+
+    return stats
+
+
+
+def log_resource_usage(log: logging.Logger, prefix: str = "STATS"):
+    s = get_system_stats()
+    
+    # Formattazione in una singola riga
+    msg = (
+        f"[{prefix}] "
+        f"CPU: {s['cpu_usage']:>4.1f}% | "
+        f"RAM: {s['ram_used']:.1f}/{s['ram_total']:.1f}GB | "
+        f"GPU: {s['gpu_load']:>4.1f}% | "
+        f"VRAM: {s['vram_used']:.1f}/{s['vram_total']:.1f}GB"
+    )
+    log.info(msg)
+
+
+# Colori ANSI per uniformare tqdm al logger
+LOG_GREEN = "\033[92m"
+LOG_RESET = "\033[0m"
+
+def get_pbar_prefix(desc: str = "Progress") -> str:
+    """Genera il prefisso colorato con timestamp per tqdm."""
+    ts = time.strftime('%H:%M:%S')
+    # Usiamo lo spazio corretto per allinearci a "INFO    :"
+    return f"{LOG_GREEN}{ts} INFO   {LOG_RESET}: {desc}"

@@ -17,7 +17,15 @@ TEMP_DIR   = PROJECT_ROOT / "temp_workdir"
 CHECKS_DIR = PROJECT_ROOT / "checks"
 # File per la cache delle coordinate astronomiche
 COORDS_CACHE_JSON = CONFIG_DIR / "coords_cache.json"
-
+#resfiles
+FRAME_DIR = "extracted_frames"
+YOLO_CACHE ="yolo_scan_res.json"
+LENS_HEALTH = "lens_health.json"
+VISION_CACHE = "vision_scan_res.json"
+CLIPBLIP_CACHE = "clip_blip_res.json"
+CLIPBLIP_FALLBACK_CACHE = "clip_blip_fallback_res.json"
+FINAL_REPORT = "classification_results.json"
+GROUND_TRUTH ="ground_truth.json"
 # File specifici
 CAMERAS_JSON = CONFIG_DIR / "cameras.json"
 SETTINGS_JSON = CONFIG_DIR / "settings.json"

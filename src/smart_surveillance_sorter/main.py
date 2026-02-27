@@ -3,11 +3,12 @@ import sys
 from pathlib import Path
 import time
 from smart_surveillance_sorter.compare_results import compare_results
+from smart_surveillance_sorter.constants import FINAL_REPORT, GROUND_TRUTH
 from smart_surveillance_sorter.generate_ground_truth import check_duplicates_with_log, genera_ground_truth
 from smart_surveillance_sorter.logger import get_logger
 from smart_surveillance_sorter.scanners.scanner import Scanner
-from smart_surveillance_sorter.utils import check_dir, save_json
-from colorama import Fore, Style
+from smart_surveillance_sorter.utils import check_dir, cleanup, save_json
+
 import argparse
 
 def parse_args():
@@ -26,20 +27,20 @@ def parse_args():
     parser.add_argument("-d","--dir", required=True, help="Directory containing the videos to scan.")
     parser.add_argument("-o","--output-dir", dest="output_dir", help="Path where the sorted video will be moved")
 
-    # 3. Booleani per Scanner (dest= corrisponde esattamente all'__init__)
+    # 3. Booleani per Scanner (dest=  a __init__)
     parser.add_argument("--refine", dest="is_refine", action="store_true", help="Activate refine step after yolo, need --vision or --blip")
     parser.add_argument("--fallback", dest="is_fallback", action="store_true", help="Activate fallback vision step after yolo and blip")
     parser.add_argument("--test", dest="is_test", action="store_true", help="Debug log,copy sorted video instead move, metric log")
     parser.add_argument("--check-clean", dest="is_check_clean", action="store_true",help="Activate vision cameras check clean step")
-    #parser.add_argument("--real-time", dest="is_real_time", action="store_true",help="Activate real time input dir check for new video and sort")
+    parser.add_argument("--no-sort", dest="is_sort",action="store_false",help="False to deactivate moving/copyng file")
 
     # 4. Motore
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--vision", action="store_const", dest="engine", const="vision", help="Use ollama and vl models in refine step")
+    group.add_argument("--vision", action="store_const", dest="engine", const="vision", help="Use ollama and vl models after yolo")
     group.add_argument("--blip", action="store_const", dest="engine", const="blip", help="Use blip and clip after yolo step")
     parser.set_defaults(engine="blip")
 
-    # 5. Utility (Mancavano queste!)
+    # 5. Utility
     parser.add_argument("--ground", action="store_true", help="Generate ground truth for the input dir")
     parser.add_argument("--compare", action="store_true", help="Compare results between ground truth and results of the sorter json")
     parser.add_argument("--gt", type=str, help="Path ground_truth.json")
@@ -75,7 +76,7 @@ def main():
             risultati = genera_ground_truth(input_dir, log)
             
             # 2. Definisci il percorso (usando Path per compatibilità con la tua utils)
-            output_file_path = Path(output_dir) / "ground_truth.json"
+            output_file_path = Path(output_dir) / GROUND_TRUTH
             
             # 3. Usa la tua utility di salvataggio
             if save_json(risultati, output_file_path):
@@ -99,9 +100,10 @@ def main():
         log.info(f"Compare mode")
         
         # Se non vengono passati --gt o --res, usiamo i default nella outputDir
-        gt_path = args.gt if args.gt else Path(output_dir) / "ground_truth.json"
-        res_path = args.res if args.res else Path(output_dir) / "classification_results.json"
-        
+        # gt_path = args.gt if args.gt else Path(output_dir) / "ground_truth.json"
+        # res_path = args.res if args.res else Path(output_dir) / "classification_results.json"
+        gt_path = args.gt if args.gt else Path(output_dir) / GROUND_TRUTH
+        res_path = args.res if args.res else Path(output_dir) / FINAL_REPORT
         try:
             # Chiamiamo la funzione di confronto (assicurati di averla importata)
             # Passiamo None a session_dir perché stiamo già risolvendo i percorsi qui
@@ -111,8 +113,14 @@ def main():
             log.error(f"Error during compare  e={e}")
             sys.exit(1)
     
-    log.info(f"Scanner start: input-folder={input_dir} | output-folder={args.output_dir} | Mode={args.mode} | Refine={args.is_refine} | Engine={args.engine} | Fallback={args.is_fallback} | Test={args.is_test}")
-    # --- 2. IL TRUCCO DELLO SPLAT (**) ---
+    log.info(
+            f"Scanner start: input-folder={input_dir} | "
+            f"output-folder={args.output_dir} | "
+            f"Mode={args.mode} | Refine={args.is_refine} | "
+            f"Engine={args.engine} | Fallback={args.is_fallback} | "
+            f"Test={args.is_test}"
+        )
+    
     # --- LOGICA SCANNER ---
     # Prepariamo i parametri per lo splat
     params = vars(args).copy()
@@ -124,11 +132,10 @@ def main():
 
     start_time = time.time()
     try:
-        # TRUCCO MAGICO: Passa tutto all'init dello Scanner
+        # Passa tutto all'init dello Scanner
         # Python mapperà params['is_refine'] su is_refine=... dell'init
         scanner = Scanner(**params) 
         
-        #log.info(f"📂 Inizio analisi cartella={input_dir}")
         scanner.scan_folder(input_dir, output_dir)
         
     except KeyboardInterrupt:
@@ -138,6 +145,7 @@ def main():
     finally:
         if 'scanner' in locals():
             scanner._print_final_summary(time.time() - start_time)
+        cleanup()
 
 
 if __name__ == "__main__":

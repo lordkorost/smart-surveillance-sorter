@@ -21,24 +21,7 @@ class FileSorter:
         storage_cfg = settings.get("storage_settings", {})
         self.structure_type = storage_cfg.get("structure_type", "camera_first")
 
-    # def _execute_io(self, src, dst):
-    #     """Esegue fisicamente lo spostamento o la copia."""
-    #     src = Path(src)
-    #     dst = Path(dst)
-        
-    #     if not src.exists():
-    #         return False
-            
-    #     try:
-    #         dst.parent.mkdir(parents=True, exist_ok=True)
-    #         if self.method == "MOVE":
-    #             shutil.move(str(src), str(dst))
-    #         else:
-    #             shutil.copy2(str(src), str(dst))
-    #         return True
-    #     except Exception as e:
-    #         log.critical(f"Errore durante {self.method} di {src.name}: {e}")
-    #         return False
+
         
     def _execute_io(self, src, dst):
         """Esegue fisicamente lo spostamento o la copia."""

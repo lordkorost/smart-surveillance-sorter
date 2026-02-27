@@ -9,5 +9,4 @@ export PYTHONPATH="$APP_PATH/src"
 
 echo "🌟 Avvio Gradio WebUI per Smart Surveillance Sorter..."
 
-# Cambiato da 'streamlit run' a 'python'
-python src/smart_surveillance_sorter/webui.py
+python src/smart_surveillance_sorter/webui_v2.py
