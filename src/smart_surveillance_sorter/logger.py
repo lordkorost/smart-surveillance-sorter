@@ -115,7 +115,8 @@ def get_logger(name: str = None, debug: bool = False) -> logging.Logger:
     # Liste delle librerie che vogliamo zittire totalmente
     external_libs = [
         "httpx", "httpcore", "urllib3", "huggingface_hub", 
-        "timm", "transformers", "open_clip", "ultralytics", "onnxruntime"
+        "timm", "transformers", "open_clip", "ultralytics", 
+        "onnxruntime","matplotlib"
     ]
     
     for lib_name in external_libs:

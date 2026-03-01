@@ -305,7 +305,7 @@ class QueueHandler(logging.Handler):
 
 def run_process(input_path, output_path, mode, model_name,
                 use_refine, engine, use_fallback, is_clean_check,
-                is_sort, test_mode, device):
+                no_sort, test_mode, device):
     if not input_path:
         yield "⚠️ Specifica la cartella di input."
         return
@@ -325,7 +325,7 @@ def run_process(input_path, output_path, mode, model_name,
            f"📂 Input:  {input_path}\n"
            f"📂 Output: {final_output}\n"
            f"⚙️  Mode={mode} | Engine={'--refine --' + engine if use_refine else 'yolo only'} "
-           f"| Fallback={use_fallback} | Test={test_mode} | NoSort={is_sort}\n"
+           f"| Fallback={use_fallback} | Test={test_mode} | NoSort={no_sort}\n"
            f"{'─'*60}\n")
 
     # Aggiorna model e device nel settings.json prima di partire
@@ -360,7 +360,7 @@ def run_process(input_path, output_path, mode, model_name,
                 is_test=test_mode,
                 engine=engine,
                 is_check_clean=is_clean_check,
-                is_sort=is_sort,
+                is_sort=not no_sort,
             )
             scanner.scan_folder(input_path, final_output)
         except Exception as e:
@@ -567,7 +567,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                     mode_opt    = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="full")
                     with gr.Row():
                         is_test = gr.Checkbox(label="🧪 Test mode (copia invece di spostare)", value=True)
-                        is_sort = gr.Checkbox(label="🚫 No Sort (non muovere/copiare file)", value=False)
+                        no_sort = gr.Checkbox(label="🚫 No Sort (non muovere/copiare file)", value=False)
 
                 with gr.Column(scale=1):
                     yolo_model = gr.Dropdown(choices=get_available_models(), label="YOLO Model", value="yolov8l.pt")
@@ -599,7 +599,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             run_btn.click(
                 fn=run_process,
                 inputs=[input_path, output_path, mode_opt, yolo_model,
-                        refine, engine_opt, fallback, check_clean, is_sort, is_test, device_opt],
+                        refine, engine_opt, fallback, check_clean, no_sort, is_test, device_opt],
                 outputs=output_log,
                 queue=True,
             )

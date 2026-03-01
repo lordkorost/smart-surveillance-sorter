@@ -483,6 +483,7 @@ class Scanner():
                 "confirmed": len(self.clip_blip_results),
                 "time": elapsed
             }
+        
         log.info(f"Refine complete in {elapsed:.2f}s. Valid_vids={len(self.clip_blip_results)}/{len(self.results)}")
   
     def _get_arbitration_queue(self):
@@ -991,32 +992,55 @@ class Scanner():
         
         return None
     
-    def _print_final_summary(self, total_time):
-        # Conteggio delle categorie
+    # def _print_final_summary(self, total_time):
+    #     # Conteggio delle categorie
+    #     stats = {}
+    #     for res in self.final_reports:
+    #         cat = res.get('category', 'unknown')
+    #         stats[cat] = stats.get(cat, 0) + 1
+        
+    #     # Calcolo dei totali
+    #     total_videos = len(self.final_reports)
+        
+    #     # Separatore
+    #     log.info("-" * 50)
+    #     log.info("           Results")
+    #     log.info("-" * 50)
+        
+    #     # Statistiche principali (usiamo il trigger '=' per i colori)
+    #     log.info(f"⏱️  Total_time={total_time:.2f}s")
+    #     log.info(f"🎥 Processed num_video={total_videos}")
+        
+    #     log.info("Category")
+        
+    #     for cat, count in stats.items():
+    #         # Usiamo il trigger '='. Il logger colorerà la categoria in Cyan e il numero in Giallo
+    #         log.info(f"  - category={cat.capitalize():<12} | count={count}")
+        
+    #     log.info("-" * 50)
+
+    def _get_final_summary(self, total_time: float) -> str:
         stats = {}
         for res in self.final_reports:
             cat = res.get('category', 'unknown')
             stats[cat] = stats.get(cat, 0) + 1
-        
-        # Calcolo dei totali
         total_videos = len(self.final_reports)
-        
-        # Separatore
+        lines = [
+            f"⏱️  Total_time={total_time:.2f}s",
+            f"🎥 Processed num_video={total_videos}",
+            "Category",
+        ]
+        for cat, count in stats.items():
+            lines.append(f"  - category={cat.capitalize():<12} | count={count}")
+        return "\n".join(lines)
+
+    def _print_final_summary(self, total_time: float):
         log.info("-" * 50)
         log.info("           Results")
         log.info("-" * 50)
-        
-        # Statistiche principali (usiamo il trigger '=' per i colori)
-        log.info(f"⏱️  Total_time={total_time:.2f}s")
-        log.info(f"🎥 Processed num_video={total_videos}")
-        
-        log.info("Category")
-        
-        for cat, count in stats.items():
-            # Usiamo il trigger '='. Il logger colorerà la categoria in Cyan e il numero in Giallo
-            log.info(f"  - category={cat.capitalize():<12} | count={count}")
-        
-        log.info("-" * 50)
+        for line in self._get_final_summary(total_time).split("\n"):
+            log.info(line)
+    log.info("-" * 50)
 
     def _finalize_results(self, source_list, engine="yolo"):
         """

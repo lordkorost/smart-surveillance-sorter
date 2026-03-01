@@ -1,762 +1,1002 @@
 import logging
 import os
+import queue
 import signal
+import threading
 import time
-import gradio as gr
 import json
+import traceback
 from pathlib import Path
 
-# Import dal tuo progetto
-from smart_surveillance_sorter.constants import CAMERAS_JSON, SETTINGS_JSON, MODELS_DIR, PROMPTS_JSON
-#from smart_surveillance_sorter.log_config import configure_logger
+import gradio as gr
+
+from smart_surveillance_sorter.constants import CAMERAS_JSON, CLIP_BLIP_JSON, SETTINGS_JSON, MODELS_DIR, PROMPTS_JSON
 from smart_surveillance_sorter.logger import get_logger
 from smart_surveillance_sorter.scanners.scanner import Scanner
 from smart_surveillance_sorter.scanners.vision_helpers import build_dynamic_prompt
 from smart_surveillance_sorter.utils import load_json, save_json, validate_ollama_setup
 
-# --- FUNZIONI DI SERVIZIO ---
+log = get_logger(debug=True)
 
+SETTINGS_DEFAULT = Path(SETTINGS_JSON).parent / "settings_default.json"
+SETTINGS_BACKUP  = Path(SETTINGS_JSON).parent / "settings_backup.json"
 
-def ui_validate_ollama(ip, port, model_name):
-    # Costruiamo il dizionario che la tua funzione si aspetta
-    mock_settings = {
-        "model_name": model_name,
-        "ollama_conf": {
-            "ip": ip,
-            "port": port
-        }
-    }
-    
-    # Chiamiamo la tua funzione originale
-    is_valid = validate_ollama_setup(mock_settings)
-    
-    if is_valid:
-        return "✅ Validazione riuscita! Ollama risponde correttamente."
-    else:
-        return "❌ Validazione fallita. Controlla che Ollama sia attivo e il modello caricato."
-
-def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, m_c, m_f, mode, has_crop, is_fallback):
-    # 1. Ricostruiamo al volo un dizionario prompts_config basato sulla UI
-    temp_prompts_config = {
-        "shared_components": {
-            "system_instruction": sys_inst,
-            "mandatory_rules": rules
-        },
-        "class_descriptions": {
-            "PERSON": d_p,
-            "ANIMAL": d_a,
-            "VEHICLE": d_v
-        },
-        "modules": {
-            "analyst_mission_crop": m_c,
-            "fallback_header": m_f
-        },
-        "templates": load_json(PROMPTS_JSON).get("templates", {}) # Prendiamo i template dal file (che non cambiano)
-    }
-
-    # 2. Simuliamo una cam_cfg di test
-    test_cam_cfg = {
-        "desc": "ZONA TEST: Ingresso principale con giardino e parcheggio.",
-        "filters": {"ignore_labels": []}
-    }
-
-    try:
-        # 3. Chiamiamo la tua funzione originale!
-        final_prompt = build_dynamic_prompt(
-            temp_prompts_config, 
-            test_cam_cfg, 
-            mode=mode, 
-            has_crop=has_crop, 
-            is_fallback=is_fallback
-        )
-        return final_prompt
-    except Exception as e:
-        return f"❌ Errore nella costruzione del prompt: {str(e)}"
-    
-
-def delete_camera(cam_id):
-    if not cam_id:
-        return gr.update(), "⚠️ Seleziona una telecamera da eliminare."
-    
-    cameras = load_json(CAMERAS_JSON)
-    
-    if cam_id in cameras:
-        cam_name = cameras[cam_id].get("name", "Sconosciuta")
-        del cameras[cam_id]
-        save_json(cameras, CAMERAS_JSON)
-        
-        # Prepariamo la nuova lista per il dropdown
-        new_ids = list(cameras.keys())
-        new_val = new_ids[0] if new_ids else None
-        
-        # Restituiamo l'aggiornamento del dropdown e un messaggio di stato
-        return gr.update(choices=new_ids, value=new_val), f"🗑️ Telecamera {cam_id} ({cam_name}) eliminata."
-    
-    return gr.update(), "❌ Errore: Telecamera non trovata."
-
-def update_fallback_availability(engine):
-    # Se l'engine è vision, fallback è abilitato. Se è blip, lo disabilitiamo.
-    if engine == "vision":
-        return gr.update(interactive=True, value=True)
-    else:
-        # Lo disattiviamo e togliamo la spunta per coerenza
-        return gr.update(interactive=False, value=False)
-def update_engines_availability(engine):
-    """
-    Gestisce l'interattività dei checkbox in base all'engine selezionato.
-    Il check_clean e il fallback avanzato richiedono 'vision' (Ollama).
-    """
-    if engine == "vision":
-        # Abilitiamo tutto
-        return (
-            gr.update(interactive=True, value=True),  # fallback
-            gr.update(interactive=True)               # check_clean
-        )
-    else:
-        # Disabilitiamo e togliamo la spunta per coerenza
-        return (
-            gr.update(interactive=False, value=False), # fallback
-            gr.update(interactive=False, value=False)  # check_clean
-        )
-
-def add_new_camera():
-    cameras = load_json(CAMERAS_JSON)
-    # Trova il prossimo ID disponibile (es: se hai 00, 01, crea 02)
-    existing_ids = sorted([int(k) for k in cameras.keys()])
-    next_id = f"{max(existing_ids) + 1:02d}" if existing_ids else "00"
-    
-    # Crea un template vuoto
-    cameras[next_id] = {"name": "Nuova Cam", "search_patterns": [f"_{next_id}_"], "thresholds": {"person": 0.5, "vehicle": 0.5, "animal": 0.5},"blip_rules":{"FAKE_WEIGHTS": {"GROUND": 1.0,   
-                "GARDEN": 1.0,   
-                "SHOE": 1.0,     
-                "WOOD": 1.0   }}}
-    save_json(cameras, CAMERAS_JSON)
-    
-    # Aggiorna il dropdown con la nuova lista
-    return gr.update(choices=list(cameras.keys()), value=next_id)
-
-# def load_camera_details(cam_id):
-#     # if not cam_id:
-#     #     return [None] * 10
-#     if not cam_id:
-#         # Se non c'è cam_id (es. lista vuota), svuota tutti i campi
-#         return [""] * 5 + [False] + [""] + [0.5] * 3
-#     cameras = load_json(CAMERAS_JSON)
-#     cam = cameras.get(cam_id, {})
-    
-#     # Prepariamo i valori (gestendo i default se mancano chiavi)
-#     return [
-#         cam.get("name", ""),
-#         cam.get("location", ""),
-#         ", ".join(cam.get("search_patterns", [])),
-#         cam.get("priority", "person"),
-#         cam.get("desc", ""),
-#         cam.get("dynamic_stride", False),
-#         ", ".join(cam.get("filters", {}).get("ignore_labels", [])),
-#         cam.get("thresholds", {}).get("person", 0.5),
-#         cam.get("thresholds", {}).get("vehicle", 0.5),
-#         cam.get("thresholds", {}).get("animal", 0.5),
-#         cam.get("blip_rules",{}).get("FAKE_WEIGHTS",{}.get("GROUND",1)),
-#         cam.get("blip_rules",{}).get("FAKE_WEIGHTS",{}.get("GARDEN",1)),
-#         cam.get("blip_rules",{}).get("FAKE_WEIGHTS",{}.get("SHOE",1)),
-#         cam.get("blip_rules",{}).get("FAKE_WEIGHTS",{}.get("WOOD",1))
-#     ]
-
-def load_camera_details(cam_id):
-    """
-    Restituisce i dettagli di una telecamera in una lista ordinata.
-    Se cam_id è vuoto (es. una lista vuota) tutti i campi vengono
-    restituiti come stringhe vuote o valori di default.
-    """
-    # Se non c'è cam_id, svuota tutti i campi
-    if not cam_id:
-        return ["", "", "", "", "", False, "", 0.5, 0.5, 0.5, 1, 1, 1, 1]
-
-    cameras = load_json(CAMERAS_JSON)           # [1]
-    cam = cameras.get(cam_id, {})               # [1]
-
-    # Prepariamo i valori (gestendo i default se mancano chiavi)
-    return [
-        cam.get("name", ""),                                 # nome
-        cam.get("location", ""),                             # località
-        ", ".join(cam.get("search_patterns", [])),           # pattern
-        cam.get("priority", "person"),                       # priorità
-        cam.get("desc", ""),                                 # descrizione
-        cam.get("dynamic_stride", False),                    # dynamic_stride
-        ", ".join(cam.get("filters", {}).get("ignore_labels", [])),  # ignore_labels
-        cam.get("thresholds", {}).get("person", 0.5),        # soglia person
-        cam.get("thresholds", {}).get("vehicle", 0.5),       # soglia vehicle
-        cam.get("thresholds", {}).get("animal", 0.5),        # soglia animal
-        cam.get("blip_rules", {}).get("FAKE_WEIGHTS", {}).get("GROUND", 1),  # GROUND
-        cam.get("blip_rules", {}).get("FAKE_WEIGHTS", {}).get("GARDEN", 1),   # GARDEN
-        cam.get("blip_rules", {}).get("FAKE_WEIGHTS", {}).get("SHOE", 1),     # SHOE
-        cam.get("blip_rules", {}).get("FAKE_WEIGHTS", {}).get("WOOD", 1)      # WOOD
-    ]
-def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ignore, th_p, th_v, th_a,fw_ground,fw_garden,fw_shoe,fw_wood):
-    cameras = load_json(CAMERAS_JSON)
-    
-    cameras[cam_id] = {
-        "name": name,
-        "location": loc,
-        "search_patterns": [p.strip() for p in patterns.split(",")],
-        "priority": priority,
-        "desc": desc,
-        "dynamic_stride": dynamic,
-        "filters": {"ignore_labels": [i.strip() for i in ignore.split(",") if i.strip()]},
-        "thresholds": {"person": float(th_p), "vehicle": float(th_v), "animal": float(th_a)},
-        "blip_rules": {"FAKE_WEIGHTS":{"GROUND": float(fw_ground), "GARDEN": float(fw_garden), "SHOE": float(fw_shoe), "WOOD": float(fw_wood)}}
-    }
-    
-    save_json(cameras, CAMERAS_JSON)
-    return f"✅ Telecamera {cam_id} ({name}) salvata!"
-
-def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
-    try:
-        # Carichiamo il file originale per preservare i templates
-        data = load_json(PROMPTS_JSON)
-        
-        # Aggiorniamo solo i componenti testuali
-        data["shared_components"]["system_instruction"] = sys_inst
-        data["shared_components"]["mandatory_rules"] = rules
-        data["class_descriptions"]["PERSON"] = d_p
-        data["class_descriptions"]["ANIMAL"] = d_a
-        data["class_descriptions"]["VEHICLE"] = d_v
-        data["modules"]["analyst_mission_crop"] = m_c
-        data["modules"]["fallback_header"] = m_f
-        
-        # Salvataggio
-        save_json(data, PROMPTS_JSON)
-        return "✅ Prompt AI aggiornati! I cambiamenti influenzeranno le prossime analisi."
-    except Exception as e:
-        return f"❌ Errore nel salvataggio dei prompt: {str(e)}"
-
-
-    
-def load_configs():
-    """Carica i file JSON direttamente senza utility esterne."""
-    print(f"DEBUG: Lettura diretta file...")
-    
-    # --- Caricamento Settings ---
-    try:
-        if SETTINGS_JSON.exists():
-            with open(SETTINGS_JSON, "r", encoding="utf-8") as f:
-                settings_raw = json.load(f)
-                settings_str = json.dumps(settings_raw, indent=4, ensure_ascii=False)
-                print(f"✅ DEBUG: settings.json letto ({len(settings_str)} caratteri)")
-        else:
-            settings_str = "{ 'info': 'File settings.json non trovato' }"
-    except Exception as e:
-        print(f"❌ DEBUG ERRORE Settings: {e}")
-        settings_str = f"{{ 'error': '{str(e)}' }}"
-
-    # --- Caricamento Cameras ---
-    try:
-        if CAMERAS_JSON.exists():
-            with open(CAMERAS_JSON, "r", encoding="utf-8") as f:
-                cameras_raw = json.load(f)
-                cameras_str = json.dumps(cameras_raw, indent=4, ensure_ascii=False)
-                print(f"✅ DEBUG: cameras.json letto ({len(cameras_str)} caratteri)")
-        else:
-            cameras_str = "{ 'info': 'File cameras.json non trovato' }"
-    except Exception as e:
-        print(f"❌ DEBUG ERRORE Cameras: {e}")
-        cameras_str = f"{{ 'error': '{str(e)}' }}"
-
-    try:
-        if PROMPTS_JSON.exists():
-            with open(PROMPTS_JSON, "r", encoding="utf-8") as f:
-                prompt_raw = json.load(f)
-                prompt_str = json.dumps(prompt_raw, indent=4, ensure_ascii=False)
-                print(f"✅ DEBUG: prompts.json letto ({len(cameras_str)} caratteri)")
-        else:
-            cameras_str = "{ 'info': 'File prompts.json non trovato' }"
-    except Exception as e:
-        print(f"❌ DEBUG ERRORE promps: {e}")
-        cameras_str = f"{{ 'error': '{str(e)}' }}"
-
-    return settings_str, cameras_str,prompt_str
-
-def save_config_ui(content, file_path):
-    """Salva il contenuto dell'editor nel file JSON."""
-    try:
-        data = json.loads(content)
-        success = save_json(data, file_path)
-        if success:
-            return f"✅ Salvato con successo in: {file_path.name} ({time.strftime('%H:%M:%S')})"
-        return f"❌ Errore durante il salvataggio di {file_path.name}"
-    except Exception as e:
-        return f"❌ Errore nel formato JSON: {str(e)}"
+# ==============================================================================
+# UTILITY
+# ==============================================================================
 
 def get_available_models():
-    """Elenca i modelli YOLO disponibili."""
     if MODELS_DIR.exists():
         models = [f.name for f in MODELS_DIR.glob("*.pt")]
         return models if models else ["yolov8l.pt"]
     return ["yolov8l.pt"]
 
-
 def shutdown_server():
-    print("🛑 Spegnimento della WebUI in corso...")
-    # Aspettiamo un secondo per permettere alla UI di mostrare il messaggio
-    os.kill(os.getpid(), signal.SIGINT) 
+    print("🛑 Spegnimento WebUI...")
+    os.kill(os.getpid(), signal.SIGINT)
     return "Server arrestato. Puoi chiudere questa scheda."
 
-def save_comprehensive_settings(*args):
-    # args contiene tutti i valori della UI nell'ordine in cui sono messi negli 'inputs'
+def load_configs():
+    def _load(path):
+        try:
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.dumps(json.load(f), indent=4, ensure_ascii=False)
+        except Exception as e:
+            return f"{{ 'error': '{str(e)}' }}"
+        return "{ 'info': 'File non trovato' }"
+    return _load(SETTINGS_JSON), _load(CAMERAS_JSON), _load(PROMPTS_JSON)
+
+def save_config_ui(content, file_path):
     try:
-        data = load_json(SETTINGS_JSON)
-        
-        # Mappatura manuale semplificata (seguendo l'ordine degli inputs del bottone)
-        (city,priority, save_others, fn_temp,ts_format, struct, y_mod, y_dev, y_stri, y_occ, y_gap, 
-         #th_p, th_v, th_a, 
-         stride_fast,pre_roll_sec,cd_sec,v_mod, v_temp, o_ip, o_port, v_tk, v_tp, 
-         w_h, w_m, w_l, sc_p, sc_a, sc_v) = args
-
-        # Update dict
-        data["classification_settings"]["priority_hierarchy"] = [x.strip() for x in priority.split(",")]
-        data["classification_settings"]["save_others"] = save_others
-        data["city"] = city
-        data["storage_settings"]["filename_template"] = fn_temp
-        data["storage_settings"]["timestamp_format"] = ts_format
-        data["storage_settings"]["structure_type"] = struct
-
-        data["yolo_settings"]["model_path"] = y_mod
-        data["yolo_settings"]["device"] = y_dev
-        data["yolo_settings"]["vid_stride"] = int(y_stri)
-        data["yolo_settings"]["num_occurrence"] = int(y_occ)
-        data["yolo_settings"]["time_gap_sec"] = int(y_gap)
-        #data["yolo_settings"]["thresholds"] = {"person": th_p, "vehicle": th_v, "animal": th_a}
-        data["yolo_settings"]["dynamic_stride_settings"] = {"stride_fast": stride_fast, "pre_roll_sec": pre_roll_sec,"cooldown_sec": cd_sec }
-        
-        data["vision_settings"]["model_name"] = v_mod
-        data["vision_settings"]["temperature"] = v_temp
-        data["vision_settings"]["ollama_conf"] = {"ip": o_ip, "port": o_port}
-        data["vision_settings"]["top_k"] = int(v_tk)
-        data["vision_settings"]["top_p"] = v_tp
-        
-        data["scoring_system"]["weights"] = {"score_high": w_h, "score_mid": w_m, "score_low": w_l}
-        data["scoring_system"]["thresholds"] = {"person": sc_p, "animal": sc_a, "vehicle": sc_v}
-
-        save_json(data, SETTINGS_JSON)
-        return "✅ Tutte le impostazioni salvate! Lo Scanner userà questi valori al prossimo avvio."
+        data = json.loads(content)
+        if save_json(data, file_path):
+            return f"✅ Salvato: {file_path.name} ({time.strftime('%H:%M:%S')})"
+        return f"❌ Errore salvataggio {file_path.name}"
     except Exception as e:
-        return f"❌ Errore nel salvataggio: {str(e)}"
+        return f"❌ Errore JSON: {str(e)}"
 
-# Usiamo debug=True di default per la UI o lo aggiorniamo nel run_process
-log = get_logger(debug=True) 
-#log = logging.getLogger(__name__)
+# ==============================================================================
+# SETTINGS BACKUP / RESTORE / DEFAULT
+# ==============================================================================
 
-def run_process(input_path, output_path, mode, model_name, use_refine, use_fallback, test_mode, engine, device,is_clean_check):
-    """Avvia lo Scanner e riporta i log alla UI."""
-    if not input_path:
-        yield "⚠️ Errore: Devi specificare almeno la cartella di input."
-        return
+def backup_settings():
+    """Salva una copia di settings.json e clip_blip_settings.json."""
+    try:
+        import shutil
+        shutil.copy2(SETTINGS_JSON, SETTINGS_BACKUP)
+        return True
+    except Exception as e:
+        log.error(f"Backup settings failed: {e}")
+        return False
+
+# def restore_settings_backup():
+#     try:
+#         if not SETTINGS_BACKUP.exists():
+#             return "⚠️ Nessun backup trovato. Avvia prima un test scan."
+#         import shutil
+#         shutil.copy2(SETTINGS_BACKUP, SETTINGS_JSON)
+#         return "✅ Settings ripristinati dal backup pre-test."
+#     except Exception as e:
+#         return f"❌ Errore ripristino: {str(e)}"
+
+def restore_settings_backup():
+    try:
+        if not SETTINGS_BACKUP.exists():
+            return "⚠️ Nessun backup trovato.", *([gr.update()] * 4)
+        import shutil
+        shutil.copy2(SETTINGS_BACKUP, SETTINGS_JSON)
+        # Rileggi i valori ripristinati
+        s = load_json(SETTINGS_JSON)
+        dss = s["yolo_settings"]["dynamic_stride_settings"]
+        return (
+            "✅ Settings ripristinati dal backup pre-test.",
+            s["yolo_settings"].get("vid_stride_sec", 0.6),
+            dss.get("warmup_sec", 5),
+            dss.get("stride_fast_sec", 1.0),
+            dss.get("pre_roll_sec", 20),
+        )
+    except Exception as e:
+        return f"❌ Errore: {str(e)}", *([gr.update()] * 4)
     
-    # --- AGGIUNGI QUESTA RIGA ---
-    input_p = Path(input_path) 
-    
-    # Ora usa 'input_p' invece di 'input_path' per i controlli
-    if not input_p.exists() or not input_p.is_dir():
-        yield f"❌ Errore: Il percorso '{input_path}' non esiste o non è una cartella."
-        return
-    get_logger(debug=test_mode)
-    log.info(f"🚀 Avvio scansione da WebUI (Mode: {mode}, Engine: {engine}, Test: {test_mode})")
-    final_output = output_path if (output_path and output_path.strip()) else input_path
-    
-    yield f"🚀 Inizializzazione Scanner...\n📂 In: {input_path}\n📂 Out: {final_output}"
-    # 2. AGGIORNAMENTO DINAMICO SETTINGS (yolo_settings -> model_path)
+def restore_settings_default():
+    try:
+        if not SETTINGS_DEFAULT.exists():
+            return "⚠️ File settings_default.json non trovato nella cartella config."
+        import shutil
+        shutil.copy2(SETTINGS_DEFAULT, SETTINGS_JSON)
+        return "✅ Settings ripristinati ai valori di default."
+    except Exception as e:
+        return f"❌ Errore ripristino default: {str(e)}"
+
+# ==============================================================================
+# OLLAMA
+# ==============================================================================
+
+def ui_validate_ollama(ip, port, model_name):
+    mock_settings = {"model_name": model_name, "ollama_conf": {"ip": ip, "port": port}}
+    if validate_ollama_setup(mock_settings):
+        return "✅ Ollama risponde correttamente."
+    return "❌ Validazione fallita. Controlla che Ollama sia attivo e il modello caricato."
+
+# ==============================================================================
+# PROMPT
+# ==============================================================================
+
+def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, m_c, m_f, mode, has_crop, is_fallback):
+    temp_prompts_config = {
+        "shared_components": {"system_instruction": sys_inst, "mandatory_rules": rules},
+        "class_descriptions": {"PERSON": d_p, "ANIMAL": d_a, "VEHICLE": d_v},
+        "modules": {"analyst_mission_crop": m_c, "fallback_header": m_f},
+        "templates": load_json(PROMPTS_JSON).get("templates", {})
+    }
+    test_cam_cfg = {"desc": "ZONA TEST: Ingresso principale con giardino e parcheggio.", "filters": {"ignore_labels": []}}
+    try:
+        return build_dynamic_prompt(temp_prompts_config, test_cam_cfg, mode=mode, has_crop=has_crop, is_fallback=is_fallback)
+    except Exception as e:
+        return f"❌ Errore costruzione prompt: {str(e)}"
+
+def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
+    try:
+        data = load_json(PROMPTS_JSON)
+        data["shared_components"]["system_instruction"]   = sys_inst
+        data["shared_components"]["mandatory_rules"]      = rules
+        data["class_descriptions"]["PERSON"]              = d_p
+        data["class_descriptions"]["ANIMAL"]              = d_a
+        data["class_descriptions"]["VEHICLE"]             = d_v
+        data["class_descriptions"]["CLEAN_CHECK"]         = d_clean
+        data["modules"]["analyst_mission_crop"]           = m_c
+        data["modules"]["fallback_header"]                = m_f
+        data["modules"]["clean_header"]                   = m_clean
+        save_json(data, PROMPTS_JSON)
+        return "✅ Prompt AI aggiornati."
+    except Exception as e:
+        return f"❌ Errore salvataggio prompt: {str(e)}"
+
+# ==============================================================================
+# CAMERAS
+# ==============================================================================
+
+def load_camera_details(cam_id):
+    empty = ["", "", "", "", "", False, "", 0.49, 0.55, 0.30, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+    if not cam_id:
+        return empty
+    cameras = load_json(CAMERAS_JSON)
+    cam = cameras.get(cam_id, {})
+    br  = cam.get("blip_rules", {})
+    tn  = cam.get("thresholds_night", {})
+    return [
+        cam.get("name", ""),
+        cam.get("location", ""),
+        ", ".join(cam.get("search_patterns", [])),
+        cam.get("priority", "person"),
+        cam.get("desc", ""),
+        cam.get("dynamic_stride", False),
+        ", ".join(cam.get("filters", {}).get("ignore_labels", [])),
+        cam.get("thresholds", {}).get("person",  0.49),
+        cam.get("thresholds", {}).get("vehicle", 0.55),
+        cam.get("thresholds", {}).get("animal",  0.30),
+        tn.get("person",  -1.0),
+        tn.get("vehicle", -1.0),
+        tn.get("animal",  -1.0),
+        br.get("FAKE_WEIGHTS", {}).get("GROUND", 1.0),
+        br.get("FAKE_WEIGHTS", {}).get("GARDEN", 1.0),
+        br.get("FAKE_WEIGHTS", {}).get("SHOE",   1.0),
+        br.get("FAKE_WEIGHTS", {}).get("WOOD",   1.0),
+        br.get("THRESHOLD", {}).get("PERSON",  -1.0),
+        br.get("THRESHOLD", {}).get("VEHICLE", -1.0),
+        br.get("THRESHOLD", {}).get("ANIMAL",  -1.0),
+        br.get("FAKE_PENALTY_WEIGHT", {}).get("PERSON",  -1.0),
+        br.get("FAKE_PENALTY_WEIGHT", {}).get("ANIMAL",  -1.0),
+        br.get("FAKE_PENALTY_WEIGHT", {}).get("VEHICLE", -1.0),
+    ]
+
+def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ignore,
+                       th_p, th_v, th_a, nth_p, nth_v, nth_a,
+                       fw_ground, fw_garden, fw_shoe, fw_wood,
+                       thr_person, thr_vehicle, thr_animal,
+                       fpw_person, fpw_animal, fpw_vehicle):
+    cameras = load_json(CAMERAS_JSON)
+    thresholds_night = {}
+    if float(nth_p) >= 0: thresholds_night["person"]  = float(nth_p)
+    if float(nth_v) >= 0: thresholds_night["vehicle"] = float(nth_v)
+    if float(nth_a) >= 0: thresholds_night["animal"]  = float(nth_a)
+    threshold_override = {}
+    if float(thr_person)  >= 0: threshold_override["PERSON"]  = float(thr_person)
+    if float(thr_vehicle) >= 0: threshold_override["VEHICLE"] = float(thr_vehicle)
+    if float(thr_animal)  >= 0: threshold_override["ANIMAL"]  = float(thr_animal)
+    penalty_override = {}
+    if float(fpw_person)  >= 0: penalty_override["PERSON"]  = float(fpw_person)
+    if float(fpw_animal)  >= 0: penalty_override["ANIMAL"]  = float(fpw_animal)
+    if float(fpw_vehicle) >= 0: penalty_override["VEHICLE"] = float(fpw_vehicle)
+    blip_rules = {"FAKE_WEIGHTS": {"GROUND": float(fw_ground), "GARDEN": float(fw_garden),
+                                   "SHOE": float(fw_shoe), "WOOD": float(fw_wood)}}
+    if threshold_override: blip_rules["THRESHOLD"] = threshold_override
+    if penalty_override:   blip_rules["FAKE_PENALTY_WEIGHT"] = penalty_override
+    cam_data = {
+        "name": name, "location": loc,
+        "search_patterns": [p.strip() for p in patterns.split(",") if p.strip()],
+        "priority": priority, "desc": desc, "dynamic_stride": dynamic,
+        "filters": {"ignore_labels": [i.strip() for i in ignore.split(",") if i.strip()]},
+        "thresholds": {"person": float(th_p), "vehicle": float(th_v), "animal": float(th_a)},
+        "blip_rules": blip_rules,
+    }
+    if thresholds_night:
+        cam_data["thresholds_night"] = thresholds_night
+    cameras[cam_id] = cam_data
+    save_json(cameras, CAMERAS_JSON)
+    return f"✅ Telecamera {cam_id} ({name}) salvata!"
+
+def add_new_camera():
+    cameras = load_json(CAMERAS_JSON)
+    existing_ids = sorted([int(k) for k in cameras.keys()])
+    next_id = f"{max(existing_ids) + 1:02d}" if existing_ids else "00"
+    cameras[next_id] = {
+        "name": "Nuova Cam", "search_patterns": [f"_{next_id}_"],
+        "thresholds": {"person": 0.49, "vehicle": 0.55, "animal": 0.30},
+        "blip_rules": {"FAKE_WEIGHTS": {"GROUND": 1.0, "GARDEN": 1.0, "SHOE": 1.0, "WOOD": 1.0}}
+    }
+    save_json(cameras, CAMERAS_JSON)
+    return gr.update(choices=list(cameras.keys()), value=next_id)
+
+def delete_camera(cam_id):
+    if not cam_id:
+        return gr.update(), "⚠️ Seleziona una telecamera."
+    cameras = load_json(CAMERAS_JSON)
+    if cam_id in cameras:
+        cam_name = cameras[cam_id].get("name", "")
+        del cameras[cam_id]
+        save_json(cameras, CAMERAS_JSON)
+        new_ids = list(cameras.keys())
+        return gr.update(choices=new_ids, value=new_ids[0] if new_ids else None), f"🗑️ {cam_id} ({cam_name}) eliminata."
+    return gr.update(), "❌ Telecamera non trovata."
+
+# ==============================================================================
+# ENGINE AVAILABILITY
+# ==============================================================================
+
+def update_engines_availability(engine):
+    if engine == "vision":
+        return gr.update(interactive=True), gr.update(interactive=True)
+    else:
+        return gr.update(interactive=True), gr.update(interactive=False, value=False)
+
+# ==============================================================================
+# SETTINGS SAVE
+# ==============================================================================
+
+def save_comprehensive_settings(*args):
+    try:
+        (city, priority, save_others, fn_temp, ts_format, struct,
+         y_mod, y_dev, y_stride_sec, y_occ, y_gap,
+         warmup_sec, stride_fast_sec, pre_roll_sec, cd_sec,
+         v_mod, v_temp, o_ip, o_port, v_tk, v_tp,
+         w_h, w_m, w_l, sc_p, sc_a, sc_v,
+         cb_w_crop, cb_w_frame, cb_night_boost,
+         cb_thr_p, cb_thr_v, cb_thr_a,
+         cb_fpw_p, cb_fpw_a, cb_fpw_v,
+         cb_blip_p, cb_blip_a, cb_blip_v,
+         cb_bbox_ratio, cb_bbox_bonus) = args
+
+        data = load_json(SETTINGS_JSON)
+        data["city"] = city
+        data["classification_settings"]["priority_hierarchy"] = [x.strip() for x in priority.split(",")]
+        data["classification_settings"]["save_others"]        = save_others
+        data["storage_settings"]["filename_template"]         = fn_temp
+        data["storage_settings"]["timestamp_format"]          = ts_format
+        data["storage_settings"]["structure_type"]            = struct
+        data["yolo_settings"]["model_path"]                   = y_mod
+        data["yolo_settings"]["device"]                       = y_dev
+        data["yolo_settings"]["vid_stride_sec"]               = float(y_stride_sec)
+        data["yolo_settings"]["num_occurrence"]               = int(y_occ)
+        data["yolo_settings"]["time_gap_sec"]                 = int(y_gap)
+        data["yolo_settings"]["dynamic_stride_settings"]      = {
+            "warmup_sec": int(warmup_sec), "stride_fast_sec": float(stride_fast_sec),
+            "pre_roll_sec": int(pre_roll_sec), "cooldown_sec": int(cd_sec),
+        }
+        data["vision_settings"]["model_name"]  = v_mod
+        data["vision_settings"]["temperature"] = float(v_temp)
+        data["vision_settings"]["ollama_conf"] = {"ip": o_ip, "port": o_port}
+        data["vision_settings"]["top_k"]       = int(v_tk)
+        data["vision_settings"]["top_p"]       = float(v_tp)
+        data["scoring_system"]["weights"]      = {"score_high": float(w_h), "score_mid": float(w_m), "score_low": float(w_l)}
+        data["scoring_system"]["thresholds"]   = {"person": float(sc_p), "animal": float(sc_a), "vehicle": float(sc_v)}
+        save_json(data, SETTINGS_JSON)
+
+        cb_data = load_json(CLIP_BLIP_JSON)
+        cb_data["FINAL_WEIGHT_CROP"]       = float(cb_w_crop)
+        cb_data["FINAL_WEIGHT_FRAME"]      = float(cb_w_frame)
+        cb_data["YOLO_NIGHT_BOOST"]        = float(cb_night_boost)
+        cb_data["THRESHOLD"]               = {"PERSON": float(cb_thr_p), "VEHICLE": float(cb_thr_v), "ANIMAL": float(cb_thr_a)}
+        cb_data["FAKE_PENALTY_WEIGHT"]     = {"PERSON": float(cb_fpw_p), "ANIMAL": float(cb_fpw_a), "VEHICLE": float(cb_fpw_v)}
+        cb_data["BLIP_BOOST"]              = {"PERSON": float(cb_blip_p), "ANIMAL": float(cb_blip_a), "VEHICLE": float(cb_blip_v)}
+        cb_data["BBOX_SMALL_RATIO"]        = float(cb_bbox_ratio)
+        cb_data["BBOX_SMALL_PERSON_BONUS"] = float(cb_bbox_bonus)
+        save_json(cb_data, CLIP_BLIP_JSON)
+
+        return "✅ Tutte le impostazioni salvate!"
+    except Exception as e:
+        return f"❌ Errore: {str(e)}\n{traceback.format_exc()}"
+
+# ==============================================================================
+# LOG STREAMING
+# ==============================================================================
+
+class QueueHandler(logging.Handler):
+    def __init__(self, log_queue):
+        super().__init__()
+        self.log_queue = log_queue
+
+    def emit(self, record):
+        try:
+            self.log_queue.put_nowait(self.format(record))
+        except Exception:
+            pass
+
+def _run_scanner(input_path, output_path, mode, model_name,
+                 use_refine, engine, use_fallback, is_clean_check,
+                 no_sort, test_mode, device):
+    """Avvia Scanner in thread e ritorna (thread, result_holder, log_queue, q_handler)."""
+    # Aggiorna model e device nel settings.json
     try:
         with open(SETTINGS_JSON, "r", encoding="utf-8") as f:
             settings_dict = json.load(f)
-        
-        # Puliamo l'estensione .pt se presente nel dropdown per scriverlo come piace a te
-        clean_model_name = model_name.replace(".pt", "")
-        
-        # Aggiorniamo i campi in base alla tua struttura
-        if "yolo_settings" not in settings_dict:
-            settings_dict["yolo_settings"] = {}
-        
-        settings_dict["yolo_settings"]["model_path"] = clean_model_name
-        settings_dict["yolo_settings"]["device"] = device if device else "cuda"
-        
-        # Salviamo il file aggiornato
+        settings_dict.setdefault("yolo_settings", {})
+        settings_dict["yolo_settings"]["model_path"] = model_name.replace(".pt", "")
+        settings_dict["yolo_settings"]["device"]     = device or "cuda"
         with open(SETTINGS_JSON, "w", encoding="utf-8") as f:
             json.dump(settings_dict, f, indent=4, ensure_ascii=False)
-            
-        print(f"✅ DEBUG UI: settings.json aggiornato (Model: {clean_model_name}, Device: {device})")
     except Exception as e:
-        print(f"⚠️ DEBUG UI: Errore durante l'aggiornamento dei settings: {e}")
-    try:
+        log.warning(f"Errore aggiornamento settings.json: {e}")
 
-        start_time = time.time()
-        scanner = Scanner(
-            mode=mode,
-            device=device if device else None, # Passiamo il device (cpu, cuda, etc)
-            is_refine=use_refine,
-            is_fallback=use_fallback,
-            is_test=test_mode,
-            engine=engine,
-            is_check_clean=is_clean_check # <--- Fondamentale per il 117!
-        )
+    log_queue   = queue.Queue()
+    q_handler   = QueueHandler(log_queue)
+    q_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s : %(message)s", "%H:%M:%S"))
+    logging.getLogger().addHandler(q_handler)
 
-        # Esecuzione (i log dettagliati usciranno nel terminale grazie al logger root)
-        scanner.scan_folder(input_path, final_output)
-        
-        elapsed = time.time() - start_time
-        
-        # Invece di stampare tutto, recuperiamo il riepilogo finale
-        # Se hai accesso alla funzione che genera le statistiche, puoi catturarla
-        summary = f"✅ ANALISI COMPLETATA in {elapsed:.2f}s!\n\n"
-        summary += "📊 Controlla il terminale per il riepilogo dettagliato (117/117)."
-        
-        yield summary
-        scanner._print_final_summary(time.time() - start_time)
+    result_holder = {"error": None, "done": False, "scanner": None, "start_time": time.time()}
 
-    except Exception as e:
-        yield f"💥 Errore durante lo scan: {str(e)}"
-    except Exception as e:
-        import traceback
-        yield f"❌ ERRORE DURANTE LO SCAN:\n{str(e)}\n\n{traceback.format_exc()}"
+    def _run():
+        try:
+            get_logger(debug=test_mode)
+            scanner = Scanner(
+                mode=mode, device=device or None,
+                is_refine=use_refine, is_fallback=use_fallback,
+                is_test=test_mode, engine=engine,
+                is_check_clean=is_clean_check, is_sort=not no_sort,
+            )
+            result_holder["scanner"] = scanner
+            scanner.scan_folder(input_path, output_path)
+        except Exception as e:
+            result_holder["error"] = f"{str(e)}\n{traceback.format_exc()}"
+        finally:
+            result_holder["done"] = True
 
-# --- INTERFACCIA ---
-init_set, init_cam, init_prompt = load_configs()
-with gr.Blocks(title="Smart Surveillance Sorter UI") as demo:
-    gr.Markdown("# 🛡️ Smart Surveillance Sorter")
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return thread, result_holder, log_queue, q_handler
+
+
+def _stream_logs(thread, result_holder, log_queue, q_handler, header=""):
+    """Generator che fa lo streaming dei log alla UI."""
+    log_lines = [header] if header else []
+    while not result_holder["done"] or not log_queue.empty():
+        try:
+            line = log_queue.get(timeout=0.1)
+            log_lines.append(line)
+        except queue.Empty:
+            pass
+        yield "\n".join(log_lines[-80:])
+        time.sleep(0.1)
+
+    logging.getLogger().removeHandler(q_handler)
     
+    scanner = result_holder.get("scanner")
+    summary = ""
+    if scanner and hasattr(scanner, "_get_final_summary"):
+        try:
+            elapsed = time.time() - result_holder.get("start_time", time.time())
+            summary = "\n" + "─" * 50 + "\n" + scanner._get_final_summary(elapsed) + "\n" + "─" * 50
+        except Exception:
+            pass
+
+    if result_holder["error"]:
+        yield "\n".join(log_lines) + f"\n\n💥 ERRORE:\n{result_holder['error']}"
+    else:
+        yield "\n".join(log_lines) + summary + "\n\n✅ COMPLETATO!"
+
+
+def run_process(input_path, output_path, mode, model_name,
+                use_refine, engine, use_fallback, is_clean_check, device):
+    if not input_path:
+        yield "⚠️ Specifica la cartella di input."
+        return
+    input_p = Path(input_path)
+    if not input_p.exists() or not input_p.is_dir():
+        yield f"❌ Percorso '{input_path}' non esiste o non è una cartella."
+        return
+    if is_clean_check and engine != "vision":
+        yield "⚠️ Check Lens Health richiede engine 'vision'."
+        return
+
+    final_output = output_path.strip() if output_path and output_path.strip() else input_path
+    header = (f"🚀 Avvio Scanner...\n📂 {input_path}\n"
+              f"⚙️  Mode={mode} | Engine={'--refine --' + engine if use_refine else 'yolo only'} "
+              f"| Fallback={use_fallback}\n{'─'*60}")
+
+    thread, result_holder, log_queue, q_handler = _run_scanner(
+        input_path, final_output, mode, model_name,
+        use_refine, engine, use_fallback, is_clean_check,
+        False, False, device  # no_sort=False, test_mode=False
+    )
+    yield from _stream_logs(thread, result_holder, log_queue, q_handler, header)
+
+
+def run_test_process(input_path, output_path, mode, model_name,
+                     use_refine, engine, use_fallback, no_sort, test_mode, device,
+                     stride_sec, warmup_sec, stride_fast_sec, pre_roll_sec,num_occ,time_gap):
+    if not input_path:
+        yield "⚠️ Specifica la cartella di input."
+        return
+    input_p = Path(input_path)
+    if not input_p.exists() or not input_p.is_dir():
+        yield f"❌ Percorso non valido."
+        return
+
+    final_output = output_path.strip() if output_path and output_path.strip() else input_path
+
+    # Backup e applica valori di test
+    backup_settings()
+    try:
+        with open(SETTINGS_JSON, "r", encoding="utf-8") as f:
+            s = json.load(f)
+        s["yolo_settings"]["vid_stride_sec"] = float(stride_sec)
+        s["yolo_settings"]["dynamic_stride_settings"]["warmup_sec"]      = int(warmup_sec)
+        s["yolo_settings"]["dynamic_stride_settings"]["stride_fast_sec"] = float(stride_fast_sec)
+        s["yolo_settings"]["dynamic_stride_settings"]["pre_roll_sec"]    = int(pre_roll_sec)
+        s["yolo_settings"]["num_occurrence"] = int(num_occ)
+        s["yolo_settings"]["time_gap_sec"]   = int(time_gap)
+        with open(SETTINGS_JSON, "w", encoding="utf-8") as f:
+            json.dump(s, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        yield f"❌ Errore applicazione parametri test: {e}"
+        return
+
+    header = (f"🧪 TEST Scan\n📂 {input_path}\n"
+              f"⚙️  stride={stride_sec}s | warmup={warmup_sec}s | fast={stride_fast_sec}s | preroll={pre_roll_sec}s\n"
+              f"   Mode={mode} | Engine={'--refine --' + engine if use_refine else 'yolo only'} | NoSort={no_sort}\n{'─'*60}")
+
+    thread, result_holder, log_queue, q_handler = _run_scanner(
+        input_path, final_output, mode, model_name,
+        use_refine, engine, use_fallback, False,
+        no_sort, test_mode, device
+    )
+    yield from _stream_logs(thread, result_holder, log_queue, q_handler, header)
+
+
+# ==============================================================================
+# REAL-TIME SORTER
+# ==============================================================================
+
+_rt_thread     = None
+_rt_stop_event = threading.Event()
+
+
+def run_realtime(input_path, output_path, mode, model_name, engine, device, interval):
+    global _rt_thread, _rt_stop_event
+
+    if _rt_thread and _rt_thread.is_alive():
+        yield "⚠️ Real-time già in esecuzione. Fermalo prima di riavviarlo."
+        return
+    if not input_path:
+        yield "⚠️ Specifica la cartella di input."
+        return
+    input_p = Path(input_path)
+    if not input_p.exists() or not input_p.is_dir():
+        yield f"❌ Percorso non valido: {input_path}"
+        return
+
+    final_output = output_path.strip() if output_path and output_path.strip() else input_path
+    _rt_stop_event.clear()
+
+    log_queue = queue.Queue()
+    q_handler = QueueHandler(log_queue)
+    q_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s : %(message)s", "%H:%M:%S"))
+    logging.getLogger().addHandler(q_handler)
+
+    def _loop():
+        cycle = 0
+        while not _rt_stop_event.is_set():
+            cycle += 1
+            log.info(f"─── Ciclo #{cycle} ───")
+            try:
+                get_logger(debug=False)
+                with open(SETTINGS_JSON, "r", encoding="utf-8") as f:
+                    s = json.load(f)
+                s.setdefault("yolo_settings", {})
+                s["yolo_settings"]["model_path"] = model_name.replace(".pt", "")
+                s["yolo_settings"]["device"]     = device or "cuda"
+                with open(SETTINGS_JSON, "w", encoding="utf-8") as f:
+                    json.dump(s, f, indent=4, ensure_ascii=False)
+
+                scanner = Scanner(
+                    mode=mode, device=device or None,
+                    is_refine=True, is_fallback=False,
+                    is_test=False, engine=engine,
+                    is_check_clean=False, is_sort=True,
+                )
+                scanner.scan_folder(input_path, final_output)
+            except RuntimeError as e:
+                log.critical(f"Errore bloccante: {e}")
+                break
+            except Exception as e:
+                log.error(f"Errore ciclo #{cycle}: {e}")
+
+            if not _rt_stop_event.is_set():
+                log.info(f"Ciclo #{cycle} completato. Prossimo in {interval}s")
+                _rt_stop_event.wait(timeout=interval)
+
+        log.info("Real-time sorter fermato.")
+
+    _rt_thread = threading.Thread(target=_loop, daemon=True)
+    _rt_thread.start()
+
+    log_lines = []
+    while _rt_thread.is_alive() or not log_queue.empty():
+        try:
+            line = log_queue.get(timeout=0.1)
+            log_lines.append(line)
+        except queue.Empty:
+            pass
+        yield "\n".join(log_lines[-80:])
+        time.sleep(0.1)
+
+    logging.getLogger().removeHandler(q_handler)
+    yield "\n".join(log_lines) + "\n\n🛑 Real-time fermato."
+
+
+def stop_realtime():
+    global _rt_stop_event
+    _rt_stop_event.set()
+    return "🛑 Stop richiesto — il ciclo corrente finirà e poi si fermerà."
+
+
+# ==============================================================================
+# TOOLS: GROUND TRUTH & COMPARE
+# ==============================================================================
+
+def generate_gt(input_dir, output_dir, check_dupl):
+    from smart_surveillance_sorter.generate_ground_truth import genera_ground_truth, check_duplicates_with_log
+    from smart_surveillance_sorter.constants import GROUND_TRUTH
+    if not input_dir:
+        return "⚠️ Specifica la cartella di input."
+    input_p = Path(input_dir)
+    if not input_p.exists():
+        return f"❌ Cartella non trovata: {input_dir}"
+    out_p = Path(output_dir.strip()) if output_dir and output_dir.strip() else input_p
+    try:
+        risultati = genera_ground_truth(str(input_p), log)
+        out_file  = out_p / GROUND_TRUTH
+        save_json(risultati, out_file)
+        msg = f"✅ Ground Truth generato: {out_file}\n📹 Video trovati: {len(risultati)}"
+        if check_dupl:
+            import io, logging as _logging
+            buf = io.StringIO()
+            h   = _logging.StreamHandler(buf)
+            log.addHandler(h)
+            check_duplicates_with_log(str(input_p), log)
+            log.removeHandler(h)
+            dup_out = buf.getvalue()
+            msg += f"\n\n⚠️ Duplicati:\n{dup_out}" if dup_out.strip() else "\n✅ Nessun duplicato trovato."
+        return msg
+    except Exception as e:
+        return f"❌ Errore: {str(e)}"
+
+
+def run_compare(session_dir, gt_file, res_file):
+    from smart_surveillance_sorter.compare_results import compare_results
+    lines = []
+    class _ListLogger:
+        def info(self, m):  lines.append(m)
+        def error(self, m): lines.append(f"❌ {m}")
+    try:
+        compare_results(
+            session_dir=session_dir.strip() if session_dir and session_dir.strip() else None,
+            gt_file=gt_file.strip()   if gt_file  and gt_file.strip()  else None,
+            res_file=res_file.strip() if res_file and res_file.strip() else None,
+            log=_ListLogger()
+        )
+    except Exception as e:
+        lines.append(f"❌ Errore: {str(e)}")
+    return "\n".join(lines)
+
+
+# ==============================================================================
+# UI
+# ==============================================================================
+
+init_set, init_cam, init_prompt = load_configs()
+current_settings = load_json(SETTINGS_JSON)
+cb_set           = load_json(CLIP_BLIP_JSON)
+current_prompts  = load_json(PROMPTS_JSON)
+current_cameras  = load_json(CAMERAS_JSON)
+camera_ids       = list(current_cameras.keys())
+dss              = current_settings["yolo_settings"]["dynamic_stride_settings"]
+
+with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as demo:
+    gr.Markdown("# 🛡️ Smart Surveillance Sorter")
+
     with gr.Tabs():
-        # --- TAB 1: CONTROLLO ---
+
+        # ── TAB 1: RUN ────────────────────────────────────────────────────────
         with gr.TabItem("🚀 Run Scan"):
             with gr.Row():
-                with gr.Column():
-                    input_path = gr.Textbox(label="Input Directory (es: /home/user/fails)", placeholder="Percorso cartella da scansionare...")
-                    output_path = gr.Textbox(label="Output Directory (opzionale)", placeholder="Se vuoto, usa la cartella di input...")
-                    
-                    mode_opt = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="full")
-                    is_test = gr.Checkbox(label="Test mode, debug logger level and copy instead of move sorted videos", value=True)
+                with gr.Column(scale=1):
+                    run_input  = gr.Textbox(label="Input Directory", placeholder="/home/user/videos")
+                    run_output = gr.Textbox(label="Output Directory (opzionale)")
+                    run_mode   = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="full")
 
-                with gr.Column():
-                  
-                    # Dropdown per il modello come prima
-                    yolo_model = gr.Dropdown(
-                        choices=get_available_models(), 
-                        label="YOLO model", 
-                        value="yolov8l.pt"
-                    )
-                    
-                    #device for yolo and blip
-                    device_opt = gr.Radio(
-                        choices=["cuda", "cpu", "mps"], 
-                        label="Device (Hardware Acceleration)", 
-                        value="cuda",
-                        interactive=True
-    )
-                    
+                with gr.Column(scale=1):
+                    run_model  = gr.Dropdown(choices=get_available_models(), label="YOLO Model", value="yolov8l.pt")
+                    run_device = gr.Radio(choices=["cuda", "cpu", "mps"], label="Device", value="cuda")
+
                     with gr.Group():
-                        gr.Markdown("### 🧠 AI Engines & Maintenance")
-                        
-                        # --- NUOVO CHECK-CLEAN ---
-                        check_clean = gr.Checkbox(
-                            label="🕸️ Check Lens Health (Spider Webs/Dirt)", 
-                            value=False,
-                            info="Check camera lens clean/dirty, compare a night nvr image with clean nvr image in dir checks/'"
-                        )
-                        
+                        gr.Markdown("### 🧠 Engines")
                         with gr.Row():
-                            refine = gr.Checkbox(label="✨ Enable Refine", value=True)
-                            fallback = gr.Checkbox(label="🔍 Fallback Recovery", value=True)
-                        
-                        engine_opt = gr.Radio(
-                            choices=["vision", "blip"], 
-                            label="Refinement Engine", 
-                            value="vision",
-                            interactive=True
-                        )
-                        
-                        # Logica di attivazione fallback (invariata)
-                        engine_opt.change(
-                            fn=update_engines_availability,
-                            inputs=engine_opt,
-                            outputs=[fallback, check_clean] # Aggiorna entrambi!
-                        )
-                        gr.Markdown("_Note: 'vision' uses your local Ollama, 'blip' download model first time._")
-            
-            run_btn = gr.Button("START", variant="primary", size="lg")
-            output_log = gr.Textbox(label="Status Log", interactive=False, lines=8)
+                            run_refine = gr.Checkbox(label="✨ Enable Refine", value=True)
+                            run_engine = gr.Radio(choices=["blip", "vision"], label="Engine", value="blip")
+                        with gr.Row():
+                            run_fallback    = gr.Checkbox(label="🔍 Fallback", value=False,
+                                                          info="blip→vision su discordanti | vision→NVR bassa conf.")
+                            run_check_clean = gr.Checkbox(label="🕸️ Check Lens", value=False,
+                                                          info="Solo con engine vision")
+                        run_engine.change(fn=update_engines_availability, inputs=run_engine,
+                                          outputs=[run_fallback, run_check_clean])
+                        gr.Markdown("_`blip`: veloce. `vision`: Ollama/Qwen (preciso)._")
+
+            run_btn    = gr.Button("▶ START SCAN", variant="primary", size="lg")
+            run_status = gr.Markdown("")
+            run_log    = gr.Textbox(label="📋 Controlla il terminale per i log dettagliati",
+                                    interactive=False, lines=8)
 
             run_btn.click(
                 fn=run_process,
-                inputs=[
-                    input_path, 
-                    output_path, 
-                    mode_opt, 
-                    yolo_model, 
-                    refine, 
-                    fallback, 
-                    is_test, 
-                    engine_opt, 
-                    device_opt,   
-                    check_clean
-                ],
-                outputs=output_log
-)
+                inputs=[run_input, run_output, run_mode, run_model,
+                        run_refine, run_engine, run_fallback, run_check_clean, run_device],
+                outputs=run_log,
+                queue=True,
+            )
 
-        # --- TAB 2: CONFIGURAZIONE ---
-        with gr.TabItem("⚙️ SETTINGS"):
-            current_settings = load_json(SETTINGS_JSON)
+        # ── TAB 2: REAL-TIME ──────────────────────────────────────────────────
+        with gr.TabItem("🔄 Real-Time"):
+            gr.Markdown("_Loop continuo — analizza i nuovi video ogni N secondi._")
+            with gr.Row():
+                with gr.Column(scale=1):
+                    rt_input    = gr.Textbox(label="Input Directory", placeholder="/home/user/videos")
+                    rt_output   = gr.Textbox(label="Output Directory (opzionale)")
+                    rt_mode     = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="person")
+                    rt_interval = gr.Slider(10, 300, step=10, value=60, label="Intervallo tra cicli (sec)")
 
+                with gr.Column(scale=1):
+                    rt_model  = gr.Dropdown(choices=get_available_models(), label="YOLO Model", value="yolov8l.pt")
+                    rt_device = gr.Radio(choices=["cuda", "cpu", "mps"], label="Device", value="cuda")
+                    with gr.Group():
+                        gr.Markdown("### 🧠 Engine")
+                        rt_engine = gr.Radio(choices=["blip", "vision"], label="Engine", value="blip")
+                        gr.Markdown("_Fallback e Test mode non disponibili in real-time._")
+
+            with gr.Row():
+                rt_start_btn = gr.Button("▶ Avvia Real-Time", variant="primary")
+                rt_stop_btn  = gr.Button("⏹ Ferma", variant="stop")
+            rt_status = gr.Markdown("")
+            rt_log    = gr.Textbox(label="Log Real-Time", interactive=False, lines=12)
+
+            rt_start_btn.click(
+                fn=run_realtime,
+                inputs=[rt_input, rt_output, rt_mode, rt_model, rt_engine, rt_device, rt_interval],
+                outputs=rt_log, queue=True,
+            )
+            rt_stop_btn.click(fn=stop_realtime, outputs=rt_status)
+
+        # ── TAB 3: TEST ───────────────────────────────────────────────────────
+        with gr.TabItem("🧪 Test & Tuning"):
+            gr.Markdown("_Scan con parametri temporanei. I settings vengono ripristinati automaticamente dopo il test._")
+            with gr.Row():
+                with gr.Column(scale=1):
+                    test_input  = gr.Textbox(label="Input Directory", placeholder="/home/user/videos")
+                    test_output = gr.Textbox(label="Output Directory (opzionale)")
+                    test_mode_r = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="full")
+                    with gr.Row():
+                        test_is_test = gr.Checkbox(label="🧪 Test mode (copia)", value=True)
+                        test_no_sort = gr.Checkbox(label="🚫 No Sort",           value=True)
+
+                with gr.Column(scale=1):
+                    test_model  = gr.Dropdown(choices=get_available_models(), label="YOLO Model", value="yolov8l.pt")
+                    test_device = gr.Radio(choices=["cuda", "cpu", "mps"], label="Device", value="cuda")
+                    with gr.Group():
+                        gr.Markdown("### 🧠 Engines")
+                        with gr.Row():
+                            test_refine  = gr.Checkbox(label="✨ Enable Refine", value=True)
+                            test_engine  = gr.Radio(choices=["blip", "vision"], label="Engine", value="blip")
+                        test_fallback = gr.Checkbox(label="🔍 Fallback", value=False)
+
+            gr.Markdown("### 🎚️ Parametri YOLO (temporanei per questo test)")
+            with gr.Row():
+                test_stride_sec      = gr.Slider(0.1, 2.0, step=0.1, value=current_settings["yolo_settings"].get("vid_stride_sec", 0.6),        label="Stride (sec)")
+                test_warmup_sec      = gr.Slider(1, 15,   step=1,   value=dss.get("warmup_sec", 5),          label="Warmup (sec)")
+                test_stride_fast_sec = gr.Slider(0.5, 3.0, step=0.1, value=dss.get("stride_fast_sec", 1.0),  label="Stride Fast (sec)")
+                test_pre_roll_sec    = gr.Slider(5, 30,   step=1,   value=dss.get("pre_roll_sec", 20),       label="Pre Roll (sec)")
+            with gr.Row():
+                test_num_occ = gr.Slider(1, 10, step=1, value=current_settings["yolo_settings"]["num_occurrence"], label="Num. Occorrenze")
+                test_time_gap = gr.Slider(1, 10, step=1, value=current_settings["yolo_settings"]["time_gap_sec"],   label="Time Gap (sec)")
+
+            with gr.Row():
+                test_btn   = gr.Button("▶ Avvia Test Scan", variant="primary", size="lg")
+                restore_btn = gr.Button("↩️ Ripristina Backup", variant="secondary")
+
+            test_status = gr.Markdown("_Il backup viene creato automaticamente prima di ogni test scan._")
+            test_log    = gr.Textbox(label="Log Test", interactive=False, lines=12)
+
+            test_btn.click(
+                fn=run_test_process,
+                inputs=[test_input, test_output, test_mode_r, test_model,
+                        test_refine, test_engine, test_fallback, test_no_sort, test_is_test, test_device,
+                        test_stride_sec, test_warmup_sec, test_stride_fast_sec, test_pre_roll_sec,test_num_occ, test_time_gap],
+                outputs=test_log, queue=True,
+            )
+            # restore_btn.click(fn=restore_settings_backup, outputs=test_status)
+            restore_btn.click(
+                fn=restore_settings_backup,
+                outputs=[test_status, test_stride_sec, test_warmup_sec, test_stride_fast_sec, test_pre_roll_sec]
+            )
+
+        # ── TAB 4: TOOLS ──────────────────────────────────────────────────────
+        with gr.TabItem("📊 Tools"):
             with gr.Tabs():
-                with gr.Tab("🛠️ Settings Generali"):
-                    
-                    # --- 1. CLASSIFICAZIONE & STORAGE ---
-                    with gr.Accordion("📂 General settings", open=True):
-                        with gr.Row():
-                            city = gr.Textbox(label="City",value=current_settings["city"])
-                            priority = gr.Textbox(label="Priority Hiearchy", 
-                                                value=", ".join(current_settings["classification_settings"]["priority_hierarchy"]))
-                            save_others = gr.Checkbox(label="Save 'Others'", 
-                                                    value=current_settings["classification_settings"]["save_others"])
-                        with gr.Row():
-                            fn_template = gr.Textbox(label="Template File names", value=current_settings["storage_settings"]["filename_template"])
-                            ts_format   = gr.Textbox(laber="Time stamp format in file name", value= current_settings["storage_settings"]["timestamp_format"])
-                            struct_type = gr.Dropdown(choices=["camera_first", "date_first"], label="Folder structure after sorting", 
-                                                    value=current_settings["storage_settings"]["structure_type"])
 
-                    # --- 2. YOLO SETTINGS ---
-                    with gr.Accordion("🤖 YOLO settings", open=False):
+                with gr.Tab("📋 Ground Truth"):
+                    gr.Markdown("_Genera `ground_truth.json` scansionando le sottocartelle (person/, animal/, vehicle/, others/)._")
+                    with gr.Row():
+                        gt_input  = gr.Textbox(label="Cartella video ordinati manualmente")
+                        gt_output = gr.Textbox(label="Output directory (default=input)")
+                    gt_dupl = gr.Checkbox(label="Controlla duplicati", value=True)
+                    gt_btn  = gr.Button("📋 Genera Ground Truth", variant="primary")
+                    gt_out  = gr.Textbox(label="Risultato", interactive=False, lines=6)
+                    gt_btn.click(fn=generate_gt, inputs=[gt_input, gt_output, gt_dupl], outputs=gt_out)
+
+                with gr.Tab("📊 Compare Results"):
+                    gr.Markdown("_Confronta `ground_truth.json` con `classification_results.json`._")
+                    with gr.Accordion("📁 Usa directory (cerca i file automaticamente)", open=True):
+                        cmp_dir = gr.Textbox(label="Directory sessione")
+                    with gr.Accordion("📄 Oppure specifica i file manualmente", open=False):
+                        with gr.Row():
+                            cmp_gt  = gr.Textbox(label="Path ground_truth.json")
+                            cmp_res = gr.Textbox(label="Path classification_results.json")
+                    cmp_btn = gr.Button("📊 Confronta", variant="primary")
+                    cmp_out = gr.Textbox(label="Risultati", interactive=False, lines=20)
+                    cmp_btn.click(fn=run_compare, inputs=[cmp_dir, cmp_gt, cmp_res], outputs=cmp_out)
+
+        # ── TAB 5: SETTINGS ───────────────────────────────────────────────────
+        with gr.TabItem("⚙️ Settings"):
+            with gr.Tabs():
+
+                with gr.Tab("🛠️ General"):
+                    with gr.Accordion("📂 General", open=True):
+                        with gr.Row():
+                            city        = gr.Textbox(label="City", value=current_settings.get("city", ""))
+                            priority    = gr.Textbox(label="Priority Hierarchy",
+                                                     value=", ".join(current_settings["classification_settings"]["priority_hierarchy"]))
+                            save_others = gr.Checkbox(label="Save 'Others'",
+                                                      value=current_settings["classification_settings"]["save_others"])
+                        with gr.Row():
+                            fn_template = gr.Textbox(label="Filename Template", value=current_settings["storage_settings"]["filename_template"])
+                            ts_format   = gr.Textbox(label="Timestamp Format",  value=current_settings["storage_settings"]["timestamp_format"])
+                            struct_type = gr.Dropdown(choices=["camera_first", "date_first"], label="Folder Structure",
+                                                      value=current_settings["storage_settings"]["structure_type"])
+
+                    with gr.Accordion("🤖 YOLO", open=False):
                         with gr.Row():
                             y_mod = gr.Textbox(label="Model Name", value=current_settings["yolo_settings"]["model_path"])
-                            y_dev = gr.Radio(choices=["cuda", "cpu", "mps"], label="Device", value=current_settings["yolo_settings"]["device"])
+                            y_dev = gr.Radio(choices=["cuda", "cpu", "mps"], label="Device",
+                                             value=current_settings["yolo_settings"]["device"])
                         with gr.Row():
-                            y_stri = gr.Number(label="Video Stride", value=current_settings["yolo_settings"]["vid_stride"])
-                            y_occ = gr.Slider(1, 10, step=1, label="Num. Occorrenze", value=current_settings["yolo_settings"]["num_occurrence"])
-                            y_gap = gr.Number(label="Time Gap (sec)", value=current_settings["yolo_settings"]["time_gap_sec"])
-                        
-                        # gr.Markdown("#### 🎯 YOLO thresholds")
-                        # with gr.Row():
-                        #     th_p = gr.Slider(0, 1, value=current_settings["yolo_settings"]["thresholds"]["person"], label="Person threshold")
-                        #     th_v = gr.Slider(0, 1, value=current_settings["yolo_settings"]["thresholds"]["vehicle"], label="Vehicle threshold")
-                        #     th_a = gr.Slider(0, 1, value=current_settings["yolo_settings"]["thresholds"]["animal"], label="Animal threshold")
-                        gr.Markdown("Dynamic Stride")   
+                            y_stride_sec     = gr.Number(label="Video Stride (sec)", value=current_settings["yolo_settings"].get("vid_stride_sec", 0.6))
+                            y_occ            = gr.Slider(1, 10, step=1, label="Num. Occorrenze", value=current_settings["yolo_settings"]["num_occurrence"])
+                            y_gap            = gr.Number(label="Time Gap (sec)", value=current_settings["yolo_settings"]["time_gap_sec"])
+                        gr.Markdown("**Dynamic Stride**")
                         with gr.Row():
-                            stride_fast = gr.Slider(12,50,value=current_settings["yolo_settings"]["dynamic_stride_settings"]["stride_fast"],label="Stride fast")
-                            pre_roll_sec= gr.Slider(5,30,value=current_settings["yolo_settings"]["dynamica_stride_settings"]["pre_roll_sec"],label="Pre roll")
-                            cd_sec      = gr.Slider(1,20,value=current_settings["yolo_settings"]["dynamica_stride_settings"]["cooldown_sec"],label="Cooldown seconds")
+                            warmup_sec       = gr.Slider(1, 15,   step=1,   value=dss.get("warmup_sec", 5),         label="Warmup (sec)")
+                            stride_fast_sec  = gr.Slider(0.5, 3.0, step=0.1, value=dss.get("stride_fast_sec", 1.0), label="Stride Fast (sec)")
+                            pre_roll_sec     = gr.Slider(5, 30,   step=1,   value=dss.get("pre_roll_sec", 20),      label="Pre Roll (sec)")
+                            cd_sec           = gr.Slider(1, 20,   step=1,   value=dss.get("cooldown_sec", 5),       label="Cooldown (sec)")
 
-                    # --- 3. VISION & OLLAMA ---
                     with gr.Accordion("👁️ Vision AI (Ollama)", open=False):
                         with gr.Row():
-                            v_mod = gr.Textbox(label="Vision model name", value=current_settings["vision_settings"]["model_name"])
+                            v_mod  = gr.Textbox(label="Model", value=current_settings["vision_settings"]["model_name"])
                             v_temp = gr.Slider(0, 2, value=current_settings["vision_settings"]["temperature"], label="Temperature")
                         with gr.Row():
-                            ollama_ip = gr.Textbox(label="Ollama IP", value=current_settings.get("vision_settings", {}).get("ollama_conf", {}).get("ip", "127.0.0.1"))
-                            ollama_port = gr.Textbox(label="Ollama Port", value=current_settings.get("vision_settings", {}).get("ollama_conf", {}).get("port", "11434"))
-                            # --- IL TASTO CHE USA LA TUA FUNZIONE ---
-                            with gr.Row():
-                                validate_btn = gr.Button("🔍 Ollama Check", variant="secondary")
-                                validate_status = gr.Markdown("Status: _Not validate")
+                            ollama_ip       = gr.Textbox(label="IP",   value=current_settings["vision_settings"]["ollama_conf"]["ip"])
+                            ollama_port     = gr.Textbox(label="Port", value=str(current_settings["vision_settings"]["ollama_conf"]["port"]))
+                            validate_btn    = gr.Button("🔍 Check Ollama", variant="secondary")
+                            validate_status = gr.Markdown("_Not validated_")
                         with gr.Row():
                             v_topk = gr.Number(label="Top K", value=current_settings["vision_settings"]["top_k"])
                             v_topp = gr.Slider(0, 1, value=current_settings["vision_settings"]["top_p"], label="Top P")
 
-                    # --- 4. SCORING SYSTEM ---
+                    with gr.Accordion("🎛️ CLIP+BLIP Engine", open=False):
+                        gr.Markdown("_Globali — sovrascrivibili per singola telecamera nel tab Cameras._")
+                        with gr.Row():
+                            cb_weight_crop  = gr.Slider(0, 1, step=0.05, value=cb_set.get("FINAL_WEIGHT_CROP", 0.7),  label="Weight Crop")
+                            cb_weight_frame = gr.Slider(0, 1, step=0.05, value=cb_set.get("FINAL_WEIGHT_FRAME", 0.3), label="Weight Frame")
+                            cb_night_boost  = gr.Slider(0, 1, step=0.05, value=cb_set.get("YOLO_NIGHT_BOOST", 0.3),   label="Night Boost PERSON")
+                        gr.Markdown("**THRESHOLD**")
+                        with gr.Row():
+                            cb_thr_p = gr.Slider(0, 1, step=0.01, value=cb_set["THRESHOLD"]["PERSON"],  label="PERSON")
+                            cb_thr_v = gr.Slider(0, 1, step=0.01, value=cb_set["THRESHOLD"]["VEHICLE"], label="VEHICLE")
+                            cb_thr_a = gr.Slider(0, 1, step=0.01, value=cb_set["THRESHOLD"]["ANIMAL"],  label="ANIMAL")
+                        gr.Markdown("**FAKE PENALTY WEIGHT**")
+                        with gr.Row():
+                            cb_fpw_p = gr.Slider(0, 1, step=0.05, value=cb_set["FAKE_PENALTY_WEIGHT"]["PERSON"],  label="PERSON")
+                            cb_fpw_a = gr.Slider(0, 1, step=0.05, value=cb_set["FAKE_PENALTY_WEIGHT"]["ANIMAL"],  label="ANIMAL")
+                            cb_fpw_v = gr.Slider(0, 1, step=0.05, value=cb_set["FAKE_PENALTY_WEIGHT"]["VEHICLE"], label="VEHICLE")
+                        gr.Markdown("**BLIP BOOST**")
+                        with gr.Row():
+                            cb_blip_p = gr.Slider(0, 1, step=0.05, value=cb_set["BLIP_BOOST"]["PERSON"],  label="PERSON")
+                            cb_blip_a = gr.Slider(0, 1, step=0.05, value=cb_set["BLIP_BOOST"]["ANIMAL"],  label="ANIMAL")
+                            cb_blip_v = gr.Slider(0, 1, step=0.05, value=cb_set["BLIP_BOOST"]["VEHICLE"], label="VEHICLE")
+                        gr.Markdown("**BBOX Small Bonus**")
+                        with gr.Row():
+                            cb_bbox_ratio = gr.Slider(0, 0.2, step=0.005, value=cb_set.get("BBOX_SMALL_RATIO", 0.04),        label="Ratio Soglia")
+                            cb_bbox_bonus = gr.Slider(0, 0.5, step=0.05,  value=cb_set.get("BBOX_SMALL_PERSON_BONUS", 0.15), label="Bonus PERSON")
+
                     with gr.Accordion("⚖️ Scoring System", open=False):
                         with gr.Row():
                             w_high = gr.Number(label="Weight High", value=current_settings["scoring_system"]["weights"]["score_high"])
-                            w_mid = gr.Number(label="Weight Mid", value=current_settings["scoring_system"]["weights"]["score_mid"])
-                            w_low = gr.Number(label="Weight Low", value=current_settings["scoring_system"]["weights"]["score_low"])
+                            w_mid  = gr.Number(label="Weight Mid",  value=current_settings["scoring_system"]["weights"]["score_mid"])
+                            w_low  = gr.Number(label="Weight Low",  value=current_settings["scoring_system"]["weights"]["score_low"])
                         with gr.Row():
-                            sc_p = gr.Number(label="Min Person", value=current_settings["scoring_system"]["thresholds"]["person"])
-                            sc_a = gr.Number(label="Min Animal", value=current_settings["scoring_system"]["thresholds"]["animal"])
+                            sc_p = gr.Number(label="Min Person",  value=current_settings["scoring_system"]["thresholds"]["person"])
+                            sc_a = gr.Number(label="Min Animal",  value=current_settings["scoring_system"]["thresholds"]["animal"])
                             sc_v = gr.Number(label="Min Vehicle", value=current_settings["scoring_system"]["thresholds"]["vehicle"])
 
-                    save_all_btn = gr.Button("💾 SAVE ALL SETTINGS", variant="primary", size="lg")
+                    with gr.Row():
+                        save_all_btn      = gr.Button("💾 SAVE ALL SETTINGS", variant="primary", size="lg")
+                        restore_def_btn   = gr.Button("🔄 Ripristina Default", variant="secondary")
                     status_save = gr.Markdown("")
 
-                    validate_btn.click(
-                        fn=ui_validate_ollama,
-                        inputs=[ollama_ip, ollama_port, v_mod],
-                        outputs=validate_status
-                    )
-                    # ORA IL CLICK È ALLINEATO:
+                    validate_btn.click(fn=ui_validate_ollama, inputs=[ollama_ip, ollama_port, v_mod], outputs=validate_status)
                     save_all_btn.click(
                         fn=save_comprehensive_settings,
                         inputs=[
-                            city,priority, save_others, fn_template, ts_format, struct_type, # <--- Corretti struct_type e fn_template
-                            y_mod, y_dev, y_stri, y_occ, y_gap,              # <--- Corretti y_mod, y_stri
-                            #th_p, th_v, th_a,
-                            stride_fast, pre_roll_sec,cd_sec, 
-                            v_mod, v_temp, ollama_ip, ollama_port, v_topk, v_topp, 
-                            w_high, w_mid, w_low, sc_p, sc_a, sc_v
+                            city, priority, save_others, fn_template, ts_format, struct_type,
+                            y_mod, y_dev, y_stride_sec, y_occ, y_gap,
+                            warmup_sec, stride_fast_sec, pre_roll_sec, cd_sec,
+                            v_mod, v_temp, ollama_ip, ollama_port, v_topk, v_topp,
+                            w_high, w_mid, w_low, sc_p, sc_a, sc_v,
+                            cb_weight_crop, cb_weight_frame, cb_night_boost,
+                            cb_thr_p, cb_thr_v, cb_thr_a,
+                            cb_fpw_p, cb_fpw_a, cb_fpw_v,
+                            cb_blip_p, cb_blip_a, cb_blip_v,
+                            cb_bbox_ratio, cb_bbox_bonus,
                         ],
-                        outputs=status_save
+                        outputs=status_save,
                     )
+                    restore_def_btn.click(fn=restore_settings_default, outputs=status_save)
 
-                # --- SOTTO-TAB: CAMERAS & PROMPTS (Possiamo lasciarli JSON o fare liste dinamiche) ---
-                #with gr.Tab("📹 Cameras"):
-                with gr.Tab("📹 Manage Cameras"):
-                    current_cameras = load_json(CAMERAS_JSON)
-                    camera_ids = list(current_cameras.keys())
-
+                # ── Cameras ───────────────────────────────────────────────────
+                with gr.Tab("📹 Cameras"):
                     with gr.Row():
-                        # Selettore della telecamera
-                        cam_selector = gr.Dropdown(
-                            choices=camera_ids, 
-                            label="Select Camera ID", 
-                            value=camera_ids[0] if camera_ids else None,
-                            interactive=True
-                        )
-                        add_cam_btn = gr.Button("➕ Add New Cam", variant="secondary")
-
+                        cam_selector = gr.Dropdown(choices=camera_ids, label="Telecamera",
+                                                   value=camera_ids[0] if camera_ids else None, interactive=True)
+                        add_cam_btn  = gr.Button("➕ Aggiungi", variant="secondary")
                     with gr.Group():
-                        gr.Markdown("### 📝 Change Camera Settings")
+                        gr.Markdown("### 📝 Impostazioni")
                         with gr.Row():
-                            c_name = gr.Textbox(label="Name (es: Garden)")
-                            c_loc = gr.Textbox(label="Location (es: outdoor)")
-                        
+                            c_name = gr.Textbox(label="Nome")
+                            c_loc  = gr.Textbox(label="Location")
                         with gr.Row():
-                            # I pattern li gestiamo come stringa separata da virgola
-                            c_patterns = gr.Textbox(label="Search Patterns", 
-                                                placeholder="_00_, ch00, Cam00")
+                            c_patterns = gr.Textbox(label="Search Patterns (virgola)", placeholder="_00_, ch00")
                             c_priority = gr.Dropdown(choices=["person", "animal", "vehicle"], label="Priority")
-                        
-                        c_desc = gr.Textbox(label="Description", lines=2)
-                        
+                        c_desc = gr.Textbox(label="Description (usata nel prompt Vision AI)", lines=2)
                         with gr.Row():
                             c_dynamic = gr.Checkbox(label="Dynamic Stride")
-                            c_ignore = gr.Textbox(label="Labels to ignore (use coco names) (es: car, truck)")
-
+                            c_ignore  = gr.Textbox(label="Labels da ignorare (COCO, virgola)")
+                        gr.Markdown("### 🎯 YOLO Thresholds")
+                        gr.Markdown("**Giorno**")
                         with gr.Row():
-                            cth_p = gr.Slider(0, 1, label="Person threshold Yolo (Cam)")
-                            cth_v = gr.Slider(0, 1, label="Vehicle threshold Yolo (Cam)")
-                            cth_a = gr.Slider(0, 1, label="Animal threshold Yolo (Cam)")
+                            cth_p = gr.Slider(0, 1, step=0.01, label="Person")
+                            cth_v = gr.Slider(0, 1, step=0.01, label="Vehicle")
+                            cth_a = gr.Slider(0, 1, step=0.01, label="Animal")
+                        gr.Markdown("**Notte** — -1 = usa soglie di giorno")
                         with gr.Row():
-                            fw_ground = gr.Slider(0,1,label="Fake ground weight Blip")
-                            fw_garden = gr.Slider(0,1,label="Fake garden weight Blip")
-                            fw_shoe = gr.Slider(0,1,label="Fake shoe weight Blip")
-                            fw_wood = gr.Slider(0,1,label="Fake wood weight Blip")
-           
+                            cth_np = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Person notte")
+                            cth_nv = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Vehicle notte")
+                            cth_na = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Animal notte")
+                        gr.Markdown("### 🎛️ CLIP+BLIP Override  (-1 = usa globale)")
+                        gr.Markdown("**Fake Weights**")
+                        with gr.Row():
+                            fw_ground = gr.Slider(0, 1, step=0.05, label="GROUND")
+                            fw_garden = gr.Slider(0, 1, step=0.05, label="GARDEN")
+                            fw_shoe   = gr.Slider(0, 1, step=0.05, label="SHOE")
+                            fw_wood   = gr.Slider(0, 1, step=0.05, label="WOOD")
+                        gr.Markdown("**THRESHOLD override**")
+                        with gr.Row():
+                            cam_thr_p = gr.Slider(-1, 1, step=0.01, value=-1.0, label="PERSON")
+                            cam_thr_v = gr.Slider(-1, 1, step=0.01, value=-1.0, label="VEHICLE")
+                            cam_thr_a = gr.Slider(-1, 1, step=0.01, value=-1.0, label="ANIMAL")
+                        gr.Markdown("**FAKE PENALTY WEIGHT override**")
+                        with gr.Row():
+                            cam_fpw_p = gr.Slider(-1, 1, step=0.05, value=-1.0, label="PERSON")
+                            cam_fpw_a = gr.Slider(-1, 1, step=0.05, value=-1.0, label="ANIMAL")
+                            cam_fpw_v = gr.Slider(-1, 1, step=0.05, value=-1.0, label="VEHICLE")
 
-                    save_cam_btn = gr.Button("💾 Salva Modifiche Telecamera", variant="primary")
-                    delete_cam_btn = gr.Button("🗑️ Elimina Telecamera", variant="stop")
+                    cam_inputs  = [cam_selector, c_name, c_loc, c_patterns, c_priority, c_desc, c_dynamic, c_ignore,
+                                   cth_p, cth_v, cth_a, cth_np, cth_nv, cth_na,
+                                   fw_ground, fw_garden, fw_shoe, fw_wood,
+                                   cam_thr_p, cam_thr_v, cam_thr_a,
+                                   cam_fpw_p, cam_fpw_a, cam_fpw_v]
+                    cam_outputs = [c_name, c_loc, c_patterns, c_priority, c_desc, c_dynamic, c_ignore,
+                                   cth_p, cth_v, cth_a, cth_np, cth_nv, cth_na,
+                                   fw_ground, fw_garden, fw_shoe, fw_wood,
+                                   cam_thr_p, cam_thr_v, cam_thr_a,
+                                   cam_fpw_p, cam_fpw_a, cam_fpw_v]
+
+                    with gr.Row():
+                        save_cam_btn   = gr.Button("💾 Salva Telecamera", variant="primary")
+                        delete_cam_btn = gr.Button("🗑️ Elimina", variant="stop")
                     status_cam = gr.Markdown("")
 
-                    delete_cam_btn.click(
-                        fn=delete_camera,
-                        inputs=cam_selector,
-                        outputs=[cam_selector, status_cam]
-                    )
-                    save_cam_btn.click(
-                        fn=save_single_camera,
-                        inputs=[cam_selector, c_name, c_loc, c_patterns, c_priority, c_desc, c_dynamic, c_ignore, cth_p, cth_v, cth_a,fw_ground,fw_garden,fw_shoe,fw_wood],
-                        outputs=status_cam
-                    )
-                    add_cam_btn.click(fn=add_new_camera, outputs=cam_selector)
-                    cam_selector.change(
-                        fn=load_camera_details, # La funzione che legge il JSON (assicurati che sia definita)
-                        inputs=cam_selector,
-                        outputs=[c_name, c_loc, c_patterns, c_priority, c_desc, c_dynamic, c_ignore, cth_p, cth_v, cth_a,fw_ground,fw_garden,fw_shoe,fw_wood]
-                    )
-                    demo.load(
-                        fn=load_camera_details,
-                        inputs=cam_selector,
-                        outputs=[c_name, c_loc, c_patterns, c_priority, c_desc, c_dynamic, c_ignore, cth_p, cth_v, cth_a,fw_ground,fw_garden,fw_shoe,fw_wood]
-                    )
+                    save_cam_btn.click(fn=save_single_camera,   inputs=cam_inputs,   outputs=status_cam)
+                    delete_cam_btn.click(fn=delete_camera,      inputs=cam_selector, outputs=[cam_selector, status_cam])
+                    add_cam_btn.click(fn=add_new_camera,         outputs=cam_selector)
+                    cam_selector.change(fn=load_camera_details,  inputs=cam_selector, outputs=cam_outputs)
+                    demo.load(fn=load_camera_details,             inputs=cam_selector, outputs=cam_outputs)
 
-                #with gr.Tab("📝 Prompts"):
-                with gr.Tab("📝 Editor Prompt AI"):
-                    current_prompts = load_json(PROMPTS_JSON)
-                    
-                    with gr.Accordion("📢 System Instruction(Global)", open=True):
-                    
-                        gr.Markdown("_This rules are apply for every call to AI._")
-                        p_sys = gr.Textbox(
-                            label="System Instruction", 
-                            value=current_prompts["shared_components"]["system_instruction"]
-                        )
-                        p_rules = gr.Textbox(
-                            label="Mandatory Rules", 
-                            value=current_prompts["shared_components"]["mandatory_rules"], 
-                            lines=3
-                        )
-                    #with gr.Accordion("🎯 Descrizione Classi (Cosa deve cercare)", open=True):
-                    with gr.Accordion("🎯 Class Description (What AI should search)", open=True):
-                        gr.Markdown("_Definisci i criteri con cui l'AI riconosce i soggetti o lo stato delle lenti._")
-                        with gr.Row():
-                            desc_p = gr.Textbox(label="PERSON Description", value=current_prompts["class_descriptions"]["PERSON"], lines=2)
-                        with gr.Row():
-                            desc_a = gr.Textbox(label="ANIMAL Description", value=current_prompts["class_descriptions"]["ANIMAL"], lines=2)
-                        with gr.Row():
-                            desc_v = gr.Textbox(label="VEHICLE Description", value=current_prompts["class_descriptions"]["VEHICLE"], lines=2)
-                        # --- NUOVO CAMPO CLEAN CHECK ---
-                        with gr.Row():
-                            desc_clean = gr.Textbox(label="LENS CLEANING Description", value=current_prompts["class_descriptions"]["CLEAN_CHECK"], lines=3)
-
-                    with gr.Accordion("🧩 Modules and Headers (Advanced)", open=False):
-                        gr.Markdown("_Texts added in case of Crop, Fallback or Maintenance._")
-                        m_crop = gr.Textbox(label="Mission Crop Header", value=current_prompts["modules"]["analyst_mission_crop"], lines=3)
-                        m_fall = gr.Textbox(label="Fallback Header", value=current_prompts["modules"]["fallback_header"], lines=2)
-                        # --- NUOVO CAMPO HEADER CLEAN ---
-                        m_clean = gr.Textbox(label="Clean Check Header", value=current_prompts["modules"]["clean_header"], lines=2)
-                        
+                # ── Prompt Editor ─────────────────────────────────────────────
+                with gr.Tab("📝 Prompt AI"):
+                    with gr.Accordion("📢 System Instruction", open=True):
+                        p_sys   = gr.Textbox(label="System Instruction", value=current_prompts["shared_components"]["system_instruction"])
+                        p_rules = gr.Textbox(label="Mandatory Rules",    value=current_prompts["shared_components"]["mandatory_rules"], lines=3)
+                    with gr.Accordion("🎯 Class Descriptions", open=True):
+                        desc_p     = gr.Textbox(label="PERSON",          value=current_prompts["class_descriptions"]["PERSON"],      lines=2)
+                        desc_a     = gr.Textbox(label="ANIMAL",          value=current_prompts["class_descriptions"]["ANIMAL"],      lines=2)
+                        desc_v     = gr.Textbox(label="VEHICLE",         value=current_prompts["class_descriptions"]["VEHICLE"],     lines=2)
+                        desc_clean = gr.Textbox(label="LENS CLEAN CHECK",value=current_prompts["class_descriptions"]["CLEAN_CHECK"], lines=3)
+                    with gr.Accordion("🧩 Modules / Headers (Advanced)", open=False):
+                        m_crop  = gr.Textbox(label="Mission Crop Header", value=current_prompts["modules"]["analyst_mission_crop"], lines=3)
+                        m_fall  = gr.Textbox(label="Fallback Header",     value=current_prompts["modules"]["fallback_header"],      lines=2)
+                        m_clean = gr.Textbox(label="Clean Check Header",  value=current_prompts["modules"]["clean_header"],         lines=2)
                         with gr.Accordion("🔍 Dynamic Prompt Preview", open=False):
-                            gr.Markdown("_Simulate how the final prompt will be constructed._")
                             with gr.Row():
-                                test_mode = gr.Dropdown(choices=["full", "person", "person_animal", "clean_check"], label="Simulate Mode", value="full")
-                                test_has_crop = gr.Checkbox(label="Simulate Crop (Zoom)")
-                                test_is_fallback = gr.Checkbox(label="Simulate Fallback")
-                            
-                            preview_btn = gr.Button("🔨 Generate Preview", variant="secondary")
-                            prompt_preview = gr.Code(label="Final prompt sent to AI", language="markdown", lines=15)
-
-                    save_prompt_btn = gr.Button("💾 Update Prompt AI", variant="primary")
-                    status_prompt = gr.Markdown("")
-
-                    # --- COLLEGAMENTO EVENTO ---
+                                test_mode_p   = gr.Dropdown(choices=["full", "person", "person_animal", "clean_check"], label="Mode", value="full")
+                                test_has_crop = gr.Checkbox(label="Simulate Crop")
+                                test_is_fb    = gr.Checkbox(label="Simulate Fallback")
+                            preview_btn    = gr.Button("🔨 Generate Preview", variant="secondary")
+                            prompt_preview = gr.Code(label="Prompt finale", language="markdown", lines=15)
+                    save_prompt_btn = gr.Button("💾 Salva Prompt AI", variant="primary")
+                    status_prompt   = gr.Markdown("")
                     preview_btn.click(
                         fn=preview_prompt_logic,
-                        inputs=[p_sys, p_rules, desc_p, desc_a, desc_v, m_crop, m_fall, test_mode, test_has_crop, test_is_fallback],
+                        inputs=[p_sys, p_rules, desc_p, desc_a, desc_v, m_crop, m_fall, test_mode_p, test_has_crop, test_is_fb],
                         outputs=prompt_preview
                     )
-                    # Collegamento
                     save_prompt_btn.click(
                         fn=save_prompts_ui,
-                        inputs=[
-                            p_sys,      # sys_inst
-                            p_rules,    # rules
-                            desc_p,     # d_p
-                            desc_a,     # d_a
-                            desc_v,     # d_v
-                            desc_clean, # d_clean (Il nuovo campo della classe)
-                            m_crop,     # m_c
-                            m_fall,     # m_f
-                            m_clean     # m_clean (Il nuovo header)
-                        ],
+                        inputs=[p_sys, p_rules, desc_p, desc_a, desc_v, desc_clean, m_crop, m_fall, m_clean],
                         outputs=status_prompt
                     )
+
+                # ── System ────────────────────────────────────────────────────
                 with gr.Tab("🖥️ System"):
-                    with gr.Row():
-                        stop_btn = gr.Button("🛑 Turn off WebUI", variant="stop")
-                        #restart_btn = gr.Button("🔄 Riavvia (Soft)", variant="secondary")
-                    
-                    status_sys = gr.Markdown("System Status: Running")
-
-                # Logica corretta
-                stop_btn.click(fn=shutdown_server, inputs=None, outputs=status_sys)
-                # Se vuoi che il tasto reset aggiorni anche il messaggio di stato:
-                #restart_btn.click(fn=lambda: "### 🔄 Configurazioni ricaricate dai file JSON", inputs=None, outputs=status_sys)
-
-    
+                    stop_btn   = gr.Button("🛑 Spegni WebUI", variant="stop")
+                    status_sys = gr.Markdown("Status: Running")
+                    stop_btn.click(fn=shutdown_server, outputs=status_sys)
 
 
-
-
-# Avvio UI
 if __name__ == "__main__":
-    # # Avviamo col tema corretto qui per evitare i warning di Gradio 6
-    # demo.launch(theme=gr.themes.Soft())
-    # if __name__ == "__main__":
+    demo.queue()
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        prevent_thread_lock=False # Aiuta a gestire meglio la chiusura
+        prevent_thread_lock=False,
     )

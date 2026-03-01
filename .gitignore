@@ -5,18 +5,25 @@ __pycache__/
 venv/
 env/
 .vscode
-# --- Dati e Video (Il "grosso" da escludere) ---
+# --- Dati e Video
 *.mp4
 *.mkv
 *.avi
 *.jpg
 *.jpeg
 *.png
-# Escludi tutti i modelli nella cartella model
+
+# Altri
 models/*.pt
 models/*.onnx
 models/*.engine
 checks/*
+scanners/yolo_engine_old.py
+scanner/clip_blip_engine_old.py
+webui_old.py
+config/cameras.json
+config/clip_blip_settings_old.json
+real_time_sorter_old.py
 
 # --- Log ---
 *.log
