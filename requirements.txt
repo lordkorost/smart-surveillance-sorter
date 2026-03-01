@@ -89,7 +89,6 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2025.3
 ultralytics==8.4.9
-ultralytics==8.4.9
 urllib3==2.6.3
 uvicorn==0.40.0
 wcwidth==0.6.0

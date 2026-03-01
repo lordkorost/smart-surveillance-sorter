@@ -60,48 +60,78 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 ### 📦 Installation
 
 
+
+Readme install · MD
+Copia
+
 #### 1. Clone the repository
 ```bash
-git clone [https://github.com/your-username/smart-surveillance-sorter.git](https://github.com/your-username/smart-surveillance-sorter.git)
+git clone https://github.com/your-username/smart-surveillance-sorter.git
 cd smart-surveillance-sorter
 ```
 
-#### Run the intelligent installer:
-The script will automatically create a virtual environment and install the correct version of PyTorch for your hardware.
-## Linux (Ubuntu/Debian)
+#### 2. Run the installer
+
+The installer automatically creates a virtual environment and installs the correct version of PyTorch for your hardware.
+
+### Linux (Ubuntu/Debian)
+
 ```bash
 chmod +x install.sh
 ./install.sh
 ```
-Optional: You can force a specific backend if the auto-detection fails:
 
-For NVIDIA:
+Optional: force a specific backend if auto-detection fails:
+
 ```bash
-./install.sh --use-cuda
-```
-For AMD: 
-```bash
-./install.sh --use-rocm
+./install.sh --use-cuda    # NVIDIA GPU
+./install.sh --use-rocm    # AMD GPU (ROCm 6.4)
+./install.sh --use-cpu     # CPU only
 ```
 
 Launch the application:
+
 ```bash
 ./run.sh
 ```
 
-## Windows
-```bash
+---
+
+### Windows 11
+
+> [!IMPORTANT]
+> Windows requires **Python 3.12** installed and added to PATH.
+> Download from: https://www.python.org/downloads/release/python-31212/
+
+```bat
 install.bat
 ```
 
+Optional: force a specific backend:
+
+```bat
+install.bat --use-cuda     :: NVIDIA GPU
+install.bat --use-rocm     :: AMD GPU (ROCm 7.2 for Windows)
+install.bat --use-cpu      :: CPU only
+```
+
 Launch the application:
-```bash
+
+```bat
 run.bat
 ```
->[!NOTE]
->Currently defaults to CPU-only mode for maximum compatibility.
->[!TIP]
->GPU on Windows: If you have an NVIDIA or AMD GPU and want to use it on Windows, follow the instructions in docs/windows_gpu.md after running the installer.
+
+> [!NOTE]
+> **AMD GPU on Windows**: Requires AMD Adrenalin driver **26.1.1 or later**.
+> Download from AMD Adrenalin Software → Optional → AI Bundle → PyTorch.
+> Tested on RX 9060 XT with ROCm 7.2 — full GPU acceleration works.
+
+> [!NOTE]
+> **NVIDIA GPU on Windows**: Tested with CUDA 12.4. Should work out of the box with `--use-cuda`.
+
+> [!TIP]
+> If auto-detection fails, always use the explicit `--use-rocm` or `--use-cuda` flag.
+> See `docs/windows_gpu.md` for detailed GPU setup instructions.
 
 #### **Advanced CLI Usage**
 If you prefer using the terminal, check out our [**CLI Reference Guide**](docs/cli_reference.md) for all available flags and examples.

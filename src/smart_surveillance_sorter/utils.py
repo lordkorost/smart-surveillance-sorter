@@ -12,7 +12,7 @@ from smart_surveillance_sorter.constants import PROJECT_ROOT
 #from colorama import Fore, Style
 import json
 from astral.geocoder import database, lookup
-from constants import COORDS_CACHE_JSON
+from smart_surveillance_sorter.constants import COORDS_CACHE_JSON
 from astral import Observer
 from astral.sun import sun
 from datetime import timedelta

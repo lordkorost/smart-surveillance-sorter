@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-surveillance-sorter"
+version = "0.1.0"
+description = "AI-powered surveillance video sorter"
+requires-python = ">=3.12"
+dependencies = [
+    "astral",
+    "geopy",
+    "opencv-python",
+    "pillow",
+    "psutil",
+    "GPUtil",
+    "tqdm",
+    "pyyaml",
+    "requests",
+    "colorama",
+    "ollama",
+    "gradio",
+    "transformers",
+    "timm",
+    "open_clip_torch",
+    "ultralytics==8.4.9",
+    "safetensors",
+    "torch",
+    "torchvision",
+]
+
+[project.scripts]
+sss = "smart_surveillance_sorter.main:main"
+sss-webui = "smart_surveillance_sorter.webui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
