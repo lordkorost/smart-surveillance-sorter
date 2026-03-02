@@ -32,9 +32,9 @@ def get_available_models():
     return ["yolov8l.pt"]
 
 def shutdown_server():
-    print("🛑 Spegnimento WebUI...")
+    print("🛑 WebUI shutdown...")
     os.kill(os.getpid(), signal.SIGINT)
-    return "Server arrestato. Puoi chiudere questa scheda."
+    return "Server stop. You can close this tab."
 
 def load_configs():
     def _load(path):
@@ -44,7 +44,7 @@ def load_configs():
                     return json.dumps(json.load(f), indent=4, ensure_ascii=False)
         except Exception as e:
             return f"{{ 'error': '{str(e)}' }}"
-        return "{ 'info': 'File non trovato' }"
+        return "{ 'info': 'File not found' }"
     return _load(SETTINGS_JSON), _load(CAMERAS_JSON), _load(PROMPTS_JSON)
 
 def save_config_ui(content, file_path):
@@ -52,16 +52,16 @@ def save_config_ui(content, file_path):
         data = json.loads(content)
         if save_json(data, file_path):
             return f"✅ Salvato: {file_path.name} ({time.strftime('%H:%M:%S')})"
-        return f"❌ Errore salvataggio {file_path.name}"
+        return f"❌ Save error {file_path.name}"
     except Exception as e:
-        return f"❌ Errore JSON: {str(e)}"
+        return f"❌ Error JSON: {str(e)}"
 
 # ==============================================================================
 # SETTINGS BACKUP / RESTORE / DEFAULT
 # ==============================================================================
 
 def backup_settings():
-    """Salva una copia di settings.json e clip_blip_settings.json."""
+    """Save a copy of settings.json and clip_blip_settings.json."""
     try:
         import shutil
         shutil.copy2(SETTINGS_JSON, SETTINGS_BACKUP)
@@ -70,44 +70,35 @@ def backup_settings():
         log.error(f"Backup settings failed: {e}")
         return False
 
-# def restore_settings_backup():
-#     try:
-#         if not SETTINGS_BACKUP.exists():
-#             return "⚠️ Nessun backup trovato. Avvia prima un test scan."
-#         import shutil
-#         shutil.copy2(SETTINGS_BACKUP, SETTINGS_JSON)
-#         return "✅ Settings ripristinati dal backup pre-test."
-#     except Exception as e:
-#         return f"❌ Errore ripristino: {str(e)}"
 
 def restore_settings_backup():
     try:
         if not SETTINGS_BACKUP.exists():
-            return "⚠️ Nessun backup trovato.", *([gr.update()] * 4)
+            return "⚠️ No backup found.", *([gr.update()] * 4)
         import shutil
         shutil.copy2(SETTINGS_BACKUP, SETTINGS_JSON)
         # Rileggi i valori ripristinati
         s = load_json(SETTINGS_JSON)
         dss = s["yolo_settings"]["dynamic_stride_settings"]
         return (
-            "✅ Settings ripristinati dal backup pre-test.",
+            "✅ Settings restored from pre-test backup.",
             s["yolo_settings"].get("vid_stride_sec", 0.6),
             dss.get("warmup_sec", 5),
             dss.get("stride_fast_sec", 1.0),
             dss.get("pre_roll_sec", 20),
         )
     except Exception as e:
-        return f"❌ Errore: {str(e)}", *([gr.update()] * 4)
+        return f"❌ Error: {str(e)}", *([gr.update()] * 4)
     
 def restore_settings_default():
     try:
         if not SETTINGS_DEFAULT.exists():
-            return "⚠️ File settings_default.json non trovato nella cartella config."
+            return "⚠️ settings_default.json file not found in config folder."
         import shutil
         shutil.copy2(SETTINGS_DEFAULT, SETTINGS_JSON)
-        return "✅ Settings ripristinati ai valori di default."
+        return "✅ Settings restored to default."
     except Exception as e:
-        return f"❌ Errore ripristino default: {str(e)}"
+        return f"❌ Default reset error: {str(e)}"
 
 # ==============================================================================
 # OLLAMA
@@ -116,8 +107,8 @@ def restore_settings_default():
 def ui_validate_ollama(ip, port, model_name):
     mock_settings = {"model_name": model_name, "ollama_conf": {"ip": ip, "port": port}}
     if validate_ollama_setup(mock_settings):
-        return "✅ Ollama risponde correttamente."
-    return "❌ Validazione fallita. Controlla che Ollama sia attivo e il modello caricato."
+        return "✅ Ollama responds correctly."
+    return "❌ Validation failed. Please check that Ollama is active and the model is downloaded"
 
 # ==============================================================================
 # PROMPT
@@ -130,11 +121,11 @@ def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, m_c, m_f, mode, has_cro
         "modules": {"analyst_mission_crop": m_c, "fallback_header": m_f},
         "templates": load_json(PROMPTS_JSON).get("templates", {})
     }
-    test_cam_cfg = {"desc": "ZONA TEST: Ingresso principale con giardino e parcheggio.", "filters": {"ignore_labels": []}}
+    test_cam_cfg = {"desc": "Test Zone: Main entrance with garden and parking.", "filters": {"ignore_labels": []}}
     try:
         return build_dynamic_prompt(temp_prompts_config, test_cam_cfg, mode=mode, has_crop=has_crop, is_fallback=is_fallback)
     except Exception as e:
-        return f"❌ Errore costruzione prompt: {str(e)}"
+        return f"❌ Prompt construction error: {str(e)}"
 
 def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
     try:
@@ -151,7 +142,7 @@ def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
         save_json(data, PROMPTS_JSON)
         return "✅ Prompt AI aggiornati."
     except Exception as e:
-        return f"❌ Errore salvataggio prompt: {str(e)}"
+        return f"❌ Errore prompt save: {str(e)}"
 
 # ==============================================================================
 # CAMERAS
@@ -225,7 +216,7 @@ def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ign
         cam_data["thresholds_night"] = thresholds_night
     cameras[cam_id] = cam_data
     save_json(cameras, CAMERAS_JSON)
-    return f"✅ Telecamera {cam_id} ({name}) salvata!"
+    return f"✅ Cam {cam_id} ({name}) saved!"
 
 def add_new_camera():
     cameras = load_json(CAMERAS_JSON)
@@ -241,15 +232,15 @@ def add_new_camera():
 
 def delete_camera(cam_id):
     if not cam_id:
-        return gr.update(), "⚠️ Seleziona una telecamera."
+        return gr.update(), "⚠️ Select a camera."
     cameras = load_json(CAMERAS_JSON)
     if cam_id in cameras:
         cam_name = cameras[cam_id].get("name", "")
         del cameras[cam_id]
         save_json(cameras, CAMERAS_JSON)
         new_ids = list(cameras.keys())
-        return gr.update(choices=new_ids, value=new_ids[0] if new_ids else None), f"🗑️ {cam_id} ({cam_name}) eliminata."
-    return gr.update(), "❌ Telecamera non trovata."
+        return gr.update(choices=new_ids, value=new_ids[0] if new_ids else None), f"🗑️ {cam_id} ({cam_name}) deleted."
+    return gr.update(), "❌ Camera not found."
 
 # ==============================================================================
 # ENGINE AVAILABILITY
@@ -314,9 +305,9 @@ def save_comprehensive_settings(*args):
         cb_data["BBOX_SMALL_PERSON_BONUS"] = float(cb_bbox_bonus)
         save_json(cb_data, CLIP_BLIP_JSON)
 
-        return "✅ Tutte le impostazioni salvate!"
+        return "✅ All settings saved!"
     except Exception as e:
-        return f"❌ Errore: {str(e)}\n{traceback.format_exc()}"
+        return f"❌ Error: {str(e)}\n{traceback.format_exc()}"
 
 # ==============================================================================
 # LOG STREAMING
@@ -336,7 +327,7 @@ class QueueHandler(logging.Handler):
 def _run_scanner(input_path, output_path, mode, model_name,
                  use_refine, engine, use_fallback, is_clean_check,
                  no_sort, test_mode, device):
-    """Avvia Scanner in thread e ritorna (thread, result_holder, log_queue, q_handler)."""
+    """Start Scanner in thread and return (thread, result_holder, log_queue, q_handler)."""
     # Aggiorna model e device nel settings.json
     try:
         with open(SETTINGS_JSON, "r", encoding="utf-8") as f:
@@ -347,7 +338,7 @@ def _run_scanner(input_path, output_path, mode, model_name,
         with open(SETTINGS_JSON, "w", encoding="utf-8") as f:
             json.dump(settings_dict, f, indent=4, ensure_ascii=False)
     except Exception as e:
-        log.warning(f"Errore aggiornamento settings.json: {e}")
+        log.warning(f"Error updating settings.json: {e}")
 
     log_queue   = queue.Queue()
     q_handler   = QueueHandler(log_queue)
@@ -378,7 +369,7 @@ def _run_scanner(input_path, output_path, mode, model_name,
 
 
 def _stream_logs(thread, result_holder, log_queue, q_handler, header=""):
-    """Generator che fa lo streaming dei log alla UI."""
+    """Generator that streams logs to the UI."""
     log_lines = [header] if header else []
     while not result_holder["done"] or not log_queue.empty():
         try:
@@ -401,33 +392,33 @@ def _stream_logs(thread, result_holder, log_queue, q_handler, header=""):
             pass
 
     if result_holder["error"]:
-        yield "\n".join(log_lines) + f"\n\n💥 ERRORE:\n{result_holder['error']}"
+        yield "\n".join(log_lines) + f"\n\n💥 ERROR:\n{result_holder['error']}"
     else:
-        yield "\n".join(log_lines) + summary + "\n\n✅ COMPLETATO!"
+        yield "\n".join(log_lines) + summary + "\n\n✅ COMPLETED!!"
 
 
 def run_process(input_path, output_path, mode, model_name,
                 use_refine, engine, use_fallback, is_clean_check, device):
     if not input_path:
-        yield "⚠️ Specifica la cartella di input."
+        yield "⚠️ Specify the input folder."
         return
     input_p = Path(input_path)
     if not input_p.exists() or not input_p.is_dir():
-        yield f"❌ Percorso '{input_path}' non esiste o non è una cartella."
+        yield f"❌ Path '{input_path}' does not exist or is not a folder."
         return
     if is_clean_check and engine != "vision":
-        yield "⚠️ Check Lens Health richiede engine 'vision'."
+        yield "⚠️ Check Lens Health requires 'vision' engine."
         return
 
     final_output = output_path.strip() if output_path and output_path.strip() else input_path
-    header = (f"🚀 Avvio Scanner...\n📂 {input_path}\n"
+    header = (f"🚀 Starting Scanner...\n📂 {input_path}\n"
               f"⚙️  Mode={mode} | Engine={'--refine --' + engine if use_refine else 'yolo only'} "
               f"| Fallback={use_fallback}\n{'─'*60}")
 
     thread, result_holder, log_queue, q_handler = _run_scanner(
         input_path, final_output, mode, model_name,
         use_refine, engine, use_fallback, is_clean_check,
-        False, False, device  # no_sort=False, test_mode=False
+        False, False, device 
     )
     yield from _stream_logs(thread, result_holder, log_queue, q_handler, header)
 
@@ -436,11 +427,11 @@ def run_test_process(input_path, output_path, mode, model_name,
                      use_refine, engine, use_fallback, no_sort, test_mode, device,
                      stride_sec, warmup_sec, stride_fast_sec, pre_roll_sec,num_occ,time_gap):
     if not input_path:
-        yield "⚠️ Specifica la cartella di input."
+        yield "⚠️ Specify the input folder."
         return
     input_p = Path(input_path)
     if not input_p.exists() or not input_p.is_dir():
-        yield f"❌ Percorso non valido."
+        yield f"❌ Path not valid."
         return
 
     final_output = output_path.strip() if output_path and output_path.strip() else input_path
@@ -459,7 +450,7 @@ def run_test_process(input_path, output_path, mode, model_name,
         with open(SETTINGS_JSON, "w", encoding="utf-8") as f:
             json.dump(s, f, indent=4, ensure_ascii=False)
     except Exception as e:
-        yield f"❌ Errore applicazione parametri test: {e}"
+        yield f"❌ Error applying test parameters: {e}"
         return
 
     header = (f"🧪 TEST Scan\n📂 {input_path}\n"
@@ -486,14 +477,14 @@ def run_realtime(input_path, output_path, mode, model_name, engine, device, inte
     global _rt_thread, _rt_stop_event
 
     if _rt_thread and _rt_thread.is_alive():
-        yield "⚠️ Real-time già in esecuzione. Fermalo prima di riavviarlo."
+        yield "⚠️ Real-time already running. Stop it before restarting."
         return
     if not input_path:
-        yield "⚠️ Specifica la cartella di input."
+        yield "⚠️ Specify the input folder."
         return
     input_p = Path(input_path)
     if not input_p.exists() or not input_p.is_dir():
-        yield f"❌ Percorso non valido: {input_path}"
+        yield f"❌ Path not valid: {input_path}"
         return
 
     final_output = output_path.strip() if output_path and output_path.strip() else input_path
@@ -508,7 +499,7 @@ def run_realtime(input_path, output_path, mode, model_name, engine, device, inte
         cycle = 0
         while not _rt_stop_event.is_set():
             cycle += 1
-            log.info(f"─── Ciclo #{cycle} ───")
+            log.info(f"─── Cycle #{cycle} ───")
             try:
                 get_logger(debug=False)
                 with open(SETTINGS_JSON, "r", encoding="utf-8") as f:
@@ -527,16 +518,16 @@ def run_realtime(input_path, output_path, mode, model_name, engine, device, inte
                 )
                 scanner.scan_folder(input_path, final_output)
             except RuntimeError as e:
-                log.critical(f"Errore bloccante: {e}")
+                log.critical(f"Errore: {e}")
                 break
             except Exception as e:
-                log.error(f"Errore ciclo #{cycle}: {e}")
+                log.error(f"Error cycle #{cycle}: {e}")
 
             if not _rt_stop_event.is_set():
-                log.info(f"Ciclo #{cycle} completato. Prossimo in {interval}s")
+                log.info(f"Cycle #{cycle} completated. Next in {interval}s")
                 _rt_stop_event.wait(timeout=interval)
 
-        log.info("Real-time sorter fermato.")
+        log.info("Real-time sorter stopped.")
 
     _rt_thread = threading.Thread(target=_loop, daemon=True)
     _rt_thread.start()
@@ -552,13 +543,13 @@ def run_realtime(input_path, output_path, mode, model_name, engine, device, inte
         time.sleep(0.1)
 
     logging.getLogger().removeHandler(q_handler)
-    yield "\n".join(log_lines) + "\n\n🛑 Real-time fermato."
+    yield "\n".join(log_lines) + "\n\n🛑 Real-time stopped."
 
 
 def stop_realtime():
     global _rt_stop_event
     _rt_stop_event.set()
-    return "🛑 Stop richiesto — il ciclo corrente finirà e poi si fermerà."
+    return "🛑 Stop requested — the current cycle will finish and then stop."
 
 
 # ==============================================================================
@@ -569,16 +560,16 @@ def generate_gt(input_dir, output_dir, check_dupl):
     from smart_surveillance_sorter.generate_ground_truth import genera_ground_truth, check_duplicates_with_log
     from smart_surveillance_sorter.constants import GROUND_TRUTH
     if not input_dir:
-        return "⚠️ Specifica la cartella di input."
+        return "⚠️ Specify the input folder."
     input_p = Path(input_dir)
     if not input_p.exists():
-        return f"❌ Cartella non trovata: {input_dir}"
+        return f"❌ Folder not found: {input_dir}"
     out_p = Path(output_dir.strip()) if output_dir and output_dir.strip() else input_p
     try:
         risultati = genera_ground_truth(str(input_p), log)
         out_file  = out_p / GROUND_TRUTH
         save_json(risultati, out_file)
-        msg = f"✅ Ground Truth generato: {out_file}\n📹 Video trovati: {len(risultati)}"
+        msg = f"✅ Ground Truth generated: {out_file}\n📹 Video found: {len(risultati)}"
         if check_dupl:
             import io, logging as _logging
             buf = io.StringIO()
@@ -587,10 +578,10 @@ def generate_gt(input_dir, output_dir, check_dupl):
             check_duplicates_with_log(str(input_p), log)
             log.removeHandler(h)
             dup_out = buf.getvalue()
-            msg += f"\n\n⚠️ Duplicati:\n{dup_out}" if dup_out.strip() else "\n✅ Nessun duplicato trovato."
+            msg += f"\n\n⚠️ Duplicates:\n{dup_out}" if dup_out.strip() else "\n✅ No duplicates found."
         return msg
     except Exception as e:
-        return f"❌ Errore: {str(e)}"
+        return f"❌ Error: {str(e)}"
 
 
 def run_compare(session_dir, gt_file, res_file):
@@ -633,8 +624,8 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             with gr.Row():
                 with gr.Column(scale=1):
                     run_input  = gr.Textbox(label="Input Directory", placeholder="/home/user/videos")
-                    run_output = gr.Textbox(label="Output Directory (opzionale)")
-                    run_mode   = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="full")
+                    run_output = gr.Textbox(label="Output Directory (optional)")
+                    run_mode   = gr.Radio(["full", "person", "person_animal"], label="Mode", value="full")
 
                 with gr.Column(scale=1):
                     run_model  = gr.Dropdown(choices=get_available_models(), label="YOLO Model", value="yolov8l.pt")
@@ -647,16 +638,16 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             run_engine = gr.Radio(choices=["blip", "vision"], label="Engine", value="blip")
                         with gr.Row():
                             run_fallback    = gr.Checkbox(label="🔍 Fallback", value=False,
-                                                          info="blip→vision su discordanti | vision→NVR bassa conf.")
+                                                          info="blip→vision on discordant | vision→NVR imgs low conf.")
                             run_check_clean = gr.Checkbox(label="🕸️ Check Lens", value=False,
-                                                          info="Solo con engine vision")
+                                                          info="Only with vision engine")
                         run_engine.change(fn=update_engines_availability, inputs=run_engine,
                                           outputs=[run_fallback, run_check_clean])
-                        gr.Markdown("_`blip`: veloce. `vision`: Ollama/Qwen (preciso)._")
+                        gr.Markdown("_`blip`: fast. `vision`: Ollama/Qwen (slow)._")
 
             run_btn    = gr.Button("▶ START SCAN", variant="primary", size="lg")
             run_status = gr.Markdown("")
-            run_log    = gr.Textbox(label="📋 Controlla il terminale per i log dettagliati",
+            run_log    = gr.Textbox(label="📋 Check the terminal for detailed logs",
                                     interactive=False, lines=8)
 
             run_btn.click(
@@ -669,13 +660,13 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
 
         # ── TAB 2: REAL-TIME ──────────────────────────────────────────────────
         with gr.TabItem("🔄 Real-Time"):
-            gr.Markdown("_Loop continuo — analizza i nuovi video ogni N secondi._")
+            gr.Markdown("_Continuous loop — scans new videos every N seconds._")
             with gr.Row():
                 with gr.Column(scale=1):
                     rt_input    = gr.Textbox(label="Input Directory", placeholder="/home/user/videos")
-                    rt_output   = gr.Textbox(label="Output Directory (opzionale)")
+                    rt_output   = gr.Textbox(label="Output Directory (optional)")
                     rt_mode     = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="person")
-                    rt_interval = gr.Slider(10, 300, step=10, value=60, label="Intervallo tra cicli (sec)")
+                    rt_interval = gr.Slider(10, 300, step=10, value=60, label="Interval between cycles (sec)")
 
                 with gr.Column(scale=1):
                     rt_model  = gr.Dropdown(choices=get_available_models(), label="YOLO Model", value="yolov8l.pt")
@@ -683,11 +674,11 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                     with gr.Group():
                         gr.Markdown("### 🧠 Engine")
                         rt_engine = gr.Radio(choices=["blip", "vision"], label="Engine", value="blip")
-                        gr.Markdown("_Fallback e Test mode non disponibili in real-time._")
+                        gr.Markdown("_Fallback and Test mode not available in real-time._")
 
             with gr.Row():
-                rt_start_btn = gr.Button("▶ Avvia Real-Time", variant="primary")
-                rt_stop_btn  = gr.Button("⏹ Ferma", variant="stop")
+                rt_start_btn = gr.Button("▶ Start Real-Time", variant="primary")
+                rt_stop_btn  = gr.Button("⏹ Stop", variant="stop")
             rt_status = gr.Markdown("")
             rt_log    = gr.Textbox(label="Log Real-Time", interactive=False, lines=12)
 
@@ -700,14 +691,14 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
 
         # ── TAB 3: TEST ───────────────────────────────────────────────────────
         with gr.TabItem("🧪 Test & Tuning"):
-            gr.Markdown("_Scan con parametri temporanei. I settings vengono ripristinati automaticamente dopo il test._")
+            gr.Markdown("_Scan with temporary parameters. Settings are automatically restored after the test._")
             with gr.Row():
                 with gr.Column(scale=1):
                     test_input  = gr.Textbox(label="Input Directory", placeholder="/home/user/videos")
-                    test_output = gr.Textbox(label="Output Directory (opzionale)")
-                    test_mode_r = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="full")
+                    test_output = gr.Textbox(label="Output Directory (optional)")
+                    test_mode_r = gr.Radio(["full", "person", "person_animal"], label="Mode", value="full")
                     with gr.Row():
-                        test_is_test = gr.Checkbox(label="🧪 Test mode (copia)", value=True)
+                        test_is_test = gr.Checkbox(label="🧪 Test mode (copy)", value=True)
                         test_no_sort = gr.Checkbox(label="🚫 No Sort",           value=True)
 
                 with gr.Column(scale=1):
@@ -720,7 +711,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             test_engine  = gr.Radio(choices=["blip", "vision"], label="Engine", value="blip")
                         test_fallback = gr.Checkbox(label="🔍 Fallback", value=False)
 
-            gr.Markdown("### 🎚️ Parametri YOLO (temporanei per questo test)")
+            gr.Markdown("### 🎚️ YOLO parameters (temporary for this test)")
             with gr.Row():
                 test_stride_sec      = gr.Slider(0.1, 2.0, step=0.1, value=current_settings["yolo_settings"].get("vid_stride_sec", 0.6),        label="Stride (sec)")
                 test_warmup_sec      = gr.Slider(1, 15,   step=1,   value=dss.get("warmup_sec", 5),          label="Warmup (sec)")
@@ -731,10 +722,10 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                 test_time_gap = gr.Slider(1, 10, step=1, value=current_settings["yolo_settings"]["time_gap_sec"],   label="Time Gap (sec)")
 
             with gr.Row():
-                test_btn   = gr.Button("▶ Avvia Test Scan", variant="primary", size="lg")
-                restore_btn = gr.Button("↩️ Ripristina Backup", variant="secondary")
+                test_btn   = gr.Button("▶ Start Test Scan", variant="primary", size="lg")
+                restore_btn = gr.Button("↩️ Restore Backup", variant="secondary")
 
-            test_status = gr.Markdown("_Il backup viene creato automaticamente prima di ogni test scan._")
+            test_status = gr.Markdown("_The backup is created automatically before each test scan._")
             test_log    = gr.Textbox(label="Log Test", interactive=False, lines=12)
 
             test_btn.click(
@@ -744,7 +735,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                         test_stride_sec, test_warmup_sec, test_stride_fast_sec, test_pre_roll_sec,test_num_occ, test_time_gap],
                 outputs=test_log, queue=True,
             )
-            # restore_btn.click(fn=restore_settings_backup, outputs=test_status)
+            
             restore_btn.click(
                 fn=restore_settings_backup,
                 outputs=[test_status, test_stride_sec, test_warmup_sec, test_stride_fast_sec, test_pre_roll_sec]
@@ -755,25 +746,25 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             with gr.Tabs():
 
                 with gr.Tab("📋 Ground Truth"):
-                    gr.Markdown("_Genera `ground_truth.json` scansionando le sottocartelle (person/, animal/, vehicle/, others/)._")
+                    gr.Markdown("_Generate `ground_truth.json` by scanning subfolders (person/, animal/, vehicle/, others/)._")
                     with gr.Row():
-                        gt_input  = gr.Textbox(label="Cartella video ordinati manualmente")
+                        gt_input  = gr.Textbox(label="Manually sorted video folder")
                         gt_output = gr.Textbox(label="Output directory (default=input)")
-                    gt_dupl = gr.Checkbox(label="Controlla duplicati", value=True)
-                    gt_btn  = gr.Button("📋 Genera Ground Truth", variant="primary")
-                    gt_out  = gr.Textbox(label="Risultato", interactive=False, lines=6)
+                    gt_dupl = gr.Checkbox(label="Check for Duplicates", value=True)
+                    gt_btn  = gr.Button("📋 Generate Ground Truth", variant="primary")
+                    gt_out  = gr.Textbox(label="Risultats", interactive=False, lines=6)
                     gt_btn.click(fn=generate_gt, inputs=[gt_input, gt_output, gt_dupl], outputs=gt_out)
 
                 with gr.Tab("📊 Compare Results"):
-                    gr.Markdown("_Confronta `ground_truth.json` con `classification_results.json`._")
-                    with gr.Accordion("📁 Usa directory (cerca i file automaticamente)", open=True):
-                        cmp_dir = gr.Textbox(label="Directory sessione")
-                    with gr.Accordion("📄 Oppure specifica i file manualmente", open=False):
+                    gr.Markdown("_Compare `ground_truth.json` with `classification_results.json`._")
+                    with gr.Accordion("📁 Use directory (search for files automatically)", open=True):
+                        cmp_dir = gr.Textbox(label="Directory session")
+                    with gr.Accordion("📄 Or specify the files manually", open=False):
                         with gr.Row():
                             cmp_gt  = gr.Textbox(label="Path ground_truth.json")
                             cmp_res = gr.Textbox(label="Path classification_results.json")
-                    cmp_btn = gr.Button("📊 Confronta", variant="primary")
-                    cmp_out = gr.Textbox(label="Risultati", interactive=False, lines=20)
+                    cmp_btn = gr.Button("📊 Compare", variant="primary")
+                    cmp_out = gr.Textbox(label="Risultats", interactive=False, lines=20)
                     cmp_btn.click(fn=run_compare, inputs=[cmp_dir, cmp_gt, cmp_res], outputs=cmp_out)
 
         # ── TAB 5: SETTINGS ───────────────────────────────────────────────────
@@ -824,7 +815,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             v_topp = gr.Slider(0, 1, value=current_settings["vision_settings"]["top_p"], label="Top P")
 
                     with gr.Accordion("🎛️ CLIP+BLIP Engine", open=False):
-                        gr.Markdown("_Globali — sovrascrivibili per singola telecamera nel tab Cameras._")
+                        gr.Markdown("_Global — overridden on a per-camera basis in the Cameras tab._")
                         with gr.Row():
                             cb_weight_crop  = gr.Slider(0, 1, step=0.05, value=cb_set.get("FINAL_WEIGHT_CROP", 0.7),  label="Weight Crop")
                             cb_weight_frame = gr.Slider(0, 1, step=0.05, value=cb_set.get("FINAL_WEIGHT_FRAME", 0.3), label="Weight Frame")
@@ -861,7 +852,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
 
                     with gr.Row():
                         save_all_btn      = gr.Button("💾 SAVE ALL SETTINGS", variant="primary", size="lg")
-                        restore_def_btn   = gr.Button("🔄 Ripristina Default", variant="secondary")
+                        restore_def_btn   = gr.Button("🔄 Restore Default", variant="secondary")
                     status_save = gr.Markdown("")
 
                     validate_btn.click(fn=ui_validate_ollama, inputs=[ollama_ip, ollama_port, v_mod], outputs=validate_status)
@@ -888,31 +879,31 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                     with gr.Row():
                         cam_selector = gr.Dropdown(choices=camera_ids, label="Telecamera",
                                                    value=camera_ids[0] if camera_ids else None, interactive=True)
-                        add_cam_btn  = gr.Button("➕ Aggiungi", variant="secondary")
+                        add_cam_btn  = gr.Button("➕ Add", variant="secondary")
                     with gr.Group():
-                        gr.Markdown("### 📝 Impostazioni")
+                        gr.Markdown("### 📝 Settings")
                         with gr.Row():
                             c_name = gr.Textbox(label="Nome")
                             c_loc  = gr.Textbox(label="Location")
                         with gr.Row():
                             c_patterns = gr.Textbox(label="Search Patterns (virgola)", placeholder="_00_, ch00")
                             c_priority = gr.Dropdown(choices=["person", "animal", "vehicle"], label="Priority")
-                        c_desc = gr.Textbox(label="Description (usata nel prompt Vision AI)", lines=2)
+                        c_desc = gr.Textbox(label="Description (used in Vision AI prompt)", lines=2)
                         with gr.Row():
                             c_dynamic = gr.Checkbox(label="Dynamic Stride")
-                            c_ignore  = gr.Textbox(label="Labels da ignorare (COCO, virgola)")
+                            c_ignore  = gr.Textbox(label="Labels to ignore (COCO, comma)")
                         gr.Markdown("### 🎯 YOLO Thresholds")
-                        gr.Markdown("**Giorno**")
+                        gr.Markdown("**Day**")
                         with gr.Row():
                             cth_p = gr.Slider(0, 1, step=0.01, label="Person")
                             cth_v = gr.Slider(0, 1, step=0.01, label="Vehicle")
                             cth_a = gr.Slider(0, 1, step=0.01, label="Animal")
-                        gr.Markdown("**Notte** — -1 = usa soglie di giorno")
+                        gr.Markdown("**Night** — -1 = usa day thresholds")
                         with gr.Row():
-                            cth_np = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Person notte")
-                            cth_nv = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Vehicle notte")
-                            cth_na = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Animal notte")
-                        gr.Markdown("### 🎛️ CLIP+BLIP Override  (-1 = usa globale)")
+                            cth_np = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Person night")
+                            cth_nv = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Vehicle night")
+                            cth_na = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Animal night")
+                        gr.Markdown("### 🎛️ CLIP+BLIP Override  (-1 = use global)")
                         gr.Markdown("**Fake Weights**")
                         with gr.Row():
                             fw_ground = gr.Slider(0, 1, step=0.05, label="GROUND")
@@ -942,8 +933,8 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                                    cam_fpw_p, cam_fpw_a, cam_fpw_v]
 
                     with gr.Row():
-                        save_cam_btn   = gr.Button("💾 Salva Telecamera", variant="primary")
-                        delete_cam_btn = gr.Button("🗑️ Elimina", variant="stop")
+                        save_cam_btn   = gr.Button("💾 Save Camera", variant="primary")
+                        delete_cam_btn = gr.Button("🗑️ Delete", variant="stop")
                     status_cam = gr.Markdown("")
 
                     save_cam_btn.click(fn=save_single_camera,   inputs=cam_inputs,   outputs=status_cam)
@@ -973,7 +964,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                                 test_is_fb    = gr.Checkbox(label="Simulate Fallback")
                             preview_btn    = gr.Button("🔨 Generate Preview", variant="secondary")
                             prompt_preview = gr.Code(label="Prompt finale", language="markdown", lines=15)
-                    save_prompt_btn = gr.Button("💾 Salva Prompt AI", variant="primary")
+                    save_prompt_btn = gr.Button("💾 Save Prompt AI", variant="primary")
                     status_prompt   = gr.Markdown("")
                     preview_btn.click(
                         fn=preview_prompt_logic,
@@ -988,15 +979,28 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
 
                 # ── System ────────────────────────────────────────────────────
                 with gr.Tab("🖥️ System"):
-                    stop_btn   = gr.Button("🛑 Spegni WebUI", variant="stop")
+                    stop_btn   = gr.Button("🛑 Turn off WebUI", variant="stop")
                     status_sys = gr.Markdown("Status: Running")
                     stop_btn.click(fn=shutdown_server, outputs=status_sys)
 
+import socket
+
+def find_free_port(start=7860, end=7900):
+    for port in range(start, end):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError("No free port found")
 
 if __name__ == "__main__":
+    port = find_free_port()
+
     demo.queue()
     demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
+        server_name="127.0.0.1",
+        server_port=port,
         prevent_thread_lock=False,
     )

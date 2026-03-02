@@ -2,7 +2,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
 ![Status](https://img.shields.io/badge/status-active--main-green.svg)
-![Hardware](https://img.shields.io/badge/HW-CUDA%20%7C%20ROCm-orange.svg)
+![Hardware](https://img.shields.io/badge/HW-CUDA%20%7C%20ROCm%20%7C%20CPU-orange.svg)
 ![AI](https://img.shields.io/badge/AI-YOLO%20%7C%20CLIP%20%7C%20BLIP%20%7C%20Vision-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
@@ -125,7 +125,17 @@ run.bat
 > **AMD GPU on Windows**: Requires AMD Adrenalin driver **26.1.1 or later**.
 > Download from AMD Adrenalin Software → Optional → AI Bundle → PyTorch.
 > Tested on RX 9060 XT with ROCm 7.2 — full GPU acceleration works.
-
+> [!IMPORTANT]
+> **AMD GPU on Windows — Ollama**: ROCm is not yet fully supported for Ollama on Windows.
+> To enable GPU acceleration you must set the `OLLAMA_VULKAN=1` environment variable.
+>
+> **Permanent setup:**
+> 1. Open "Environment Variables" in Windows Settings
+> 2. Under "System variables" → New
+> 4. Restart Ollama from the tray icon
+>
+> Without this setting Ollama will use CPU only (100% CPU, very slow).
+> Tested on RX 9060 XT with AMD Adrenalin 26.1.1 + ROCm 7.2.
 > [!NOTE]
 > **NVIDIA GPU on Windows**: Tested with CUDA 12.4. Should work out of the box with `--use-cuda`.
 
@@ -140,7 +150,18 @@ If you prefer using the terminal, check out our [**CLI Reference Guide**](docs/c
 
 Before running the sorter, you need to set up your environment. You can do this via the Web UI or by manually editing the files in the config/ folder.
 * Set your Location: Open config/settings.json and set your city. This is required to calculate sunrise/sunset times for accurate day/night detection.
-* Filename Template: Ensure the filename_template in settings.json matches how your NVR saves files (e.g., CameraName_YYYYMMDD_HHMMSS.mp4). This allows the sorter to extract the exact timestamp of each event.
+* Filename Template: Ensure the filename_template in settings.json matches how your NVR saves files (e.g., CameraName_YYYYMMDD_HHMMSS.mp4). This allows the sorter to find files correctly.
+```
+Reolink (default)
+"filename_template": "{nvr_name}_{camera_id}_{timestamp}"
+
+Hikvision (es: CH01_20260228063426.mp4)
+"filename_template": "CH{camera_id}_{timestamp}"
+
+Dahua (es: 2026-02-28_06-34-26_cam1.mp4)
+"timestamp_format": "%Y-%m-%d_%H-%M-%S",
+"filename_template": "{timestamp}_{nvr_name}{camera_id}"
+```
 * Cameras Setup: Define your cameras in config/cameras.json. You can use [**cameras_example.json**](docs/cameras_setting.md) as a template.
 
 #### 🛠️ Deep Dive:
@@ -169,5 +190,7 @@ Before running the sorter, you need to set up your environment. You can do this 
 
 ### 📈 Detailed Analysis: 
 * For more hardware benchmarks and test results check out our [**Full Test Report**](docs/tests.md)
+
+
 
 

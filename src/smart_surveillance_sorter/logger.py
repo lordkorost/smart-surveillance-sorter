@@ -12,6 +12,8 @@ import re
 
 import torch
 
+from smart_surveillance_sorter.constants import LOGS_DIR
+
 class ColorFormatter(logging.Formatter):
     # Palette colori ANSI
     RESET  = "\033[0m"
@@ -83,12 +85,13 @@ def get_logger(name: str = None, debug: bool = False) -> logging.Logger:
 
     # 2. Handler per il File (Solo se debug è True)
     if debug:
-        log_dir = "logs"
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
+        os.makedirs(LOGS_DIR, exist_ok=True)
+
+        log_filename = LOGS_DIR / "debug_session.log"
+
         
         # Usiamo un nome fisso per permettere la rotazione (es: debug.log, debug.log.1, ecc.)
-        log_filename = os.path.join(log_dir, "debug_session.log")
+        log_filename = os.path.join(LOGS_DIR, "debug_session.log")
         
         file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         
@@ -148,50 +151,122 @@ def get_ram_info() -> Dict[str, float]:
     }
 import os
 
+# def get_gpu_info() -> Dict[str, float]:
+#     """
+#     Rilevamento VRAM Universale: 
+#     1. Prova AMD (Linux sysfs card1/card0/renderD128)
+#     2. Prova NVIDIA (GPUtil)
+#     3. Ritorna 0.0 se non trova nulla
+#     """
+#     # --- 1. TEST AMD (Linux) ---
+#     # Proviamo i percorsi comuni in ordine di probabilità per GPU dedicate
+#     amd_paths = [
+#         "/sys/class/drm/card1/device", 
+#         "/sys/class/drm/renderD128/device",
+#         "/sys/class/drm/card0/device"
+#     ]
+    
+#     for base_path in amd_paths:
+#         vram_used_p = os.path.join(base_path, "mem_info_vram_used")
+#         vram_total_p = os.path.join(base_path, "mem_info_vram_total")
+        
+#         if os.path.exists(vram_used_p) and os.path.exists(vram_total_p):
+#             try:
+#                 with open(vram_used_p, 'r') as f:
+#                     used = int(f.read().strip()) / (1024**3)
+#                 with open(vram_total_p, 'r') as f:
+#                     total = int(f.read().strip()) / (1024**3)
+#                 return {"total": total, "used": used, "free": total - used}
+#             except:
+#                 continue
+
+#     # --- 2. TEST NVIDIA (GPUtil) ---
+#     try:
+#         import GPUtil
+#         gpus = GPUtil.getGPUs()
+#         if gpus:
+#             gpu = max(gpus, key=lambda g: g.memoryUtil)
+#             t = gpu.memoryTotal / 1024
+#             u = gpu.memoryUsed / 1024
+#             return {"total": t, "used": u, "free": t - u}
+#     except (ImportError, Exception):
+#         pass
+
+#     return {"total": 0.0, "used": 0.0, "free": 0.0}
+# # ------------------------------------------------------------------
+# # 1.3  Rileva device (CPU vs CUDA)
+# # ------------------------------------------------------------------
+# def detect_device() -> Tuple[Union[str, None], Union[torch.device, None]]:
+#     """
+#     Ritorna:
+#       - 'cuda' o 'cpu' (o None se non è CUDA)
+#       - torch.device('cuda:0') oppure torch.device('cpu')
+#     """
+#     if torch.cuda.is_available():
+#         return "cuda", torch.device("cuda:0")
+#     else:
+#         return "cpu", torch.device("cpu")
+
+import os
+from typing import Dict, Tuple, Union
+import torch
+
+try:
+    import GPUtil
+except ImportError:
+    GPUtil = None
+
 def get_gpu_info() -> Dict[str, float]:
     """
-    Rilevamento VRAM Universale: 
-    1. Prova AMD (Linux sysfs card1/card0/renderD128)
-    2. Prova NVIDIA (GPUtil)
-    3. Ritorna 0.0 se non trova nulla
+    Rilevamento VRAM Universale:
+    1. AMD Linux tramite sysfs
+    2. AMD/ROCm o NVIDIA tramite torch
+    3. NVIDIA tramite GPUtil
+    4. Fallback 0.0
     """
-    # --- 1. TEST AMD (Linux) ---
-    # Proviamo i percorsi comuni in ordine di probabilità per GPU dedicate
-    amd_paths = [
-        "/sys/class/drm/card1/device", 
-        "/sys/class/drm/renderD128/device",
-        "/sys/class/drm/card0/device"
-    ]
-    
-    for base_path in amd_paths:
-        vram_used_p = os.path.join(base_path, "mem_info_vram_used")
-        vram_total_p = os.path.join(base_path, "mem_info_vram_total")
-        
-        if os.path.exists(vram_used_p) and os.path.exists(vram_total_p):
-            try:
-                with open(vram_used_p, 'r') as f:
-                    used = int(f.read().strip()) / (1024**3)
-                with open(vram_total_p, 'r') as f:
-                    total = int(f.read().strip()) / (1024**3)
-                return {"total": total, "used": used, "free": total - used}
-            except:
-                continue
+    # --- 1. AMD Linux sysfs ---
+    if os.name == "posix":  # Linux/Mac
+        amd_paths = [
+            "/sys/class/drm/card1/device", 
+            "/sys/class/drm/renderD128/device",
+            "/sys/class/drm/card0/device"
+        ]
+        for base_path in amd_paths:
+            vram_used_p = os.path.join(base_path, "mem_info_vram_used")
+            vram_total_p = os.path.join(base_path, "mem_info_vram_total")
+            if os.path.exists(vram_used_p) and os.path.exists(vram_total_p):
+                try:
+                    with open(vram_used_p, 'r') as f:
+                        used = int(f.read().strip()) / (1024**3)
+                    with open(vram_total_p, 'r') as f:
+                        total = int(f.read().strip()) / (1024**3)
+                    return {"total": total, "used": used, "free": total - used}
+                except Exception:
+                    continue
 
-    # --- 2. TEST NVIDIA (GPUtil) ---
-    try:
-        import GPUtil
-        gpus = GPUtil.getGPUs()
-        if gpus:
-            gpu = max(gpus, key=lambda g: g.memoryUtil)
-            t = gpu.memoryTotal / 1024
-            u = gpu.memoryUsed / 1024
-            return {"total": t, "used": u, "free": t - u}
-    except (ImportError, Exception):
-        pass
+    # --- 2. Torch CUDA/ROCm ---
+    if torch.cuda.is_available():
+        t = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        u = torch.cuda.memory_allocated(0) / (1024**3)
+        return {"total": t, "used": u, "free": t - u}
 
+    # --- 3. GPUtil NVIDIA fallback ---
+    if GPUtil:
+        try:
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                gpu = max(gpus, key=lambda g: g.memoryUtil)
+                t = gpu.memoryTotal / 1024
+                u = gpu.memoryUsed / 1024
+                return {"total": t, "used": u, "free": t - u}
+        except Exception:
+            pass
+
+    # --- 4. Fallback CPU ---
     return {"total": 0.0, "used": 0.0, "free": 0.0}
+
 # ------------------------------------------------------------------
-# 1.3  Rileva device (CPU vs CUDA)
+# Rileva device (CPU vs CUDA)
 # ------------------------------------------------------------------
 def detect_device() -> Tuple[Union[str, None], Union[torch.device, None]]:
     """

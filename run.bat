@@ -1,12 +1,18 @@
 @echo off
-set APP_PATH=%~dp0
-cd /d %APP_PATH%
+echo START BATCH
+echo Current dir: %cd%
+pushd "%~dp0" || (echo pushd FAILED & exit /b 1)
+echo After pushd, dir: %cd%
 
-call .venv\Scripts\activate.bat
+call ".venv\Scripts\activate.bat"
+echo After activate.bat
 
-set PYTHONPATH=%APP_PATH%src
+if not exist models mkdir models
+if not exist logs mkdir logs
+echo Directories OK
 
-echo 🌟 Avvio Gradio WebUI per Smart Surveillance Sorter...
+echo Start Gradio WebUI for Smart Surveillance Sorter...
+python -m smart_surveillance_sorter.webui
+echo After python -m webui
 
-python src\smart_surveillance_sorter\webui.py
 pause
