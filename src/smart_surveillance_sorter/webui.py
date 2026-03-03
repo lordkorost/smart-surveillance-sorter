@@ -712,15 +712,15 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             #     outputs=ALL_BTNS,
             #     queue=False,
             # )
-            rt_stop_btn.click(
-                fn=stop_realtime,
-                outputs=rt_status,
-                queue=False,
-            ).then(
-                fn=enable_btns,
-                outputs=ALL_BTNS,
-                queue=False,
-            )
+            # rt_stop_btn.click(
+            #     fn=stop_realtime,
+            #     outputs=rt_status,
+            #     queue=False,
+            # ).then(
+            #     fn=enable_btns,
+            #     outputs=ALL_BTNS,
+            #     queue=False,
+            # )
 
         # ── TAB 3: TEST ───────────────────────────────────────────────────────
         with gr.TabItem("🧪 Test & Tuning"):
@@ -1081,7 +1081,15 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
         outputs=ALL_BTNS,
         queue=False,
     )
-                
+    rt_stop_btn.click(
+                fn=stop_realtime,
+                outputs=rt_status,
+                queue=False,
+            ).then(
+                fn=enable_btns,
+                outputs=ALL_BTNS,
+                queue=False,
+            )               
 
 import socket
 
