@@ -20,7 +20,13 @@ log = get_logger(debug=True)
 
 SETTINGS_DEFAULT = Path(SETTINGS_JSON).parent / "settings_default.json"
 SETTINGS_BACKUP  = Path(SETTINGS_JSON).parent / "settings_backup.json"
+ALL_BTNS = [run_btn, test_btn, rt_start_btn]
 
+def disable_btns():
+    return [gr.update(interactive=False)] * 3
+
+def enable_btns():
+    return [gr.update(interactive=True)] * 3
 # ==============================================================================
 # UTILITY
 # ==============================================================================
@@ -652,13 +658,21 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             run_log    = gr.Textbox(label="📋 Check the terminal for detailed logs",
                                     interactive=False, lines=8)
 
-            run_btn.click(
-                fn=run_process,
-                inputs=[run_input, run_output, run_mode, run_model,
-                        run_refine, run_engine, run_fallback, run_check_clean, run_device],
-                outputs=run_log,
-                queue=True,
-            )
+            # run_btn.click(
+            #     fn=disable_btns,
+            #     outputs=ALL_BTNS,
+            #     queue=False,
+            # ).then(
+            #     fn=run_process,
+            #     inputs=[run_input, run_output, run_mode, run_model,
+            #             run_refine, run_engine, run_fallback, run_check_clean, run_device],
+            #     outputs=run_log,
+            #     queue=True,
+            # ).then(
+            #     fn=enable_btns,
+            #     outputs=ALL_BTNS,
+            #     queue=False,
+            # )
 
         # ── TAB 2: REAL-TIME ──────────────────────────────────────────────────
         with gr.TabItem("🔄 Real-Time"):
@@ -684,12 +698,29 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             rt_status = gr.Markdown("")
             rt_log    = gr.Textbox(label="Log Real-Time", interactive=False, lines=12)
 
-            rt_start_btn.click(
-                fn=run_realtime,
-                inputs=[rt_input, rt_output, rt_mode, rt_model, rt_engine, rt_device, rt_interval],
-                outputs=rt_log, queue=True,
+            # rt_start_btn.click(
+            #     fn=disable_btns,
+            #     outputs=ALL_BTNS,
+            #     queue=False,
+            # ).then(
+            #     fn=run_realtime,
+            #     inputs=[rt_input, rt_output, rt_mode, rt_model, rt_engine, rt_device, rt_interval],
+            #     outputs=rt_log,
+            #     queue=True,
+            # ).then(
+            #     fn=enable_btns,
+            #     outputs=ALL_BTNS,
+            #     queue=False,
+            # )
+            rt_stop_btn.click(
+                fn=stop_realtime,
+                outputs=rt_status,
+                queue=False,
+            ).then(
+                fn=enable_btns,
+                outputs=ALL_BTNS,
+                queue=False,
             )
-            rt_stop_btn.click(fn=stop_realtime, outputs=rt_status)
 
         # ── TAB 3: TEST ───────────────────────────────────────────────────────
         with gr.TabItem("🧪 Test & Tuning"):
@@ -730,13 +761,23 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             test_status = gr.Markdown("_The backup is created automatically before each test scan._")
             test_log    = gr.Textbox(label="Log Test", interactive=False, lines=12)
 
-            test_btn.click(
-                fn=run_test_process,
-                inputs=[test_input, test_output, test_mode_r, test_model,
-                        test_refine, test_engine, test_fallback, test_no_sort, test_is_test, test_device,
-                        test_stride_sec, test_warmup_sec, test_stride_fast_sec, test_pre_roll_sec,test_num_occ, test_time_gap],
-                outputs=test_log, queue=True,
-            )
+            # test_btn.click(
+            #     fn=disable_btns,
+            #     outputs=ALL_BTNS,
+            #     queue=False,
+            # ).then(
+            #     fn=run_test_process,
+            #     inputs=[test_input, test_output, test_mode_r, test_model,
+            #             test_refine, test_engine, test_fallback, test_no_sort, test_is_test, test_device,
+            #             test_stride_sec, test_warmup_sec, test_stride_fast_sec, test_pre_roll_sec,
+            #             test_num_occ, test_time_gap],
+            #     outputs=test_log,
+            #     queue=True,
+            # ).then(
+            #     fn=enable_btns,
+            #     outputs=ALL_BTNS,
+            #     queue=False,
+            # )
             
             restore_btn.click(
                 fn=restore_settings_backup,
@@ -989,6 +1030,58 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                     stop_btn   = gr.Button("🛑 Turn off WebUI", variant="stop")
                     status_sys = gr.Markdown("Status: Running")
                     stop_btn.click(fn=shutdown_server, outputs=status_sys)
+
+    ALL_BTNS = [run_btn, test_btn, rt_start_btn]
+
+    run_btn.click(
+        fn=disable_btns,
+        outputs=ALL_BTNS,
+        queue=False,
+    ).then(
+        fn=run_process,
+        inputs=[run_input, run_output, run_mode, run_model,
+                run_refine, run_engine, run_fallback, run_check_clean, run_device],
+        outputs=run_log,
+        queue=True,
+    ).then(
+        fn=enable_btns,
+        outputs=ALL_BTNS,
+        queue=False,
+    )
+
+    test_btn.click(
+        fn=disable_btns,
+        outputs=ALL_BTNS,
+        queue=False,
+    ).then(
+        fn=run_test_process,
+        inputs=[test_input, test_output, test_mode_r, test_model,
+                test_refine, test_engine, test_fallback, test_no_sort, test_is_test, test_device,
+                test_stride_sec, test_warmup_sec, test_stride_fast_sec, test_pre_roll_sec,
+                test_num_occ, test_time_gap],
+        outputs=test_log,
+        queue=True,
+    ).then(
+        fn=enable_btns,
+        outputs=ALL_BTNS,
+        queue=False,
+    )
+
+    rt_start_btn.click(
+        fn=disable_btns,
+        outputs=ALL_BTNS,
+        queue=False,
+    ).then(
+        fn=run_realtime,
+        inputs=[rt_input, rt_output, rt_mode, rt_model, rt_engine, rt_device, rt_interval],
+        outputs=rt_log,
+        queue=True,
+    ).then(
+        fn=enable_btns,
+        outputs=ALL_BTNS,
+        queue=False,
+    )
+                
 
 import socket
 
