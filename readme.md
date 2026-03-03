@@ -59,11 +59,6 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 
 ### 📦 Installation
 
-
-
-Readme install · MD
-Copia
-
 #### 1. Clone the repository
 ```bash
 git clone https://github.com/your-username/smart-surveillance-sorter.git
@@ -134,16 +129,14 @@ run.bat
 > 2. Under "System variables" → New
 > 4. Restart Ollama from the tray icon
 >
-> Without this setting Ollama will use CPU only (100% CPU, very slow).
+> Without this setting Ollama will use CPU only.
 > Tested on RX 9060 XT with AMD Adrenalin 26.1.1 + ROCm 7.2.
-> [!NOTE]
-> **NVIDIA GPU on Windows**: Tested with CUDA 12.4. Should work out of the box with `--use-cuda`.
 
 > [!TIP]
 > If auto-detection fails, always use the explicit `--use-rocm` or `--use-cuda` flag.
 > See `docs/windows_gpu.md` for detailed GPU setup instructions.
 
-#### **Advanced CLI Usage**
+#### **CLI Usage**
 If you prefer using the terminal, check out our [**CLI Reference Guide**](docs/cli_reference.md) for all available flags and examples.
 
 ### ⚙️ Configuration
@@ -170,7 +163,8 @@ Dahua (es: 2026-02-28_06-34-26_cam1.mp4)
 
 ⚠️ IMPORTANT: Test Before Use!
 >[!CAUTION]
-> Always use the "Test Mode" first! > Before letting the sorter move your real NVR recordings, run it with the --test flag (or enable "Test Mode" in the Web UI). In this mode, the software will copy files instead of moving them, allowing you to verify if the detection and categorization are working as expected for your specific camera angles.
+> Always use the "Test Mode" first! 
+> Before letting the sorter move your real NVR recordings, run it with the --test flag (or enable "Test Mode" in the Web UI). In this mode, the software will copy files instead of moving them, allowing you to verify if the detection and categorization are working as expected for your specific camera angles.
 
 
 ##  📊 Test Results 

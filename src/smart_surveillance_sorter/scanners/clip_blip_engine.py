@@ -59,7 +59,6 @@ class ClipBlipEngine:
         self.FAKE_KEYS     = cb.get("FAKE_KEYS", {})
         self.BLIP_KEYWORDS = cb.get("BLIP_KEYWORDS", {})
 
-        # --- Parametri v2 (semplificati) ---
 
         # Soglia minima di score CLIP perché un frame sia "significativo"
         # (evita che frame completamente vuoti guidino la decisione)
@@ -102,7 +101,7 @@ class ClipBlipEngine:
         # Coordinate per calcolo notte astronomica
         self.city_name = self.settings.get("city", "Roma")
         self.lat, self.lon = get_smart_coordinates(self.city_name)
-        log.info(f"🚀 ClipBlipEngine  — city={self.city_name} ({self.lat}, {self.lon})")
+        log.info(f"ClipBlipEngine  — city={self.city_name} ({self.lat}, {self.lon})")
 
         # Mappa label YOLO → classe principale
         self.label_to_main_class = {}
@@ -127,7 +126,7 @@ class ClipBlipEngine:
             return {cls: float(sim[0, i]) for i, cls in enumerate(texts)}
 
     # ------------------------------------------------------------------
-    # Scoring per singolo frame — unico punto decisionale
+    # Scoring per singolo frame 
     # ------------------------------------------------------------------
 
     def _score_frame(self, frame, active_rules, is_night):
@@ -292,19 +291,14 @@ class ClipBlipEngine:
         cam_config   = self.ch_configs.get(camera_id, {})
         
         active_rules = self._get_active_rules(camera_id)
-        # ignore_labels = cam_config.get("filters", {}).get("ignore_labels", [])
-        # classes_to_ignore = {
-        #     self.label_to_main_class[lbl.lower()]
-        #     for lbl in ignore_labels
-        #     if lbl.lower() in self.label_to_main_class
-        # }
+      
 
         ignore_classes = set(cam_config.get("filters", {}).get("ignore_classes", []))
 
         frames_list = []
         for frame in frames:
             yolo_category = frame.get("category", "").upper()
-            #print(f"DEBUG: category={yolo_category}, classes_to_ignore={ignore_classes}")
+            
             if yolo_category in ignore_classes:
                 continue
 
@@ -341,7 +335,7 @@ class ClipBlipEngine:
             if (sum(animal_scores) / len(animal_scores)) > threshold:
                 return "ANIMAL"
             
-         # 3. Veicolo (priorità su animale)
+         # 3. Veicolo 
         vehicle_scores = [f["final_scores"]["VEHICLE"] for f in frames_list if f["label"] == "VEHICLE"]
         if vehicle_scores:
             threshold = self._get_dynamic_threshold(len(vehicle_scores), "VEHICLE", active_rules)
