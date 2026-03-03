@@ -20,7 +20,7 @@ log = get_logger(debug=True)
 
 SETTINGS_DEFAULT = Path(SETTINGS_JSON).parent / "settings_default.json"
 SETTINGS_BACKUP  = Path(SETTINGS_JSON).parent / "settings_backup.json"
-ALL_BTNS = [run_btn, test_btn, rt_start_btn]
+#ALL_BTNS = [run_btn, test_btn, rt_start_btn]
 
 def disable_btns():
     return [gr.update(interactive=False)] * 3
