@@ -75,7 +75,17 @@ def build_index(input_dir,settings):
             if imgs < vids:
                 log.warning(f"Camera={cam_id} has less images than videos")
 
+        total_videos = sum(
+            1 for cam_files in index.values() 
+            for f in cam_files if f["type"] == "video"
+        )
+        total_images = sum(
+            1 for cam_files in index.values() 
+            for f in cam_files if f["type"] == "image"
+        )
+        log.info(f"Index complete: cameras={len(index)} | total_video={total_videos} | total_img={total_images}")
         return index
+                
      
 def associate_files(index,input_dir):
     
