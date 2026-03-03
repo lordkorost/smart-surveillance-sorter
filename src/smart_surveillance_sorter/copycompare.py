@@ -125,14 +125,14 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, copy_wrong=No
                     shutil.copy2(src, dst)
                     copied += 1
                 except Exception as e:
-                    _print(f"  ⚠️ Errore copia {video_name}: {e}")
+                    _print(f"  ⚠️ Error copy {video_name}: {e}")
             else:
-                _print(f"  ⚠️ Video non trovato: {video_name}")
+                _print(f"  ⚠️ Video not found: {video_name}")
                 not_found += 1
 
-        _print(f"  ✅ Copiati {copied}/{len(discrepancies)} video")
+        _print(f"  ✅ Copied {copied}/{len(discrepancies)} video")
         if not_found:
-            _print(f"  ⚠️ Non trovati: {not_found}")
+            _print(f"  ⚠️ Not found: {not_found}")
 
 
 if __name__ == "__main__":
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("--gt", type=str, help="Path to file ground_truth.json")
     parser.add_argument("--res", type=str, help="Path to file classification_results.json")
     parser.add_argument("--copy-wrong", type=str, metavar="DEST_DIR",
-                        help="Se specificato, copia i video sbagliati in questa cartella (organizzati per tipo di errore)")
+                        help="Copy wrong videos in folder for error type")
     args = parser.parse_args()
     
     compare_results(session_dir=args.dir, gt_file=args.gt, res_file=args.res, copy_wrong=args.copy_wrong)

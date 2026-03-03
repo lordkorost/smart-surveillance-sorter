@@ -2,11 +2,9 @@ from datetime import timedelta
 from pathlib import Path
 import sys
 import time
-
 import torch
 from smart_surveillance_sorter.constants import CAMERAS_JSON, CHECKS_DIR, CLIPBLIP_CACHE, CLIPBLIP_FALLBACK_CACHE, FINAL_REPORT, FRAME_DIR, LENS_HEALTH, SETTINGS_JSON, VISION_CACHE, YOLO_CACHE
 import logging
-from pathlib import Path
 from smart_surveillance_sorter.file_utils import associate_files, build_index, sortVideos, parse_filename
 from smart_surveillance_sorter.logger import  get_pbar_prefix, log_resource_usage
 from smart_surveillance_sorter.scanners.clip_blip_engine import ClipBlipEngine
@@ -20,7 +18,7 @@ log = logging.getLogger(__name__)
 
 class Scanner():
     def __init__(self, mode, device=None, is_refine=False, is_fallback=False, is_test = False,engine="blip",is_check_clean=False,is_real_time=False,is_sort=True):     
-        # 1. Parametri operativi
+
         self.mode = mode
         self.is_refine = is_refine
         self.is_fallback = is_fallback
@@ -29,7 +27,6 @@ class Scanner():
         self.is_check_clean = is_check_clean
         self.is_real_time = is_real_time
         self.is_sort = is_sort
-
 
         if self.is_test:
             self.stats = {
@@ -87,7 +84,7 @@ class Scanner():
 
         if not self._check_engine_integrity():
         # Solleviamo un errore bloccante
-            raise RuntimeError("Cambio engine rilevato! Cancella il file JSON o usa l'engine corretto.")
+            raise RuntimeError("Engine changed between scans! Delete results json or use the correct engine to resume/continue.")
         # 2. Setup Directory di Lavoro
         self.frames_dir = self.output_dir / FRAME_DIR
         self.frames_dir.mkdir(parents=True, exist_ok=True)
@@ -144,7 +141,6 @@ class Scanner():
                            self.is_test,self.final_data,self.results,
                            self.full_index)
 
-        #abbiamo finito
         total_time = time.time()-t_start
         log.info(f"Folder scan in {total_time}s")
         #se è test dobbiamo salvare le metriche in un json

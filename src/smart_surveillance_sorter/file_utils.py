@@ -15,7 +15,6 @@ def build_index(input_dir,settings):
         log.info(f"Create index of files in folder={input_dir}...")
         index = {}
         # Recuperiamo le impostazioni dal config
-        # Se non esistono, usiamo dei default (Reolink style)
         storage_cfg = settings.get("storage_settings", {})
         template = storage_cfg.get("filename_template", "{nvr_name}_{camera_id}_{timestamp}")
         ts_format = storage_cfg.get("timestamp_format", "%Y%m%d%H%M%S")
@@ -33,7 +32,6 @@ def build_index(input_dir,settings):
                 
                 if size_pre != size_post or size_post == 0:
                     # Se la dimensione cambia o è zero, l'NVR ci sta ancora lavorando
-                    # Non logghiamo con log.info per non intasare, debug è meglio
                     continue 
             # -------------------------------------
             cam_id_raw, ts = parse_filename(f, template, ts_format)
@@ -51,10 +49,9 @@ def build_index(input_dir,settings):
             if cam_id not in index:
                 index[cam_id] = []    
             #file_type = "video" if f.suffix.lower() == ".mp4" else "image"
-            # --- CORREZIONE QUI ---
             video_extensions = {".mp4", ".mkv", ".avi", ".mov"}
             file_type = "video" if f.suffix.lower() in video_extensions else "image"
-            # ----------------------
+      
             index[cam_id].append({
                 "type": file_type,
                 "timestamp": ts,

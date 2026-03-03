@@ -48,7 +48,6 @@ def run_loop():
         except Exception as e:
             log.error(f"Errore nel ciclo: {e}")
         finally:
-            # Pulizia memoria dopo ogni ciclo
             del scanner
             cleanup()
             try:

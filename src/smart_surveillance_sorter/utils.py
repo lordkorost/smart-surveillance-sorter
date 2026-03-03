@@ -29,13 +29,10 @@ def load_json(full_path):
     
     if not isinstance(full_path, Path):
         full_path = PROJECT_ROOT / full_path
-    #log.debug(f"📂 File da caricare {full_path}")    
     try:
         with open(full_path, 'r', encoding='utf-8') as f:
-            #log.debug(f"📂 File caricato con successo: {full_path}")
             return json.load(f)
     except FileNotFoundError:
-        # Usiamo il logger se disponibile, altrimenti log
         log.critical(f"Not found file={full_path}")
         return None
     except json.JSONDecodeError:
@@ -50,7 +47,6 @@ def save_json(data, full_path):
         full_path = PROJECT_ROOT / full_path
         
     try:
-        #log.debug(f"Save file in path={full_path}")
         full_path.parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
@@ -66,70 +62,6 @@ def get_video_capture(video_path):
         log.warning(f"Error is not possible open vid={video_path}")
         return None
     return cap
-
-
-# def parse_filename(path, template, ts_format):
-#     """
-#     Estrae camera_id (stringa) e timestamp (datetime) da file Reolink.
-#     Formato: "NVR Name_ID_YYYYMMDDHHMMSS.mp4"
-#     """
-#     stem = path.stem
-    
-#     # Trasformiamo il template in Regex (scappiamo i caratteri speciali come _)
-#     # Usiamo re.escape per gestire eventuali punti o trattini nel template dell'utente
-#     pattern = re.escape(template)
-#     pattern = pattern.replace(r"\{nvr_name\}", "(?P<nvr_name>.*?)")
-#     pattern = pattern.replace(r"\{camera_id\}", "(?P<camera_id>.*?)")
-#     pattern = pattern.replace(r"\{timestamp\}", "(?P<timestamp>\\d+)")
-    
-#     match = re.search(f"^{pattern}$", stem)
-#     if not match:
-#         return None, None
-        
-#     try:
-#         data = match.groupdict()
-#         cam_id = data.get("camera_id")
-#         timestamp_str = data.get("timestamp")
-        
-#         timestamp = datetime.strptime(timestamp_str, ts_format)
-#         return cam_id, timestamp
-#     except (ValueError, IndexError, TypeError):
-#         return None, None
-    
-
-# def parse_filename_dynamic(file_path, storage_settings):
-#     """
-#     Estrae i metadati dal nome del file usando il template del config.
-#     """
-#     stem = file_path.stem
-#     # template = storage_settings["filename_template"]
-#     # ts_format = storage_settings["timestamp_format"]
-#     template = storage_settings.get("filename_template", "{camera}_{timestamp}")
-#     ts_format = storage_settings.get("timestamp_format", "%Y%m%d_%H%M%S")
-#     # Trasformiamo il template umano in Regex
-#     # Sostituiamo i tag con gruppi di cattura nominati
-#     pattern = template.replace("{nvr_name}", "(?P<nvr_name>.*?)")
-#     pattern = pattern.replace("{camera_id}", "(?P<camera_id>.*?)")
-#     pattern = pattern.replace("{timestamp}", "(?P<timestamp>\\d+)")
-    
-#     # Aggiungiamo i limiti di inizio e fine stringa per sicurezza
-#     pattern = f"^{pattern}$"
-
-#     match = re.search(pattern, stem)
-#     if not match:
-#         return None, None
-
-#     try:
-#         data = match.groupdict()
-#         cam_id = data.get("camera_id")
-#         ts_str = data.get("timestamp")
-        
-#         # Conversione timestamp
-#         timestamp = datetime.strptime(ts_str, ts_format)
-#         return cam_id, timestamp
-#     except (ValueError, TypeError):
-#         return None, None
-    
 
 def get_camera_by_filename(filename, cameras_dict):
     """
@@ -149,7 +81,6 @@ def get_camera_by_filename(filename, cameras_dict):
                 
     return None
 
-
 def get_crop_coordinates(bbox, frame_shape, margin_perc=1.0):
    
     x1, y1, x2, y2 = bbox
@@ -164,7 +95,6 @@ def get_crop_coordinates(bbox, frame_shape, margin_perc=1.0):
         min(x2 + margin_w, w),
         min(y2 + margin_h, h)
     ]
-
 
 def get_target_ids(model, settings, mode, camera_ignore_labels):
     """
@@ -265,18 +195,12 @@ def calculate_score(category, conf, vision_answer, scoring_settings):
         base *= multiplier
     
     elif vision_answer == "nothing":
-        # SMENTITA: Qui applichiamo il Veto. 
-        # Moltiplichiamo per un valore negativo o molto vicino a zero.
-        # Se metti -10.0, cancelli istantaneamente ogni accumulo precedente.
         base = -10.0 
             
     else:
-        # DISCORDANZA: Vision vede altro (es. YOLO cane, Vision persona)
-        # Penalizziamo pesantemente la categoria originale
         base *= 0.1
             
     return base
-
 
 def cleanup():
     """Funzione dedicata alla pulizia profonda della memoria."""
@@ -289,14 +213,13 @@ def cleanup():
             torch.cuda.ipc_collect()
     except ImportError:
         pass
-    # Se vuoi essere super pulito, puoi aggiungere un log
+   
     log_resource_usage(log, "Free memory")
 
 def get_safe_path(base_dir, camera_name, category, structure_type):
     """
     Costruisce il percorso di destinazione in base alla preferenza dell'utente.
     """
-    # Pulizia nome camera (rimuove caratteri non validi per le cartelle)
     safe_camera = re.sub(r'[\\/*?:"<>|]', "", camera_name).strip()
     
     if structure_type == "camera_first":
@@ -320,13 +243,10 @@ def get_camera_mapping():
                    for cam_id, info in data.items()}
         return mapping
     except Exception as e:
-        # Fallback in caso di file mancante o corrotto
         return {}
     
 def save_test_metrics(output_dir, final_reports, total_time, stats, mode):
     metrics_path = Path(output_dir) / "test_metrics.json"
-    
-    # Creiamo un riassunto leggibile per capire la velocità dell'hardware
     performance_summary = {}
     for phase, data in stats.items():
         count = data.get("count", 0)
@@ -385,7 +305,6 @@ def check_dir(dir: str, is_readable=False, is_writeable=False):
 
     return True
 
-
 def validate_ollama_setup(vision_settings):
     """
     Controllo di pre-volo: Ollama è vivo? Il modello qwen3-vl:8b è caricato?
@@ -403,12 +322,9 @@ def validate_ollama_setup(vision_settings):
             log.info(f"Ollama Server response with error={response.status_code}")
             return False
         
-        # Opzionale: controlla se il modello è presente nella lista locale
         models_list = [m['name'] for m in response.json().get('models', [])]
         if model_required not in models_list:
             log.warning(f"Model={model_required} is not reachable. Did you forget to download/activate it?")
-            # Non blocchiamo necessariamente, Ollama potrebbe fare il pull automatico, 
-            # ma è buono saperlo.
             
         log.info(f"✅ Connect to Ollama ({ip}:{port}). Model={model_required}")
         return True
@@ -417,11 +333,10 @@ def validate_ollama_setup(vision_settings):
         log.info(f"Ollama is not reachable on {ip}:{port}.")
         return False
     
-
 def fetch_coords_logic(city_name):
     # LIVELLO 1: PROVA ONLINE (Geopy)
     try:
-        # Controllo rapido connessione (opzionale ma consigliato)
+        # Controllo rapido connessione
         from geopy.geocoders import Nominatim
         geolocator = Nominatim(user_agent="security_app", timeout=3)
         loc = geolocator.geocode(city_name)
@@ -436,31 +351,14 @@ def fetch_coords_logic(city_name):
         return {"lat": city_data.latitude, "lon": city_data.longitude}
     except KeyError:
         log.critical(f"City='{city_name}' not found offline. Fallback on Rome")
-        return {"lat": 41.89, "lon": 12.49} # Default universale
-    
+        return {"lat": 41.89, "lon": 12.49} # Default universale    
 
 def get_smart_coordinates(city_from_settings):
     update_needed = False
 
-    # # 1. Carichiamo la cache se esiste
-    # if COORDS_CACHE_JSON.exists():
-    #     try:
-    #         with open(COORDS_CACHE_JSON, "r") as f:
-    #             cache = json.load(f)
-            
-    #         if cache.get("city_name") == city_from_settings:
-    #             return cache["lat"], cache["lon"]
-    #         else:
-    #             update_needed = True # Città cambiata nel settings.json
-    #     except Exception:
-    #         update_needed = True
-    # else:
-    #     update_needed = True
-
     # 1. Carichiamo la cache (se il file non esiste o è corrotto, avremo un dizionario vuoto)
     cache = load_json(COORDS_CACHE_JSON) or {}
 
-    # 2. Verifichiamo se la città è la stessa
     # 2. Verifichiamo se la città è la stessa e se le coordinate esistono
     if cache.get("city_name") == city_from_settings:
         lat, lon = cache.get("lat"), cache.get("lon")
@@ -469,9 +367,7 @@ def get_smart_coordinates(city_from_settings):
     
     # 3. Se arriviamo qui (città diversa o dati mancanti), serve aggiornare
     update_needed = True
-        
 
-    # 2. Se serve, cerchiamo le nuove coordinate
     # 2. Se serve, cerchiamo le nuove coordinate
     if update_needed:
         coords = fetch_coords_logic(city_from_settings)
@@ -483,11 +379,9 @@ def get_smart_coordinates(city_from_settings):
             "lon": coords["lon"]
         }
         
-        # Usiamo la tua funzione centralizzata invece di with open
         save_json(new_cache_data, COORDS_CACHE_JSON)
             
-        return coords["lat"], coords["lon"]
-    
+        return coords["lat"], coords["lon"]  
 
 def is_night_astronomic(dt_frame, lat, lon):
     # Observer usa solo matematica locale

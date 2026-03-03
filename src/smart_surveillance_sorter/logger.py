@@ -4,9 +4,13 @@ from logging.handlers import RotatingFileHandler
 import os
 import time
 import psutil
-import GPUtil
 from typing import Dict, Tuple, Union
+import torch
 
+try:
+    import GPUtil
+except ImportError:
+    GPUtil = None
 
 import re
 
@@ -22,8 +26,8 @@ class ColorFormatter(logging.Formatter):
     YELLOW = "\033[93m"
     WHITE  = "\033[37m"
     RED    = "\033[91m"
-    CYAN   = "\033[96m"   # <-- AGGIUNGI QUESTA RIGA
-    BLUE   = "\033[94m"   # Opzionale: utile per le chiavi se vuoi cambiare dal Cyan
+    CYAN   = "\033[96m"   
+    BLUE   = "\033[94m"   
 
     COLORS = {
         'DEBUG': PURPLE,
@@ -40,10 +44,10 @@ class ColorFormatter(logging.Formatter):
         level_color = self.COLORS.get(record.levelname, self.RESET)
         colored_level = f"{level_color}{record.levelname:<7}{self.RESET}"
 
-        # 2. Messaggio - Partiamo dal testo grezzo
+        # 2. Messaggio 
         msg = record.getMessage()
 
-        # --- REGOLE DI COLORAZIONE (In ordine di priorità) ---
+        # --- REGOLE DI COLORAZIONE ---
         
         # A. FILE (mp4, jpg, ecc) - Lo facciamo per primo così non viene sovrascritto
         msg = re.sub(r'([\w\-_]+\.(mp4|jpg|png|json|txt|pt))', f"{self.YELLOW}\\1{self.RESET}", msg)
@@ -63,8 +67,7 @@ class ColorFormatter(logging.Formatter):
         # D. FRECCE
         msg = msg.replace("->", f"{self.CYAN}->{self.RESET}")
 
-        # 3. Applichiamo il BIANCO solo alla fine alle parti rimaste senza colore
-        # e assembliamo la riga
+        # 3. BIANCO solo alla fine alle parti rimaste senza colore
         return f"{colored_time} {colored_level}: {self.WHITE}{msg}{self.RESET}"
 
 def get_logger(name: str = None, debug: bool = False) -> logging.Logger:
@@ -88,15 +91,11 @@ def get_logger(name: str = None, debug: bool = False) -> logging.Logger:
         os.makedirs(LOGS_DIR, exist_ok=True)
 
         log_filename = LOGS_DIR / "debug_session.log"
-
-        
-        # Usiamo un nome fisso per permettere la rotazione (es: debug.log, debug.log.1, ecc.)
-        log_filename = os.path.join(LOGS_DIR, "debug_session.log")
         
         file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         
         # Configurazione Rotante: 
-        # maxBytes=10MB, tiene gli ultimi 5 file.
+        # maxBytes=10MB,
         fh = RotatingFileHandler(
             log_filename, 
             maxBytes=10*1024*1024, 
@@ -110,12 +109,6 @@ def get_logger(name: str = None, debug: bool = False) -> logging.Logger:
         
         logger.debug(f"--- LOG DEBUG ROTATE {log_filename} (Max 5 file) ---")
 
-    # # Blocca il rumore di fondo delle librerie esterne
-    # for lib in ["httpx", "httpcore", "urllib3", "huggingface_hub", "timm"]:
-    #     logging.getLogger(lib).setLevel(logging.WARNING)
-    # Blocca il rumore di fondo delle librerie esterne
-    # Usiamo ERROR invece di WARNING per essere ancora più drastici
-    # Liste delle librerie che vogliamo zittire totalmente
     external_libs = [
         "httpx", "httpcore", "urllib3", "huggingface_hub", 
         "timm", "transformers", "open_clip", "ultralytics", 
@@ -124,8 +117,8 @@ def get_logger(name: str = None, debug: bool = False) -> logging.Logger:
     
     for lib_name in external_libs:
         ext_logger = logging.getLogger(lib_name)
-        ext_logger.setLevel(logging.ERROR) # Passa solo se esplode tutto
-        ext_logger.propagate = False       # <--- IMPEDISCE di inviare log al tuo Root Logger
+        ext_logger.setLevel(logging.ERROR) 
+        ext_logger.propagate = False       
 
     # Blocca i Warning di sistema (quelli di Torch/AMD/Flash Attention/GELU)
     import warnings
@@ -149,72 +142,7 @@ def get_ram_info() -> Dict[str, float]:
         "used":  vm.used       / (1024 ** 3),
         "free":  vm.available  / (1024 ** 3),
     }
-import os
 
-# def get_gpu_info() -> Dict[str, float]:
-#     """
-#     Rilevamento VRAM Universale: 
-#     1. Prova AMD (Linux sysfs card1/card0/renderD128)
-#     2. Prova NVIDIA (GPUtil)
-#     3. Ritorna 0.0 se non trova nulla
-#     """
-#     # --- 1. TEST AMD (Linux) ---
-#     # Proviamo i percorsi comuni in ordine di probabilità per GPU dedicate
-#     amd_paths = [
-#         "/sys/class/drm/card1/device", 
-#         "/sys/class/drm/renderD128/device",
-#         "/sys/class/drm/card0/device"
-#     ]
-    
-#     for base_path in amd_paths:
-#         vram_used_p = os.path.join(base_path, "mem_info_vram_used")
-#         vram_total_p = os.path.join(base_path, "mem_info_vram_total")
-        
-#         if os.path.exists(vram_used_p) and os.path.exists(vram_total_p):
-#             try:
-#                 with open(vram_used_p, 'r') as f:
-#                     used = int(f.read().strip()) / (1024**3)
-#                 with open(vram_total_p, 'r') as f:
-#                     total = int(f.read().strip()) / (1024**3)
-#                 return {"total": total, "used": used, "free": total - used}
-#             except:
-#                 continue
-
-#     # --- 2. TEST NVIDIA (GPUtil) ---
-#     try:
-#         import GPUtil
-#         gpus = GPUtil.getGPUs()
-#         if gpus:
-#             gpu = max(gpus, key=lambda g: g.memoryUtil)
-#             t = gpu.memoryTotal / 1024
-#             u = gpu.memoryUsed / 1024
-#             return {"total": t, "used": u, "free": t - u}
-#     except (ImportError, Exception):
-#         pass
-
-#     return {"total": 0.0, "used": 0.0, "free": 0.0}
-# # ------------------------------------------------------------------
-# # 1.3  Rileva device (CPU vs CUDA)
-# # ------------------------------------------------------------------
-# def detect_device() -> Tuple[Union[str, None], Union[torch.device, None]]:
-#     """
-#     Ritorna:
-#       - 'cuda' o 'cpu' (o None se non è CUDA)
-#       - torch.device('cuda:0') oppure torch.device('cpu')
-#     """
-#     if torch.cuda.is_available():
-#         return "cuda", torch.device("cuda:0")
-#     else:
-#         return "cpu", torch.device("cpu")
-
-import os
-from typing import Dict, Tuple, Union
-import torch
-
-try:
-    import GPUtil
-except ImportError:
-    GPUtil = None
 
 def get_gpu_info() -> Dict[str, float]:
     """
@@ -313,7 +241,7 @@ def get_system_stats() -> Dict:
     # 1. CPU & RAM (Universale)
     vm = psutil.virtual_memory()
     stats = {
-        "cpu_usage": psutil.cpu_percent(interval=None), # interval=None non blocca l'esecuzione
+        "cpu_usage": psutil.cpu_percent(interval=None), 
         "ram_total": vm.total / (1024 ** 3),
         "ram_used": vm.used / (1024 ** 3),
         "ram_free": vm.available / (1024 ** 3),
@@ -323,7 +251,7 @@ def get_system_stats() -> Dict:
     }
 
     # 2. GPU AMD (Linux)
-    amd_base = "/sys/class/drm/card1/device" # La tua card1
+    amd_base = "/sys/class/drm/card1/device" 
     if not os.path.exists(amd_base):
         amd_base = "/sys/class/drm/card0/device"
 
@@ -377,5 +305,4 @@ LOG_RESET = "\033[0m"
 def get_pbar_prefix(desc: str = "Progress") -> str:
     """Genera il prefisso colorato con timestamp per tqdm."""
     ts = time.strftime('%H:%M:%S')
-    # Usiamo lo spazio corretto per allinearci a "INFO    :"
     return f"{LOG_GREEN}{ts} INFO   {LOG_RESET}: {desc}"

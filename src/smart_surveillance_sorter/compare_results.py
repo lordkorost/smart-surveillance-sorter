@@ -24,15 +24,15 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
         path_res = Path(res_file)
 
     if not path_gt or not path_res or not path_gt.exists() or not path_res.exists():
-        _err(f"File non trovati!\nGT: {path_gt}\nRES: {path_res}")
-        _err("Specifica una --dir valida o i percorsi diretti con --gt e --res")
+        _err(f"File not found!\nGT: {path_gt}\nRES: {path_res}")
+        _err("Use a valid --dir or direct path with --gt and --res")
         return
 
     gt_list  = load_json(path_gt)
     res_data = load_json(path_res)
 
     if gt_list is None or res_data is None:
-        _err("Errore caricamento JSON: uno o entrambi i file sono mancanti o corrotti.")
+        _err("Error loading json: One or all file missing or corrupted.")
         return
 
     # Normalizzazione GT

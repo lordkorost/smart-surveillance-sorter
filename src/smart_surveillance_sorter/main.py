@@ -72,18 +72,14 @@ def main():
     if args.ground:
         log.info(f"Generate Ground Truth for dir={input_dir}")
         try:
-            # 1. Genera i dati
             risultati = genera_ground_truth(input_dir, log)
             
-            # 2. Definisci il percorso (usando Path per compatibilità con la tua utils)
             output_file_path = Path(output_dir) / GROUND_TRUTH
-            
-            # 3. Usa la tua utility di salvataggio
+
             if save_json(risultati, output_file_path):
                 log.info(f"Ground Truth generate with success file={output_file_path}")
                 log.info(f"Video found {len(risultati)}")
-                
-                # 4. Controllo duplicati
+
                 check_duplicates_with_log(input_dir, log)
             else:
                 log.error("Fail to save file=ground_truth.json")
@@ -98,15 +94,9 @@ def main():
     # --- MODALITÀ CONFRONTO ---
     if args.compare:
         log.info(f"Compare mode")
-        
-        # Se non vengono passati --gt o --res, usiamo i default nella outputDir
-        # gt_path = args.gt if args.gt else Path(output_dir) / "ground_truth.json"
-        # res_path = args.res if args.res else Path(output_dir) / "classification_results.json"
         gt_path = args.gt if args.gt else Path(output_dir) / GROUND_TRUTH
         res_path = args.res if args.res else Path(output_dir) / FINAL_REPORT
         try:
-            # Chiamiamo la funzione di confronto (assicurati di averla importata)
-            # Passiamo None a session_dir perché stiamo già risolvendo i percorsi qui
             compare_results(gt_file=gt_path, res_file=res_path, log=log)
             sys.exit(0)
         except Exception as e:
@@ -122,10 +112,10 @@ def main():
         )
     
     # --- LOGICA SCANNER ---
-    # Prepariamo i parametri per lo splat
+    # parametri per lo splat
     params = vars(args).copy()
 
-    # Pulizia: togliamo tutto ciò che NON è nell'__init__ dello Scanner
+    # Pulizia: via tutto ciò che NON è nell'__init__ dello Scanner
     to_remove = ['dir', 'output_dir', 'ground', 'compare', 'gt', 'res']
     for key in to_remove:
         params.pop(key, None)
@@ -133,9 +123,7 @@ def main():
     start_time = time.time()
     try:
         # Passa tutto all'init dello Scanner
-        # Python mapperà params['is_refine'] su is_refine=... dell'init
         scanner = Scanner(**params) 
-        
         scanner.scan_folder(input_dir, output_dir)
         
     except KeyboardInterrupt:

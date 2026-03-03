@@ -1,5 +1,4 @@
 import os
-#import json
 from pathlib import Path
 import sys
 import argparse
@@ -55,7 +54,7 @@ if __name__ == "__main__":
     parser.add_argument("--test", action="store_true", help="Activate debug log")
     args = parser.parse_args()
 
-    # 1. Inizializza il logger professionale anche qui
+   
     log = get_logger(debug=args.test)
     
     input_dir = args.dir
@@ -75,7 +74,7 @@ if __name__ == "__main__":
     log.info(f"Start ground truth generate on folder={input_dir}")
     risultati = genera_ground_truth(input_dir, log)
     
-    # 5. Salvataggio con la tua utility
+    # 5. Salvataggio
     output_file_path = Path(output_dir) / "ground_truth.json"
     if save_json(risultati, output_file_path):
         log.info(f"✅ Ground Truth create. File={output_file_path}")
@@ -84,5 +83,4 @@ if __name__ == "__main__":
         # 6. Verifica duplicati
         check_duplicates_with_log(input_dir, log)
     else:
-        # Il log.critical è già dentro save_json, quindi qui basta uscire
         sys.exit(1)

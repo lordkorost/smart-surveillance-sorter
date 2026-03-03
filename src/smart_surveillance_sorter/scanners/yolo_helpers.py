@@ -47,7 +47,7 @@ def extract_frames_with_cache(
     frame_cache = {}
     frames_dir = Path(frames_dir)
     # 1. Creiamo una lista piatta di tutti i frame unici che dobbiamo estrarre
-    # Ordiniamo per categoria e confidenza come richiesto
+    # Ordiniamo per categoria e confidenza 
     target_detections = []
     for cat, items in detections.items():
         items.sort(key=lambda x: x["confidence"], reverse=True)
@@ -63,7 +63,7 @@ def extract_frames_with_cache(
         cat = det["category"]
         rank = det["cat_rank"]
 
-        # Recupero frame con posizionamento diretto (molto più veloce)
+        # Recupero frame 
         if frame_idx not in frame_cache:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
@@ -86,7 +86,6 @@ def extract_frames_with_cache(
         
 
         # -------- Salva Crop (Dettaglio per controllo) --------
-        # -------- Taglio del Crop --------
         c_x1, c_y1, c_x2, c_y2 = get_crop_coordinates(det["bbox"], frame.shape)
         cropped_frame = frame[c_y1:c_y2, c_x1:c_x2]
         

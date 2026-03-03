@@ -20,16 +20,17 @@ log = get_logger(debug=True)
 
 SETTINGS_DEFAULT = Path(SETTINGS_JSON).parent / "settings_default.json"
 SETTINGS_BACKUP  = Path(SETTINGS_JSON).parent / "settings_backup.json"
-#ALL_BTNS = [run_btn, test_btn, rt_start_btn]
+
+
+# ==============================================================================
+# UTILITY
+# ==============================================================================
 
 def disable_btns():
     return [gr.update(interactive=False)] * 3
 
 def enable_btns():
     return [gr.update(interactive=True)] * 3
-# ==============================================================================
-# UTILITY
-# ==============================================================================
 
 def get_available_models():
     if MODELS_DIR.exists():
@@ -532,7 +533,7 @@ def run_realtime(input_path, output_path, mode, model_name, engine, device, inte
                 log.error(f"Error cycle #{cycle}: {e}")
 
             if not _rt_stop_event.is_set():
-                log.info(f"Cycle #{cycle} completated. Next in {interval}s")
+                log.info(f"Cycle #{cycle} completed. Next in {interval}s")
                 _rt_stop_event.wait(timeout=interval)
 
         log.info("Real-time sorter stopped.")
@@ -761,23 +762,6 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             test_status = gr.Markdown("_The backup is created automatically before each test scan._")
             test_log    = gr.Textbox(label="Log Test", interactive=False, lines=12)
 
-            # test_btn.click(
-            #     fn=disable_btns,
-            #     outputs=ALL_BTNS,
-            #     queue=False,
-            # ).then(
-            #     fn=run_test_process,
-            #     inputs=[test_input, test_output, test_mode_r, test_model,
-            #             test_refine, test_engine, test_fallback, test_no_sort, test_is_test, test_device,
-            #             test_stride_sec, test_warmup_sec, test_stride_fast_sec, test_pre_roll_sec,
-            #             test_num_occ, test_time_gap],
-            #     outputs=test_log,
-            #     queue=True,
-            # ).then(
-            #     fn=enable_btns,
-            #     outputs=ALL_BTNS,
-            #     queue=False,
-            # )
             
             restore_btn.click(
                 fn=restore_settings_backup,
@@ -795,7 +779,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                         gt_output = gr.Textbox(label="Output directory (default=input)")
                     gt_dupl = gr.Checkbox(label="Check for Duplicates", value=True)
                     gt_btn  = gr.Button("📋 Generate Ground Truth", variant="primary")
-                    gt_out  = gr.Textbox(label="Risultats", interactive=False, lines=6)
+                    gt_out  = gr.Textbox(label="Results", interactive=False, lines=6)
                     gt_btn.click(fn=generate_gt, inputs=[gt_input, gt_output, gt_dupl], outputs=gt_out)
 
                 with gr.Tab("📊 Compare Results"):
@@ -835,7 +819,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                                              value=current_settings["yolo_settings"]["device"])
                         with gr.Row():
                             y_stride_sec     = gr.Number(label="Video Stride (sec)", value=current_settings["yolo_settings"].get("vid_stride_sec", 0.6))
-                            y_occ            = gr.Slider(1, 10, step=1, label="Num. Occorrenze", value=current_settings["yolo_settings"]["num_occurrence"])
+                            y_occ            = gr.Slider(1, 10, step=1, label="Num. Occurrence", value=current_settings["yolo_settings"]["num_occurrence"])
                             y_gap            = gr.Number(label="Time Gap (sec)", value=current_settings["yolo_settings"]["time_gap_sec"])
                         gr.Markdown("**Dynamic Stride**")
                         with gr.Row():

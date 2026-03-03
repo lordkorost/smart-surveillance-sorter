@@ -58,7 +58,7 @@ class FileSorter:
         """
         video_src = Path(item["video_path"])
         
-        # 1. Determina la cartella di destinazione (es. Orto/person)
+        # 1. Determina la cartella di destinazione
         target_dir = get_safe_path(
             base_dir, 
             item["camera_name"], 
@@ -93,23 +93,22 @@ class FileSorter:
 
    
     def sort_all(self, final_results, raw_results, full_index):
-        processed_videos = {}
-        processed_files = set() # <--- IL NOSTRO VIGILE URBANO
+        # processed_videos = {}
+        # processed_files = set() 
       
-        # 1. CONTROLLO PERMESSI TATTICO
+       
         import os
         if os.access(self.input_dir, os.W_OK):
             # Caso normale: scriviamo nell'input
             self.dest_base = self.input_dir
             log.info(f"Dir={self.input_dir}")
         else:
-            # Caso emergenza: scriviamo nella work_dir (che è temp_dir)
             self.dest_base = self.work_dir / "SMI_SORTED_RESULTS"
             self.dest_base.mkdir(parents=True, exist_ok=True)
             log.warning(f"Input is not writeable! Risults on folder={self.dest_base}")
         # --- CARICAMENTO MAPPING REALE ---
         # Usiamo la tua funzione che legge cameras.json, non settings.json!
-        from utils import get_camera_mapping 
+        from smart_surveillance_sorter.utils import get_camera_mapping 
         camera_mapping = get_camera_mapping() 
         
         #log.debug(f"--- DEBUG: Mapping caricato da cameras.json: {camera_mapping}")
@@ -138,7 +137,7 @@ class FileSorter:
                     })
                     classificati_paths.add(v_path)
 
-        files_processati = set() # Per evitare di copiare due volte la stessa immagine NVR
+        files_processati = set() 
 
         for item in final_results:
             v_path = item["video_path"]
@@ -168,7 +167,7 @@ class FileSorter:
                         if self._execute_io(f_src, target_dir / Path(f_src).name):
                             files_processati.add(f_src)
                     
-                    # Immagine Crop (quella zoomata per Qwen)
+                    # Immagine Crop 
                     c_src = f_info.get("crop_path")
                     if c_src and c_src not in files_processati:
                         if self._execute_io(c_src, target_dir / Path(c_src).name):

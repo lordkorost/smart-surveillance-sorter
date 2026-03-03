@@ -43,23 +43,19 @@ def load_smart_yolo(model_name, device=None):
     # 2. Normalizza (assicura .pt) e usa la costante MODELS_DIR
     model_file = model_name if model_name.endswith(".pt") else f"{model_name}.pt"
     local_path = MODELS_DIR / model_file
-    log.debug(f"🚀 [YOLO] device: {device}")
     # 3. Caricamento fisico
     if local_path.exists():
         log.info(f"📦 [YOLO] Loading: {local_path}")
         model = YOLO(str(local_path))
     else:
         log.info(f"🌐 [YOLO] Download {model_file} in {MODELS_DIR}...")
-        model = YOLO(model_file)
-        model.save(str(local_path))
+        model = YOLO(str(MODELS_DIR / model_file))
     
     if device:
         target_device = device
     else:
         target_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    #log.info(f"🚀 [YOLO] Forzatura device: {target_device}")
-    log.debug(f"🎯 [YOLO] Setting finale device: {target_device}")
     log.debug(f"[YOLO] → Utilizzo device: {target_device}")
     model.to(target_device)
     
