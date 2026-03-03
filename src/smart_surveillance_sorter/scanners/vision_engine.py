@@ -93,116 +93,221 @@ class VisionEngine:
             log.error(traceback.format_exc()) # Questo ti dice l'esatta riga dell'errore
             return {"label": "others", "thinking": f"Error: {str(e)}"}
 
-    def refine_single_video(self, video_data):
+    # def refine_single_video(self, video_data):
 
     
-        cam_id = video_data["camera_id"]
-        video_path = Path(video_data["video_path"])
-        frames = video_data["frames"]
+    #     cam_id = video_data["camera_id"]
+    #     video_path = Path(video_data["video_path"])
+    #     frames = video_data["frames"]
         
-        cam_cfg = self.cameras_config.get(cam_id, {})
-        #has_crops = any(f.get("crop_path") for f in frames)
-        has_crops = False
-        # Generazione prompt
-         # --- 🚀 RISOLUZIONE ALLA RADICE (FUORI DAL FOR) ---
-        is_nvr = video_data.get("resolved_by") == "nvr_image"
-        has_yolo_person = any(f.get("category") == "person" for f in frames)
-        # Se il video è NVR e YOLO ha trovato persone (anche solo una)
-        if is_nvr and has_yolo_person:
-            #print(f"  [NVR FAST-TRACK] Video {video_data.get("video_path")} validato istantaneamente via YOLO")
-            # Prendiamo il primo frame utile per popolare il report
-            #best_f = next(f for f in frames if f.get("category") == "person")
-            category = "person"
-            return self._build_result(cam_id, video_path, "person", frames[0]["frame_path"] if frames else None, frames, thinking="NVR image")
+    #     cam_cfg = self.cameras_config.get(cam_id, {})
+    #     #has_crops = any(f.get("crop_path") for f in frames)
+    #     has_crops = False
+    #     # Generazione prompt
+    #      # --- 🚀 RISOLUZIONE ALLA RADICE (FUORI DAL FOR) ---
+    #     is_nvr = video_data.get("resolved_by") == "nvr_image"
+    #     has_yolo_person = any(f.get("category") == "person" for f in frames)
+    #     # Se il video è NVR e YOLO ha trovato persone (anche solo una)
+    #     if is_nvr and has_yolo_person:
+    #         #print(f"  [NVR FAST-TRACK] Video {video_data.get("video_path")} validato istantaneamente via YOLO")
+    #         # Prendiamo il primo frame utile per popolare il report
+    #         #best_f = next(f for f in frames if f.get("category") == "person")
+    #         category = "person"
+    #         return self._build_result(cam_id, video_path, "person", frames[0]["frame_path"] if frames else None, frames, thinking="NVR image")
 
-        prompt = build_dynamic_prompt(
-            self.prompts_config, 
-            cam_cfg, 
-            mode=self.mode, 
-            has_crop=has_crops
-        )
-        # print("--- INIZIO PROMPT INVIATO ---")
-        # print(prompt)
-        # print("--- FINE PROMPT INVIATO ---")
-        scores = defaultdict(float)
-        last_frame = {}
+    #     prompt = build_dynamic_prompt(
+    #         self.prompts_config, 
+    #         cam_cfg, 
+    #         mode=self.mode, 
+    #         has_crop=has_crops
+    #     )
+    #     # print("--- INIZIO PROMPT INVIATO ---")
+    #     # print(prompt)
+    #     # print("--- FINE PROMPT INVIATO ---")
+    #     scores = defaultdict(float)
+    #     last_frame = {}
         
-        # Allineamento con il tuo settings.json ("scoring_system")
-        scoring_cfg = self.settings.get("scoring_system", {})
+    #     # Allineamento con il tuo settings.json ("scoring_system")
+    #     scoring_cfg = self.settings.get("scoring_system", {})
      
-        for frame in frames:
-            category = frame["category"]
-            conf = frame["confidence"]
-            img_path = frame["frame_path"]
+    #     for frame in frames:
+    #         category = frame["category"]
+    #         conf = frame["confidence"]
+    #         img_path = frame["frame_path"]
         
-            image_inputs = [img_path]
+    #         image_inputs = [img_path]
         
-            result = self.query_vision_model(prompt, image_inputs)
+    #         result = self.query_vision_model(prompt, image_inputs)
        
-            thinking = result.get("thinking", "")
-            vision_answer = result.get("label", "others").lower()
-            if vision_answer == "nothing": vision_answer = "others" # Bridge per sicurezza    
-            # Salviamo il thinking nel record del video per il log finale
-            video_data["thinking"] = thinking
-            # --- PRIORITÀ PERSONA ---
+    #         thinking = result.get("thinking", "")
+    #         vision_answer = result.get("label", "others").lower()
+    #         if vision_answer == "nothing": vision_answer = "others" # Bridge per sicurezza    
+    #         # Salviamo il thinking nel record del video per il log finale
+    #         video_data["thinking"] = thinking
+    #         # --- PRIORITÀ PERSONA ---
          
 
-            # 1. Se Vision dice Persona, chiudiamo subito (Massima Priorità)
-            if vision_answer == "person":
-                return self._build_result(cam_id, video_path, "person", img_path, frames, thinking)
+    #         # 1. Se Vision dice Persona, chiudiamo subito (Massima Priorità)
+    #         if vision_answer == "person":
+    #             return self._build_result(cam_id, video_path, "person", img_path, frames, thinking)
 
-            # 2. Calcolo del guadagno (Gain)
-            # Usiamo una logica di smentita aggressiva per eliminare il legno
+    #         # 2. Calcolo del guadagno (Gain)
+    #         # Usiamo una logica di smentita aggressiva per eliminare il legno
+    #         if vision_answer == "others":
+    #             # Se Vision non vede nulla, diamo un peso negativo che annulla la confidenza di YOLO
+    #             current_gain = -10.0 
+    #         elif vision_answer == category:
+    #             # Se Vision conferma (animal==animal o vehicle==vehicle), bonus!
+    #             current_gain = max(conf * 2.0, 1.5) # Forza almeno a 1.5 se c'è accordo
+    #         else:
+    #             # Se c'è discordanza (es. YOLO dice Animal, Vision dice Vehicle)
+    #             current_gain = conf * 0.5
+
+    #         scores[category] += current_gain
+    #         last_frame[category] = img_path
+
+    #         # 3. Early Exit (Solo per Animal/Vehicle confermati)
+    #         # Se il punteggio sale e Vision è d'accordo, usciamo senza aspettare altri frame
+    #         if category in ["animal", "vehicle"] and scores[category] >= 5.0 and vision_answer == category:
+    #             return self._build_result(cam_id, video_path, category, img_path, frames, thinking)
+
+
+
+    #     return self._run_ballot(scores, frames, last_frame, cam_id, video_path, scoring_cfg,thinking)
+
+    # def _run_ballot(self, scores, frames, last_frame, cam_id, video_path, scoring_cfg, thinking):
+    #     override_cfg = scoring_cfg.get("yolo_override", {})
+    #     min_conf = override_cfg.get("person_min_conf", 0.58)
+    #     # Punteggio minimo per fidarsi dei voti accumulati (animali/veicoli)
+    #     min_score = override_cfg.get("min_total_score_to_skip_override", 1.2)
+
+    #     active_scores = {k: v for k, v in scores.items() if k in ["person", "animal", "vehicle"]}
+        
+    #     # --- STEP 1: OVERRIDE PERSONA (Il tuo Veto) ---
+    #     # Se non abbiamo punteggi forti, controlliamo se YOLO aveva visto una persona con alta confidenza
+    #     current_max_score = max(active_scores.values(), default=0)
+        
+    #     if current_max_score <= min_score:
+    #         high_conf_yolo_person = [f for f in frames if f["category"] == "person" and f["confidence"] > min_conf]
+    #         if high_conf_yolo_person:
+    #             best = max(high_conf_yolo_person, key=lambda x: x["confidence"])
+    #             log.debug(f"⚠️ OVERRIDE: YOLO confirm Person ({best['confidence']:.2f}) Vision category discarded.")
+    #             return self._build_result(cam_id, video_path, "person", best["frame_path"], frames, thinking)
+
+    #     # --- STEP 2: VERDETTO FINALE ---
+    #     if active_scores:
+    #         final_cat = max(active_scores, key=active_scores.get)
+    #         if active_scores[final_cat] > min_score:
+    #             return self._build_result(cam_id, video_path, final_cat, last_frame[final_cat], frames, thinking)
+
+    #     # --- STEP 3: DEFAULT ---
+    #     return self._build_result(cam_id, video_path, "others", frames[0]["frame_path"] if frames else None, frames, thinking=thinking)
+    def refine_single_video(self, video_data):
+
+        cam_id     = video_data["camera_id"]
+        video_path = Path(video_data["video_path"])
+        frames     = video_data["frames"]
+        cam_cfg    = self.cameras_config.get(cam_id, {})
+        scoring_cfg = self.settings.get("scoring_system", {})
+
+        # --- NVR FAST-TRACK ---
+        is_nvr          = video_data.get("resolved_by") == "nvr_image"
+        has_yolo_person = any(f.get("category") == "person" for f in frames)
+        if is_nvr and has_yolo_person:
+            return self._build_result(cam_id, video_path, "person",
+                                      frames[0]["frame_path"] if frames else None,
+                                      frames, thinking="NVR image")
+
+        # Prompt — niente crop
+        prompt = build_dynamic_prompt(
+            self.prompts_config,
+            cam_cfg,
+            mode=self.mode,
+            has_crop=False
+        )
+
+        scores         = defaultdict(float)
+        last_frame     = {}
+        confirm_count  = defaultdict(int)   # contatore conferme per categoria
+        others_count   = 0                  # contatore "others" consecutivi
+
+        for frame in frames:
+            category = frame["category"]
+            conf     = frame["confidence"]
+            img_path = frame["frame_path"]
+
+            result       = self.query_vision_model(prompt, [img_path])
+            thinking     = result.get("thinking", "")
+            vision_answer = result.get("label", "others").lower()
+            if vision_answer == "nothing":
+                vision_answer = "others"
+
+            video_data["thinking"] = thinking
+
+            # --- 1. PERSON — exit immediato ---
+            if vision_answer == "person":
+                return self._build_result(cam_id, video_path, "person",
+                                          img_path, frames, thinking)
+
+            # --- 2. ANIMAL / VEHICLE ---
+            if vision_answer in ["animal", "vehicle"] and vision_answer == category:
+                confirm_count[vision_answer] += 1
+                others_count = 0  # reset others
+                # Exit se: conf alta (1 conferma) oppure 2 conferme qualsiasi
+                if conf >= 0.65 or confirm_count[vision_answer] >= 2:
+                    log.debug(f"✅ Fast exit {vision_answer} conf={conf:.2f} confirms={confirm_count[vision_answer]}")
+                    return self._build_result(cam_id, video_path, vision_answer,
+                                              img_path, frames, thinking)
+
+            # --- 3. OTHERS — 2 volte → bail out al ballot ---
             if vision_answer == "others":
-                # Se Vision non vede nulla, diamo un peso negativo che annulla la confidenza di YOLO
-                current_gain = -10.0 
+                others_count += 1
+                if others_count >= 2:
+                    log.debug(f"⏩ Fast bail-out: Vision said others {others_count}x → ballot")
+                    break
+
+            # Accumulo score per il ballot
+            if vision_answer == "others":
+                current_gain = -10.0
             elif vision_answer == category:
-                # Se Vision conferma (animal==animal o vehicle==vehicle), bonus!
-                current_gain = max(conf * 2.0, 1.5) # Forza almeno a 1.5 se c'è accordo
+                current_gain = max(conf * 2.0, 1.5)
             else:
-                # Se c'è discordanza (es. YOLO dice Animal, Vision dice Vehicle)
                 current_gain = conf * 0.5
 
-            scores[category] += current_gain
+            scores[category]    += current_gain
             last_frame[category] = img_path
 
-            # 3. Early Exit (Solo per Animal/Vehicle confermati)
-            # Se il punteggio sale e Vision è d'accordo, usciamo senza aspettare altri frame
-            if category in ["animal", "vehicle"] and scores[category] >= 5.0 and vision_answer == category:
-                return self._build_result(cam_id, video_path, category, img_path, frames, thinking)
-
-
-
-        return self._run_ballot(scores, frames, last_frame, cam_id, video_path, scoring_cfg,thinking)
+        return self._run_ballot(scores, frames, last_frame, cam_id, video_path, scoring_cfg, thinking)
 
     def _run_ballot(self, scores, frames, last_frame, cam_id, video_path, scoring_cfg, thinking):
         override_cfg = scoring_cfg.get("yolo_override", {})
-        min_conf = override_cfg.get("person_min_conf", 0.58)
-        # Punteggio minimo per fidarsi dei voti accumulati (animali/veicoli)
-        min_score = override_cfg.get("min_total_score_to_skip_override", 1.2)
+        min_conf     = override_cfg.get("person_min_conf", 0.58)
+        min_score    = override_cfg.get("min_total_score_to_skip_override", 1.2)
 
         active_scores = {k: v for k, v in scores.items() if k in ["person", "animal", "vehicle"]}
-        
-        # --- STEP 1: OVERRIDE PERSONA (Il tuo Veto) ---
-        # Se non abbiamo punteggi forti, controlliamo se YOLO aveva visto una persona con alta confidenza
         current_max_score = max(active_scores.values(), default=0)
-        
+
+        # --- STEP 1: OVERRIDE PERSONA ---
         if current_max_score <= min_score:
-            high_conf_yolo_person = [f for f in frames if f["category"] == "person" and f["confidence"] > min_conf]
+            high_conf_yolo_person = [f for f in frames
+                                     if f["category"] == "person" and f["confidence"] > min_conf]
             if high_conf_yolo_person:
                 best = max(high_conf_yolo_person, key=lambda x: x["confidence"])
-                log.debug(f"⚠️ OVERRIDE: YOLO confirm Person ({best['confidence']:.2f}) Vision category discarded.")
-                return self._build_result(cam_id, video_path, "person", best["frame_path"], frames, thinking)
+                log.debug(f"⚠️ OVERRIDE: YOLO Person ({best['confidence']:.2f}) Vision discarded.")
+                return self._build_result(cam_id, video_path, "person",
+                                          best["frame_path"], frames, thinking)
 
         # --- STEP 2: VERDETTO FINALE ---
         if active_scores:
             final_cat = max(active_scores, key=active_scores.get)
             if active_scores[final_cat] > min_score:
-                return self._build_result(cam_id, video_path, final_cat, last_frame[final_cat], frames, thinking)
+                return self._build_result(cam_id, video_path, final_cat,
+                                          last_frame[final_cat], frames, thinking)
 
         # --- STEP 3: DEFAULT ---
-        return self._build_result(cam_id, video_path, "others", frames[0]["frame_path"] if frames else None, frames, thinking=thinking)
-
+        return self._build_result(cam_id, video_path, "others",
+                                  frames[0]["frame_path"] if frames else None,
+                                  frames, thinking=thinking)
 
     def _build_result(self, cam_id, video_path, category, frame_used, all_frames,thinking):
         video_path_obj = Path(video_path)

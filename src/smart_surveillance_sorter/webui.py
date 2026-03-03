@@ -718,7 +718,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                 test_stride_fast_sec = gr.Slider(0.5, 3.0, step=0.1, value=dss.get("stride_fast_sec", 1.0),  label="Stride Fast (sec)")
                 test_pre_roll_sec    = gr.Slider(5, 30,   step=1,   value=dss.get("pre_roll_sec", 20),       label="Pre Roll (sec)")
             with gr.Row():
-                test_num_occ = gr.Slider(1, 10, step=1, value=current_settings["yolo_settings"]["num_occurrence"], label="Num. Occorrenze")
+                test_num_occ = gr.Slider(1, 10, step=1, value=current_settings["yolo_settings"]["num_occurrence"], label="Num. occurrences")
                 test_time_gap = gr.Slider(1, 10, step=1, value=current_settings["yolo_settings"]["time_gap_sec"],   label="Time Gap (sec)")
 
             with gr.Row():

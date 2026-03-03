@@ -6,7 +6,14 @@ echo After pushd, dir: %cd%
 
 call ".venv\Scripts\activate.bat"
 echo After activate.bat
-
+:: Check aggiornamenti
+for /f %%i in ('git rev-parse HEAD 2^>nul') do set CURRENT=%%i
+for /f %%i in ('git ls-remote origin HEAD 2^>nul') do set REMOTE=%%i
+if not "%CURRENT%"=="%REMOTE%" (
+    if not "%REMOTE%"=="" (
+        echo ⚠️  Nuova versione disponibile! Esegui: git pull ^&^& pip install -e .
+    )
+)
 if not exist models mkdir models
 if not exist logs mkdir logs
 echo Directories OK

@@ -17,8 +17,7 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
         s_path = Path(session_dir)
         path_gt = s_path / GROUND_TRUTH
         path_res = s_path / FINAL_REPORT
-    
-    # Se l'utente specifica i file esplicitamente, questi vincono sulla directory
+
     if gt_file:
         path_gt = Path(gt_file)
     if res_file:
@@ -29,12 +28,9 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
         _err("Specifica una --dir valida o i percorsi diretti con --gt e --res")
         return
 
-    _print(f"📊 Confronto in corso...\n📖 GT: {path_gt}\n🤖 AI: {path_res}")
-
-    gt_list = load_json(path_gt)
+    gt_list  = load_json(path_gt)
     res_data = load_json(path_res)
 
-    # Controlliamo che entrambi siano stati caricati correttamente
     if gt_list is None or res_data is None:
         _err("Errore caricamento JSON: uno o entrambi i file sono mancanti o corrotti.")
         return
@@ -48,85 +44,84 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
     else:
         res_map = {os.path.basename(path): data["video_category"].upper() for path, data in res_data.items()}
 
+    # --- INTERSEZIONE E VIDEO MANCANTI ---
+    all_videos  = set(gt_map.keys()).intersection(set(res_map.keys()))
+    only_in_gt  = set(gt_map.keys()) - set(res_map.keys())
+    only_in_res = set(res_map.keys()) - set(gt_map.keys())
+
     # --- CALCOLO STATISTICHE ---
     categories = ["PERSON", "VEHICLE", "ANIMAL", "OTHERS"]
     stats = {cat: {"FP": 0, "FN": 0, "TP": 0} for cat in categories}
-    all_videos = set(gt_map.keys()).intersection(set(res_map.keys()))
     discrepancies = []
 
     for video in all_videos:
-        actual = gt_map.get(video, "OTHERS")
+        actual    = gt_map.get(video, "OTHERS")
         predicted = res_map.get(video, "OTHERS")
 
-        # Se sono uguali (entrambi OTHERS o entrambi PERSON, ecc.), è un successo
         if actual == predicted:
-            # Contiamo il successo solo per le categorie "interessanti"
             if actual in stats:
                 stats[actual]["TP"] += 1
-            continue  # Passiamo al prossimo video, niente errori qui
+            continue
 
-        # Se arriviamo qui, c'è una discrepanza
-        
-        # Caso 1: L'AI ha visto qualcosa (es. PERSON) in un video che era OTHERS
         if actual == "OTHERS" and predicted in stats:
             stats[predicted]["FP"] += 1
             discrepancies.append((video, actual, predicted))
-            
-        # Caso 2: L'AI non ha visto nulla (OTHERS) in un video che era importante (es. ANIMAL)
         elif predicted == "OTHERS" and actual in stats:
             stats[actual]["FN"] += 1
             discrepancies.append((video, actual, predicted))
-            
-        # Caso 3: Scambio di identità (es. GT dice PERSON, AI dice VEHICLE)
         elif actual in stats and predicted in stats:
             stats[actual]["FN"] += 1
             stats[predicted]["FP"] += 1
             discrepancies.append((video, actual, predicted))
 
-    # --- OUTPUT TABELLA ---
-    # --- CALCOLO E OUTPUT METRICHE PROFESSIONALI ---
-    # Questa tabella sostituisce quella vecchia perché contiene già TP, FP e FN
-    header = f"{'CATEGORY':<12} | {'TP':<5} | {'FP':<5} | {'FN':<5} | {'PRECISION':<10} | {'RECALL':<10}"
-    _print(header)
-    _print("-" * 70)
-    
-    cat_accuracies = []
-    
+    # --- RIEPILOGO GENERALE ---
+    total_videos      = len(all_videos)
+    total_tp          = sum(s["TP"] for s in stats.values())
+    total_misclassified = len(discrepancies)
+    global_acc        = (total_tp / total_videos * 100) if total_videos > 0 else 0
+
+    _print("=" * 65)
+    _print(f"  Total videos compared : {total_videos}")
+    if only_in_gt:
+        _print(f"  ⚠️  In GT but not in results : {len(only_in_gt)} (not processed?)")
+    if only_in_res:
+        _print(f"  ⚠️  In results but not in GT : {len(only_in_res)}")
+    _print(f"  Correctly classified  : {total_tp:<5} ({global_acc:.1f}%)")
+    _print(f"  Misclassified         : {total_misclassified:<5} ({100 - global_acc:.1f}%)")
+    _print("=" * 65)
+
+    # --- TABELLA PER CATEGORIA ---
+    _print(f"{'CATEGORY':<12} | {'TP':<5} | {'FP':<5} | {'FN':<5} | {'PRECISION':<10} | {'RECALL':<8}")
+    _print("-" * 65)
+
+    cat_recalls = []
     for cat in categories:
         s = stats[cat]
-        # Precision: Quanti dei rilevati sono corretti?
         precision = (s["TP"] / (s["TP"] + s["FP"]) * 100) if (s["TP"] + s["FP"]) > 0 else 0
-        # Recall: Quanti dei presenti sono stati rilevati?
-        recall = (s["TP"] / (s["TP"] + s["FN"]) * 100) if (s["TP"] + s["FN"]) > 0 else 0
-        
-        _print(f"{cat:<12} | {s['TP']:<5} | {s['FP']:<5} | {s['FN']:<5} | {precision:>9.1f}% | {recall:>8.1f}%")
-        
-        # Non contiamo OTHERS nella media delle performance AI
+        recall    = (s["TP"] / (s["TP"] + s["FN"]) * 100) if (s["TP"] + s["FN"]) > 0 else 0
+        _print(f"{cat:<12} | {s['TP']:<5} | {s['FP']:<5} | {s['FN']:<5} | {precision:>9.1f}% | {recall:>7.1f}%")
         if cat != "OTHERS":
-            cat_accuracies.append(recall)
-       # --- RIEPILOGO FINALE ---
-    avg_recall = sum(cat_accuracies) / len(cat_accuracies) if cat_accuracies else 0
-    total_videos = len(all_videos)
-    total_tp = sum(s["TP"] for s in stats.values())
-    global_acc = (total_tp / total_videos * 100) if total_videos > 0 else 0
+            cat_recalls.append(recall)
 
-    _print("-" * 70)
-    _print(f"{'Global accuracy (with Others):':<45} {global_acc:>6.2f}%")
-    _print(f"{'RECALL on real category:':<45} {avg_recall:>6.2f}%")
-    _print("-" * 70)
-    # --- DETTAGLIO ERRORI (Messo qui per non interrompere le tabelle) ---
+    avg_recall = sum(cat_recalls) / len(cat_recalls) if cat_recalls else 0
+    _print("-" * 65)
+    _print(f"  Global accuracy            : {global_acc:.2f}%")
+    _print(f"  Avg recall (excl. Others)  : {avg_recall:.2f}%")
+    _print("=" * 65)
+
+    # --- DETTAGLIO ERRORI ---
     if discrepancies:
-        _print("Difference list:")
+        _print(f"\n  Misclassified videos ({len(discrepancies)}):")
+        _print(f"  {'VIDEO':<45} | {'GT':<10} | {'PREDICTED'}")
+        _print("  " + "-" * 70)
         for video, actual, predicted in sorted(discrepancies):
-            _print(f"Video={video:<40} | GT={actual:<10} | PREDICT={predicted:<10}")
+            _print(f"  {video:<45} | {actual:<10} | {predicted}")
 
- 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compare GT with AI.")
-    parser.add_argument("--dir", type=str, help="Input directory, search ground_truth.json and classification_results.json")
-    parser.add_argument("--gt", type=str, help="Path to file ground_truth.json")
-    parser.add_argument("--res", type=str, help="Path to file classification_results.json")
+    parser.add_argument("--dir", type=str, help="Input directory")
+    parser.add_argument("--gt",  type=str, help="Path to ground_truth.json")
+    parser.add_argument("--res", type=str, help="Path to classification_results.json")
     args = parser.parse_args()
-    
     compare_results(session_dir=args.dir, gt_file=args.gt, res_file=args.res)

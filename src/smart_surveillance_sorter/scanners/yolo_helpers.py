@@ -99,11 +99,11 @@ def extract_frames_with_cache(
         # -------- Record Unico per Frame + Crop --------
         saved_frames.append({
             "category": cat,
-            "yolo_label": det.get("label", ""),
+            "yolo_label": det.get("yolo_label", ""),
             "frame_path": str(out_path),
             "crop_path": str(out_path_crop),
             "confidence": det["confidence"],
-            "yolo_reliable": det.get("yolo_reliable", False), # Portiamoci dietro il flag per la Vision
+            "yolo_reliable": det.get("yolo_reliable", False),
             "bbox": det["bbox"],
             "area_ratio": det.get("area_ratio", 0),
             "timestamp": ts_iso,

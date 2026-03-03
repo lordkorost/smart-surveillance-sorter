@@ -173,15 +173,24 @@ Dahua (es: 2026-02-28_06-34-26_cam1.mp4)
 > Always use the "Test Mode" first! > Before letting the sorter move your real NVR recordings, run it with the --test flag (or enable "Test Mode" in the Web UI). In this mode, the software will copy files instead of moving them, allowing you to verify if the detection and categorization are working as expected for your specific camera angles.
 
 
-##  📊 Test Results (Folder1: 565 Videos)
+##  📊 Test Results 
+Dataset: Temporale (6h empty videos)
 
-| Category | True Positives | False Positives | False Negatives | 
-| :--- | :---: | :---: | :---: |
-| **PERSON** | 169 | 6 | 0 |
-| **VEHICLE** | 16 | 0 | 0 |
-| **ANIMAL** | 21 | 0 | 9 | 
-| **OTHERS** | 286 | 0 | 0 |
+MODE                | TIME    | PERSON P | PERSON R | ANIMAL P | ANIMAL R | FP tot
+--------------------|---------|----------|----------|----------|----------|-------
+YOLO+BLIP           | 26 min  | 97.4%    | 100%     | 100%     | 88.9%    | 5
+YOLO+BLIP+Fallback  | 28 min  | 98.1%    | 100%     | 100%     | 88.9%    | 4
+YOLO+Vision         | 52 min  | 98.2%    | 100%     | 100%     | 88.9%    | 4
 
+⚠️ Person False Negatives = 0 in all modes — no missed persons.
+
+Dataset: Temporale (6h empty videos)
+
+STRIDE | WARMUP | OCC | GAP | PRE | TIME   | FP | FN
+-------|--------|-----|-----|-----|--------|----|----
+0.6    | 5      | 3   | 3   | 20  | X min  | X  | X
+0.8    | 3      | 5   | 2   | 10  | X min  | X  | X
+1.0    | 2      | 3   | 3   | 15  | X min  | X  | X
 ### ⏱️ Performance Benchmarks TODO
 | Hardware | Pipeline | Avg Speed (clip lenght 25secs - 3min) |
 | :--- | :--- | :--- |
