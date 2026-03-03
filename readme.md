@@ -191,6 +191,11 @@ STRIDE | WARMUP | OCC | GAP | PRE | TIME   | FP | FN
 0.6    | 5      | 3   | 3   | 20  | X min  | X  | X
 0.8    | 3      | 5   | 2   | 10  | X min  | X  | X
 1.0    | 2      | 3   | 3   | 15  | X min  | X  | X
+
+
+Per il README li puoi citare come known limitations:
+
+⚠️ Partial detections (person visible only through glass or partially behind obstacles) may produce inconsistent results depending on lighting and angle. YOLO may detect the person while Vision cannot confirm from the full frame.
 ### ⏱️ Performance Benchmarks TODO
 | Hardware | Pipeline | Avg Speed (clip lenght 25secs - 3min) |
 | :--- | :--- | :--- |

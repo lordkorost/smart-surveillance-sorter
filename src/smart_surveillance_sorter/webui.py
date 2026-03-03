@@ -261,8 +261,8 @@ def save_comprehensive_settings(*args):
         (city, priority, save_others, fn_temp, ts_format, struct,
          y_mod, y_dev, y_stride_sec, y_occ, y_gap,
          warmup_sec, stride_fast_sec, pre_roll_sec, cd_sec,
-         v_mod, v_temp, o_ip, o_port, v_tk, v_tp,
-         w_h, w_m, w_l, sc_p, sc_a, sc_v,
+         v_mod, v_temp, o_ip, o_port, v_tk, v_tp, v_num_predict,
+         w_h, w_m, w_l, sc_p, sc_a, sc_v, ov_min_conf, ov_min_score,
          cb_w_crop, cb_w_frame, cb_night_boost,
          cb_thr_p, cb_thr_v, cb_thr_a,
          cb_fpw_p, cb_fpw_a, cb_fpw_v,
@@ -287,11 +287,13 @@ def save_comprehensive_settings(*args):
         }
         data["vision_settings"]["model_name"]  = v_mod
         data["vision_settings"]["temperature"] = float(v_temp)
+        data["vision_settings"]["num_predict"] = int(v_num_predict)
         data["vision_settings"]["ollama_conf"] = {"ip": o_ip, "port": o_port}
         data["vision_settings"]["top_k"]       = int(v_tk)
         data["vision_settings"]["top_p"]       = float(v_tp)
         data["scoring_system"]["weights"]      = {"score_high": float(w_h), "score_mid": float(w_m), "score_low": float(w_l)}
         data["scoring_system"]["thresholds"]   = {"person": float(sc_p), "animal": float(sc_a), "vehicle": float(sc_v)}
+        data["scoring_system"]["yolo_override"] = {"person_min_conf": float(ov_min_conf), "min_total_score_to_skip_override": float(ov_min_score)}
         save_json(data, SETTINGS_JSON)
 
         cb_data = load_json(CLIP_BLIP_JSON)
@@ -811,8 +813,9 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             validate_btn    = gr.Button("🔍 Check Ollama", variant="secondary")
                             validate_status = gr.Markdown("_Not validated_")
                         with gr.Row():
-                            v_topk = gr.Number(label="Top K", value=current_settings["vision_settings"]["top_k"])
-                            v_topp = gr.Slider(0, 1, value=current_settings["vision_settings"]["top_p"], label="Top P")
+                            v_topk       = gr.Number(label="Top K",       value=current_settings["vision_settings"]["top_k"])
+                            v_topp       = gr.Slider(0, 1, value=current_settings["vision_settings"]["top_p"], label="Top P")
+                            v_num_predict = gr.Number(label="Num Predict", value=current_settings["vision_settings"].get("num_predict", 1024))
 
                     with gr.Accordion("🎛️ CLIP+BLIP Engine", open=False):
                         gr.Markdown("_Global — overridden on a per-camera basis in the Cameras tab._")
@@ -849,6 +852,10 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             sc_p = gr.Number(label="Min Person",  value=current_settings["scoring_system"]["thresholds"]["person"])
                             sc_a = gr.Number(label="Min Animal",  value=current_settings["scoring_system"]["thresholds"]["animal"])
                             sc_v = gr.Number(label="Min Vehicle", value=current_settings["scoring_system"]["thresholds"]["vehicle"])
+                        gr.Markdown("**YOLO Override**")
+                        with gr.Row():
+                            ov_min_conf  = gr.Slider(0.3, 0.9, step=0.01, value=current_settings["scoring_system"].get("yolo_override", {}).get("person_min_conf", 0.58),               label="Person Min Conf")
+                            ov_min_score = gr.Slider(0.5, 5.0, step=0.1,  value=current_settings["scoring_system"].get("yolo_override", {}).get("min_total_score_to_skip_override", 1.2), label="Min Score Skip Override")
 
                     with gr.Row():
                         save_all_btn      = gr.Button("💾 SAVE ALL SETTINGS", variant="primary", size="lg")
@@ -862,8 +869,8 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             city, priority, save_others, fn_template, ts_format, struct_type,
                             y_mod, y_dev, y_stride_sec, y_occ, y_gap,
                             warmup_sec, stride_fast_sec, pre_roll_sec, cd_sec,
-                            v_mod, v_temp, ollama_ip, ollama_port, v_topk, v_topp,
-                            w_high, w_mid, w_low, sc_p, sc_a, sc_v,
+                            v_mod, v_temp, ollama_ip, ollama_port, v_topk, v_topp, v_num_predict,
+                            w_high, w_mid, w_low, sc_p, sc_a, sc_v, ov_min_conf, ov_min_score,
                             cb_weight_crop, cb_weight_frame, cb_night_boost,
                             cb_thr_p, cb_thr_v, cb_thr_a,
                             cb_fpw_p, cb_fpw_a, cb_fpw_v,
