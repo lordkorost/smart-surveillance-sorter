@@ -235,52 +235,90 @@ def log_device_status(log: logging.Logger, device_str: str, torch_dev: torch.dev
     log.info(msg)
 
 
-
 def get_system_stats() -> Dict:
-    """Raccoglie tutte le statistiche hardware in un unico dizionario."""
-    # 1. CPU & RAM (Universale)
     vm = psutil.virtual_memory()
     stats = {
-        "cpu_usage": psutil.cpu_percent(interval=None), 
-        "ram_total": vm.total / (1024 ** 3),
-        "ram_used": vm.used / (1024 ** 3),
-        "ram_free": vm.available / (1024 ** 3),
-        "gpu_load": 0.0,
+        "cpu_usage": psutil.cpu_percent(interval=None),
+        "ram_total": vm.total / (1024**3),
+        "ram_used":  vm.used  / (1024**3),
+        "ram_free":  vm.available / (1024**3),
+        "gpu_load":  0.0,
         "vram_total": 0.0,
-        "vram_used": 0.0,
+        "vram_used":  0.0,
     }
 
-    # 2. GPU AMD (Linux)
-    amd_base = "/sys/class/drm/card1/device" 
-    if not os.path.exists(amd_base):
-        amd_base = "/sys/class/drm/card0/device"
-
-    if os.path.exists(os.path.join(amd_base, "mem_info_vram_used")):
+    # VRAM — funziona su Windows e Linux (AMD e NVIDIA)
+    if torch.cuda.is_available():
         try:
-            with open(os.path.join(amd_base, "mem_info_vram_used"), 'r') as f:
-                stats["vram_used"] = int(f.read().strip()) / (1024**3)
-            with open(os.path.join(amd_base, "mem_info_vram_total"), 'r') as f:
-                stats["vram_total"] = int(f.read().strip()) / (1024**3)
-            # % Utilizzo GPU AMD
-            busy_path = os.path.join(amd_base, "gpu_busy_percent")
-            if os.path.exists(busy_path):
-                with open(busy_path, 'r') as f:
-                    stats["gpu_load"] = float(f.read().strip())
-            return stats
-        except: pass
+            free, total = torch.cuda.mem_get_info(0)
+            stats["vram_total"] = total / (1024**3)
+            stats["vram_used"]  = (total - free) / (1024**3)
+        except Exception:
+            pass
 
-    # 3. GPU NVIDIA (Win/Linux)
-    try:
-        gpus = GPUtil.getGPUs()
-        if gpus:
-            gpu = max(gpus, key=lambda g: g.memoryUtil)
-            stats["vram_total"] = gpu.memoryTotal / 1024
-            stats["vram_used"] = gpu.memoryUsed / 1024
-            stats["gpu_load"] = gpu.load * 100
-            return stats
-    except: pass
+    # GPU load % — solo Linux AMD via sysfs
+    if os.name == "posix":
+        for base in ["/sys/class/drm/card1/device", "/sys/class/drm/card0/device"]:
+            busy = os.path.join(base, "gpu_busy_percent")
+            if os.path.exists(busy):
+                try:
+                    with open(busy) as f:
+                        stats["gpu_load"] = float(f.read().strip())
+                    break
+                except Exception:
+                    pass
 
     return stats
+
+
+# def get_system_stats() -> Dict:
+#     """Raccoglie tutte le statistiche hardware in un unico dizionario."""
+#     # 1. CPU & RAM (Universale)
+#     vm = psutil.virtual_memory()
+#     stats = {
+#         "cpu_usage": psutil.cpu_percent(interval=None), 
+#         "ram_total": vm.total / (1024 ** 3),
+#         "ram_used": vm.used / (1024 ** 3),
+#         "ram_free": vm.available / (1024 ** 3),
+#         "gpu_load": 0.0,
+#         "vram_total": 0.0,
+#         "vram_used": 0.0,
+#     }
+
+#     # # 2. GPU AMD (Linux)
+#     # amd_base = "/sys/class/drm/card1/device" 
+#     # if not os.path.exists(amd_base):
+#     #     amd_base = "/sys/class/drm/card0/device"
+
+#     # if os.path.exists(os.path.join(amd_base, "mem_info_vram_used")):
+#     #     try:
+#     #         with open(os.path.join(amd_base, "mem_info_vram_used"), 'r') as f:
+#     #             stats["vram_used"] = int(f.read().strip()) / (1024**3)
+#     #         with open(os.path.join(amd_base, "mem_info_vram_total"), 'r') as f:
+#     #             stats["vram_total"] = int(f.read().strip()) / (1024**3)
+#     #         # % Utilizzo GPU AMD
+#     #         busy_path = os.path.join(amd_base, "gpu_busy_percent")
+#     #         if os.path.exists(busy_path):
+#     #             with open(busy_path, 'r') as f:
+#     #                 stats["gpu_load"] = float(f.read().strip())
+#     #         return stats
+#     #     except: pass
+
+#     # # 3. GPU NVIDIA (Win/Linux)
+#     # try:
+#     #     gpus = GPUtil.getGPUs()
+#     #     if gpus:
+#     #         gpu = max(gpus, key=lambda g: g.memoryUtil)
+#     #         stats["vram_total"] = gpu.memoryTotal / 1024
+#     #         stats["vram_used"] = gpu.memoryUsed / 1024
+#     #         stats["gpu_load"] = gpu.load * 100
+#     #         return stats
+#     # except: pass
+
+#     # GPU AMD/NVIDIA Windows+Linux via torch
+  
+
+#     return stats
 
 
 

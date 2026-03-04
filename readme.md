@@ -1,7 +1,7 @@
 # 🛡️ Smart Surveillance Sorter
 
 ![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
-![Status](https://img.shields.io/badge/status-active--main-green.svg)
+![Status](https://img.shields.io/badge/status-stable-green.svg)
 ![Hardware](https://img.shields.io/badge/HW-CUDA%20%7C%20ROCm%20%7C%20CPU-orange.svg)
 ![AI](https://img.shields.io/badge/AI-YOLO%20%7C%20CLIP%20%7C%20BLIP%20%7C%20Vision-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -10,6 +10,27 @@ Organize your NVR videos using the power of YOLO, CLIP, BLIP, and Vision models 
 Designed for those overwhelmed by hundreds of useless recordings caused by wind, insects, or leaves, this tool scans every video and automatically categorizes it into: **PERSON**, **ANIMAL**, **VEHICLE**, or **OTHERS**.
 
 ---
+
+
+
+## 📋 Table of Contents
+
+- [✨ Features](#-key-features)
+- [🔧 Requirements](#-requirements)  
+- [🚀 Quick Start](#-quick-start)
+- [📦 Installation](#-installation)
+- [📖 Documentation](#-documentation)
+- [📊 Benchmarks](#-benchmarks)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
+
+## 📖 Documentation
+
+- [Scanning Logic & Early Exit](docs/scanning-logic.md)
+- [Tuning Guide](docs/tuning-guide.md)
+- [Windows GPU Setup](docs/windows-gpu.md)
+- [Benchmarks](docs/benchmarks.md)
+- [Camera Configuration](docs/cameras-config.md)
 
 ## ✨ Features
 
@@ -199,6 +220,31 @@ Per il README li puoi citare come known limitations:
 ### 📈 Detailed Analysis: 
 * For more hardware benchmarks and test results check out our [**Full Test Report**](docs/tests.md)
 
+
+
+## 🤝 Contributing
+
+Contributions are welcome! If you want to improve the project:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes (`git commit -m 'feat: add my feature'`)
+4. Push to the branch (`git push origin feature/my-feature`)
+5. Open a Pull Request
+
+### Areas where help is appreciated
+- NVIDIA GPU testing and validation
+- Windows compatibility improvements  
+- New NVR filename template support
+- Performance optimizations
+- Documentation translations
+
+Please open an Issue before starting major changes to discuss the approach.
+
+
+## 📄 License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 
 

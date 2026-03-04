@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 import shutil
 
+from smart_surveillance_sorter.constants import FRAME_DIR
 from smart_surveillance_sorter.utils import get_safe_path
 log = logging.getLogger(__name__) 
 
@@ -107,11 +108,9 @@ class FileSorter:
             self.dest_base.mkdir(parents=True, exist_ok=True)
             log.warning(f"Input is not writeable! Risults on folder={self.dest_base}")
         # --- CARICAMENTO MAPPING REALE ---
-        # Usiamo la tua funzione che legge cameras.json, non settings.json!
         from smart_surveillance_sorter.utils import get_camera_mapping 
         camera_mapping = get_camera_mapping() 
         
-        #log.debug(f"--- DEBUG: Mapping caricato da cameras.json: {camera_mapping}")
 
 
         classificati_paths = {item["video_path"] for item in final_results}
@@ -183,6 +182,14 @@ class FileSorter:
                         if img_src not in files_processati:
                             if self._execute_io(img_src, target_dir / Path(img_src).name):
                                 files_processati.add(img_src)
+
+                 
+            # --- CLEANUP CARTELLA FRAMES VUOTA ---
+            if not self.is_test:
+                frames_dir = self.work_dir / FRAME_DIR
+                if frames_dir.exists() and not any(frames_dir.iterdir()):
+                    frames_dir.rmdir()
+                    log.debug(f"🗑️ Removed empty frames dir: {frames_dir}")
 
         
 

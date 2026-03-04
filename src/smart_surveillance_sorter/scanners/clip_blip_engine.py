@@ -222,6 +222,8 @@ class ClipBlipEngine:
         aggiunge un bonus allo score PERSON.
         Questo corregge i falsi negativi dove si vede solo la testa in un angolo.
         """
+
+        return 0
         try:
             with Image.open(frame_path) as img:
                 fw, fh = img.size
