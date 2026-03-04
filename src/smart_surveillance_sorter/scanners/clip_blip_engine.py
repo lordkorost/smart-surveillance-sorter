@@ -222,8 +222,6 @@ class ClipBlipEngine:
         aggiunge un bonus allo score PERSON.
         Questo corregge i falsi negativi dove si vede solo la testa in un angolo.
         """
-
-        return 0
         try:
             with Image.open(frame_path) as img:
                 fw, fh = img.size
@@ -247,7 +245,7 @@ class ClipBlipEngine:
           - PERSON ha soglia bassa → priorità massima
         """
         thresholds = active_rules["THRESHOLD"]
-        priority   = ["PERSON", "VEHICLE", "ANIMAL"]
+        priority   = ["PERSON", "ANIMAL", "VEHICLE"]
 
         for cls in priority:
             if cls not in final_scores:
