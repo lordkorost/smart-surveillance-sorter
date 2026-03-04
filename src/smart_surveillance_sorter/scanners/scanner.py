@@ -145,7 +145,7 @@ class Scanner():
         log.info(f"Folder scan in {total_time}s")
         #se è test dobbiamo salvare le metriche in un json
         if(self.is_test):
-            save_test_metrics(output_dir, self.final_reports, total_time, self.stats, self.mode)
+            save_test_metrics(output_dir, self.final_reports, total_time, self.stats, self.mode,self.settings)
 
     def _clip_blip_scan(self):
         #yolo -> blip
@@ -594,7 +594,7 @@ class Scanner():
                 
                 # Logging del ragionamento 
                 if self.is_test and report_vision.get("thinking"):
-                    pbar.write(f"Thinking: {report_vision.get("thinkining")}")
+                    pbar.write(f"Thinking: {report_vision.get("thinking")}")
                     pbar.write(f"\n🧠 Arbitration: {report_vision['video_name']} -> {report_vision['category']}")
 
         # 4. SALVATAGGIO finale

@@ -17,6 +17,7 @@ Rispetto alla v1:
 """
 
 import logging
+import time
 import torch
 from datetime import datetime
 from transformers import BlipConfig, BlipProcessor, BlipForConditionalGeneration
@@ -156,13 +157,17 @@ class ClipBlipEngine:
         raw_img = Image.open(crop_path).convert("RGB")
         blip_inputs = self.blip_processor(images=raw_img, return_tensors="pt").to(self.DEVICE)
         caption = self.blip_processor.decode(self.blip_model.generate(**blip_inputs)[0], skip_special_tokens=True)
-
+        t0 = time.time()
+        log.debug(f"⏱️ BLIP: {time.time()-t0:.3f}s")
         # --- CLIP scores su crop e frame ---
         fake_prompts = [desc for descs in self.FAKE_KEYS.values() for desc in descs]
         all_prompts  = current_main_class + fake_prompts
-
+        t0 = time.time()
         clip_crop  = self._get_clip_score(crop_img, all_prompts)
+        log.debug(f"⏱️ CLIP crop: {time.time()-t0:.3f}s")
+        t0 = time.time()
         clip_frame = self._get_clip_score(frame_img, all_prompts)
+        log.debug(f"⏱️ CLIP frame: {time.time()-t0:.3f}s")
 
         # Pesi crop/frame (sovrascrivibili per camera)
         w_crop  = active_rules["FINAL_WEIGHT_CROP"]

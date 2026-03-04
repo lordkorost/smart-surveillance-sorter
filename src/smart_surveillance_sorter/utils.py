@@ -245,7 +245,7 @@ def get_camera_mapping():
     except Exception as e:
         return {}
     
-def save_test_metrics(output_dir, final_reports, total_time, stats, mode):
+def save_test_metrics(output_dir, final_reports, total_time, stats, mode,settings=None):
     metrics_path = Path(output_dir) / "test_metrics.json"
     performance_summary = {}
     for phase, data in stats.items():
@@ -259,12 +259,37 @@ def save_test_metrics(output_dir, final_reports, total_time, stats, mode):
                 "avg_speed_sec_per_item": round(avg, 3)
             }
 
+
+    # Estrai parametri rilevanti dal settings
+    yolo_params = {}
+    engine_params = {}
+    if settings:
+        ys = settings.get("yolo_settings", {})
+        dss = ys.get("dynamic_stride_settings", {})
+        yolo_params = {
+            "model": ys.get("model_path", ""),
+            "device": ys.get("device", ""),
+            "vid_stride_sec": ys.get("vid_stride_sec", 0.6),
+            "num_occurrence": ys.get("num_occurrence", 3),
+            "time_gap_sec": ys.get("time_gap_sec", 3),
+            "warmup_sec": dss.get("warmup_sec", 5),
+            "stride_fast_sec": dss.get("stride_fast_sec", 1.0),
+            "pre_roll_sec": dss.get("pre_roll_sec", 20),
+        }
+        vs = settings.get("vision_settings", {})
+        engine_params = {
+            "vision_model": vs.get("model_name", ""),
+            "temperature": vs.get("temperature", 1),
+        }
+
     test_report = {
         "session_info": {
             "timestamp": datetime.now().isoformat(),
             "mode": mode,
             "total_execution_time": round(total_time, 2)
         },
+        "yolo_params": yolo_params,
+        "engine_params": engine_params,
         "performance_summary": performance_summary,
         "detailed_logs": [
             {

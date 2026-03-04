@@ -104,10 +104,12 @@ pip install torch==2.5.1+cu124 torchvision==0.20.1+cu124 torchaudio==2.5.1+cu124
 goto :install_deps
 
 :install_cpu
-echo Nessuna GPU rilevata - installazione PyTorch CPU...
+echo Nessuna GPU rilevata - installazione PyTorch CPU (con MKL)...
 echo Per AMD: installa driver Adrenalin 26.1.1+ e rilancia con --use-rocm
 echo Per NVIDIA: rilancia con --use-cuda
-pip install torch torchvision torchaudio --quiet
+echo.
+echo Nota: PyTorch standard con MKL per prestazioni CPU ottimali.
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --quiet
 goto :install_deps
 
 :install_deps
@@ -146,6 +148,8 @@ if torch.cuda.is_available():
         print(f'VRAM    : FAILED ({e})')
 else:
     print('GPU     : Non rilevata (CPU mode)')
+    mkl_ok = torch.backends.mkl.is_available()
+    print(f'MKL     : {\"OK\" if mkl_ok else \"NOT FOUND - prestazioni CPU ridotte\"}')
     print('         Per AMD: installa driver Adrenalin 26.1.1+ e rilancia con --use-rocm')
 "
 

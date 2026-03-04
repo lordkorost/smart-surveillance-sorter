@@ -24,7 +24,7 @@
     },
     "yolo_settings": {
         "model_path": "yolov8l",
-        "device": "cuda",
+        "device": "cpu",
         "num_occurrence": 3,
         "time_gap_sec": 3,
         "yolo_override_threshold": 0.85,

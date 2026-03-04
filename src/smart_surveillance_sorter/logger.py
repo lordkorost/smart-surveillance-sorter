@@ -207,32 +207,32 @@ def detect_device() -> Tuple[Union[str, None], Union[torch.device, None]]:
     else:
         return "cpu", torch.device("cpu")
     
-def log_device_status(log: logging.Logger, device_str: str, torch_dev: torch.device) -> None:
-    """
-    Stampa un messaggio di log (INFO) con:
-      - tipo device (cuda/cpu)
-      - VRAM (per cuda) o RAM (per cpu)
-      - Percentuale CPU (solo se cpu)
-    """
-    if device_str == "cuda":
-        gpu = get_gpu_info()
-        msg = (
-            f"🛠️ [Scanner] Initialized on device={torch_dev} | "
-            f"VRAM Total={gpu['total']:.2f} GB | "
-            f"Used={gpu['used']:.2f} GB | "
-            f"Free={gpu['free']:.2f} GB"
-        )
-    else:   # CPU
-        ram = get_ram_info()
-        cpu = get_cpu_usage()
-        msg = (
-            f"🛠️ [Scanner] Initialized on device={torch_dev} | "
-            f"RAM Total={ram['total']:.2f} GB | "
-            f"Used={ram['used']:.2f} GB | "
-            f"Free={ram['free']:.2f} GB | "
-            f"CPU={cpu:.1f}%"
-        )
-    log.info(msg)
+# def log_device_status(log: logging.Logger, device_str: str, torch_dev: torch.device) -> None:
+#     """
+#     Stampa un messaggio di log (INFO) con:
+#       - tipo device (cuda/cpu)
+#       - VRAM (per cuda) o RAM (per cpu)
+#       - Percentuale CPU (solo se cpu)
+#     """
+#     if device_str == "cuda":
+#         gpu = get_gpu_info()
+#         msg = (
+#             f"🛠️ [Scanner] Initialized on device={torch_dev} | "
+#             f"VRAM Total={gpu['total']:.2f} GB | "
+#             f"Used={gpu['used']:.2f} GB | "
+#             f"Free={gpu['free']:.2f} GB"
+#         )
+#     else:   # CPU
+#         ram = get_ram_info()
+#         cpu = get_cpu_usage()
+#         msg = (
+#             f"🛠️ [Scanner] Initialized on device={torch_dev} | "
+#             f"RAM Total={ram['total']:.2f} GB | "
+#             f"Used={ram['used']:.2f} GB | "
+#             f"Free={ram['free']:.2f} GB | "
+#             f"CPU={cpu:.1f}%"
+#         )
+#     log.info(msg)
 
 
 def get_system_stats() -> Dict:
@@ -242,7 +242,6 @@ def get_system_stats() -> Dict:
         "ram_total": vm.total / (1024**3),
         "ram_used":  vm.used  / (1024**3),
         "ram_free":  vm.available / (1024**3),
-        "gpu_load":  0.0,
         "vram_total": 0.0,
         "vram_used":  0.0,
     }
@@ -256,17 +255,6 @@ def get_system_stats() -> Dict:
         except Exception:
             pass
 
-    # GPU load % — solo Linux AMD via sysfs
-    if os.name == "posix":
-        for base in ["/sys/class/drm/card1/device", "/sys/class/drm/card0/device"]:
-            busy = os.path.join(base, "gpu_busy_percent")
-            if os.path.exists(busy):
-                try:
-                    with open(busy) as f:
-                        stats["gpu_load"] = float(f.read().strip())
-                    break
-                except Exception:
-                    pass
 
     return stats
 
@@ -330,7 +318,6 @@ def log_resource_usage(log: logging.Logger, prefix: str = "STATS"):
         f"[{prefix}] "
         f"CPU: {s['cpu_usage']:>4.1f}% | "
         f"RAM: {s['ram_used']:.1f}/{s['ram_total']:.1f}GB | "
-        f"GPU: {s['gpu_load']:>4.1f}% | "
         f"VRAM: {s['vram_used']:.1f}/{s['vram_total']:.1f}GB"
     )
     log.info(msg)

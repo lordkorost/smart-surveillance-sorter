@@ -239,7 +239,6 @@ class VisionEngine:
         )
 
         # 3. Interroghiamo il modello
-       
         result = self.query_vision_model(prompt, [img_path])
      
         answer = result.get("label", "others").lower()
@@ -282,7 +281,6 @@ class VisionEngine:
             )
             
 
-         
             full_response = response.get('response', '').lower().strip()
             thinking_content = response.get('thinking', '') 
            
