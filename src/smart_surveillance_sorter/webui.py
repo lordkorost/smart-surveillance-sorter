@@ -1087,12 +1087,16 @@ def find_free_port(start=7860, end=7900):
                 continue
     raise RuntimeError("No free port found")
 
-if __name__ == "__main__":
+def main():
     port = find_free_port()
-
     demo.queue()
     demo.launch(
         server_name="127.0.0.1",
         server_port=port,
         prevent_thread_lock=False,
     )
+
+if __name__ == "__main__":
+    main()
+
+
