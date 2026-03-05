@@ -30,7 +30,7 @@ def run_loop():
 
     while True:
         try:
-            log.info(f"--- Inizio scansione ({args.mode}) ---")
+            log.info(f"--- Start scan ({args.mode}) ---")
             scanner = Scanner(
                 mode=args.mode,
                 device=args.device,
@@ -41,12 +41,12 @@ def run_loop():
                 is_check_clean=False,
             )
             scanner.scan_folder(args.dir, output_dir)
-            log.info(f"Ciclo completato. Prossimo in {args.interval}s")
+            log.info(f"Cycle complete. Next in {args.interval}s")
         except (KeyboardInterrupt, RuntimeError) as e:
             log.info(f"Stop: {e}")
             break
         except Exception as e:
-            log.error(f"Errore nel ciclo: {e}")
+            log.error(f"Error in cycle: {e}")
         finally:
             del scanner
             cleanup()

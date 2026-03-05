@@ -1,9 +1,4 @@
 {
-    "config_files": {
-        "cameras_path": "config/cameras.json",
-        "prompts_path": "config/prompts.json",
-        "models_dir": "models"
-    },
     "city": "Rosarno",
     "classification_settings": {
         "priority_hierarchy": [
@@ -18,9 +13,6 @@
         "timestamp_format": "%Y%m%d%H%M%S",
         "structure_type": "camera_first",
         "use_input_dir_as_output": true
-    },
-    "blip_settings": {
-        "threshold": 0.5
     },
     "yolo_settings": {
         "model_path": "yolov8l",

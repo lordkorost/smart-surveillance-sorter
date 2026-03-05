@@ -385,7 +385,7 @@ class Scanner():
                 settings=self.settings,
                 cameras_config=self.cameras_config,
                 mode=self.mode,
-                device=self.settings.get("yolo_settings", {}).get("device", "cpu")
+                device=self.device
             )
         pbar = tqdm(
             self.results,
