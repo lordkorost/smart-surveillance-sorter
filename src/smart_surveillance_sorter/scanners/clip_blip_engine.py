@@ -150,14 +150,19 @@ class ClipBlipEngine:
         bbox       = frame.get("bbox")  # [x1, y1, x2, y2] in pixel assoluti
 
         # --- Immagini ---
+        log.debug(f"Loading crop: {crop_path}")
         crop_img  = self.preprocess(Image.open(crop_path).convert("RGB")).unsqueeze(0).to(self.DEVICE)
+        log.debug(f"Loading frame: {frame_path}")
         frame_img = self.preprocess(Image.open(frame_path).convert("RGB")).unsqueeze(0).to(self.DEVICE) if frame_path else crop_img
 
         # --- BLIP caption ---
+        log.debug(f"Running BLIP on: {crop_path}")
         raw_img = Image.open(crop_path).convert("RGB")
         blip_inputs = self.blip_processor(images=raw_img, return_tensors="pt").to(self.DEVICE)
         #t0 = time.time()
+        log.debug(f"BLIP generate start")
         caption = self.blip_processor.decode(self.blip_model.generate(**blip_inputs)[0], skip_special_tokens=True)
+        log.debug(f"BLIP done: {caption}")
         #log.debug(f"⏱️ BLIP: {time.time()-t0:.3f}s")
         # --- CLIP scores su crop e frame ---
         fake_prompts = [desc for descs in self.FAKE_KEYS.values() for desc in descs]

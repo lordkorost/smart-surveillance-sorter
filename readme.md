@@ -48,33 +48,14 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 
 ## 🚀 Quick Start
 
-### 🛠️ Hardware Requirements
+### 🛠️ Requirements
 
-#### 💻 CPU-Only Mode (Low Resources)
-*Ideal for home servers or PCs without a dedicated/supported GPU.*
-* **Processor:** Intel Core i5/i7 (8th Gen+) or AMD Ryzen 5+.
-* **RAM:** 8-16 GB.
-* **Performance:** Excellent for batch scanning or real-time monitoring with a few cameras.
-* **Models:** Runs the standard pipeline (YOLO + CLIP/BLIP).
+- **Python 3.12** — required (both Linux and Windows)
+- **RAM:** 8GB minimum, 16GB recommended
+- **VRAM:** 8GB minimum for GPU mode, 12GB+ for Vision/Ollama
+- **Ollama** — required for Vision mode (recommended model: `qwen3-vl:8b`)
 
-#### ⚡ GPU Accelerated Mode (High Performance)
-*Ideal for massive processing, multi-camera setups, or advanced Vision models.*
-* **NVIDIA:** CUDA 12.x support.
-* **AMD:** ROCm 6.4 support (Tested on RX 9600 XT).
-* **VRAM:** 8GB (Base) / 12GB+ (Vision/Ollama).
-* **Advantages:** Ultra-fast analysis and support for heavy Vision models.
-
-### ⚙️ Software and Drivers
-* **Python:** 3.12+ (installed and available in your user PATH).
-* **Ollama:** Required for **Vision Mode** (recommended model: `qwen2.5-vl:8b`).
-* **FFmpeg:** Mandatory for frame extraction from NVR video streams.
-
-#### GPU Drivers:
-* **NVIDIA:** Driver version 550+ with CUDA 12.x support.
-* **AMD:** Updated drivers with ROCm support (or AI Bundle for Windows).
-
-> [!IMPORTANT]
-> 🛡️ **Compatibility Note:** The system automatically detects available hardware. If no compatible GPU (CUDA or ROCm) is found, it will automatically fallback to **CPU mode**, ensuring functionality on any modern system.
+> ℹ️ CPU mode works on any modern system but is significantly slower — see [Benchmarks](#-benchmarks).
 
 ---
 
@@ -88,74 +69,42 @@ cd smart-surveillance-sorter
 
 #### 2. Run the installer
 
-The installer automatically creates a virtual environment and installs the correct version of PyTorch for your hardware.
-
-### Linux (Ubuntu/Debian)
-
+**Linux:**
 ```bash
 chmod +x install.sh
-./install.sh
-```
-
-Optional: force a specific backend if auto-detection fails:
-
-```bash
+./install.sh --use-rocm    # AMD GPU
 ./install.sh --use-cuda    # NVIDIA GPU
-./install.sh --use-rocm    # AMD GPU (ROCm 6.4)
 ./install.sh --use-cpu     # CPU only
 ```
 
-Launch the application:
+**Windows:**
+```bat
+install.bat --use-rocm     :: AMD GPU (ROCm 7.2)
+install.bat --use-cuda     :: NVIDIA GPU
+install.bat --use-cpu      :: CPU only
+```
 
+> ℹ️ Windows requires Python 3.12 installed and added to PATH.  
+> Download: https://www.python.org/downloads/release/python-31212/
+
+#### 3. Launch
 ```bash
-./run.sh
+./run.sh      # Linux
+run.bat       # Windows
 ```
 
 ---
 
-### Windows 11
+### 🖥️ GPU Setup
 
-> [!IMPORTANT]
-> Windows requires **Python 3.12** installed and added to PATH.
-> Download from: https://www.python.org/downloads/release/python-31212/
+| GPU | Linux | Windows |
+|-----|-------|---------|
+| NVIDIA | CUDA 12.x driver | CUDA 12.x driver |
+| AMD | ROCm 6.4 | Adrenalin 26.1.1+ + Ollama from AI Bundle |
 
-```bat
-install.bat
-```
+> 📖 **AMD GPU detailed setup:** [docs/gpu-setup-amd.md](docs/gpu-setup-amd.md)
 
-Optional: force a specific backend:
-
-```bat
-install.bat --use-cuda     :: NVIDIA GPU
-install.bat --use-rocm     :: AMD GPU (ROCm 7.2 for Windows)
-install.bat --use-cpu      :: CPU only
-```
-
-Launch the application:
-
-```bat
-run.bat
-```
-
-> [!NOTE]
-> **AMD GPU on Windows**: Requires AMD Adrenalin driver **26.1.1 or later**.
-> Download from AMD Adrenalin Software → Optional → AI Bundle → PyTorch.
-> Tested on RX 9060 XT with ROCm 7.2 — full GPU acceleration works.
-> [!IMPORTANT]
-> **AMD GPU on Windows — Ollama**: ROCm is not yet fully supported for Ollama on Windows.
-> To enable GPU acceleration you must set the `OLLAMA_VULKAN=1` environment variable.
->
-> **Permanent setup:**
-> 1. Open "Environment Variables" in Windows Settings
-> 2. Under "System variables" → New
-> 4. Restart Ollama from the tray icon
->
-> Without this setting Ollama will use CPU only.
-> Tested on RX 9060 XT with AMD Adrenalin 26.1.1 + ROCm 7.2.
-
-> [!TIP]
-> If auto-detection fails, always use the explicit `--use-rocm` or `--use-cuda` flag.
-> See `docs/windows_gpu.md` for detailed GPU setup instructions.
+> ⚠️ **AMD GPU on Windows + Ollama (Vision mode):** ROCm is not yet fully supported for Ollama on Windows. Set `OLLAMA_VULKAN=1` as a system environment variable to enable GPU acceleration. Without this, Ollama runs on CPU only.
 
 #### **CLI Usage**
 If you prefer using the terminal, check out our [**CLI Reference Guide**](docs/cli_reference.md) for all available flags and examples.
@@ -188,39 +137,71 @@ Dahua (es: 2026-02-28_06-34-26_cam1.mp4)
 > Before letting the sorter move your real NVR recordings, run it with the --test flag (or enable "Test Mode" in the Web UI). In this mode, the software will copy files instead of moving them, allowing you to verify if the detection and categorization are working as expected for your specific camera angles.
 
 
-##  📊 Test Results 
-Dataset: Temporale (6h empty videos)
+## 📊 Benchmarks
 
-MODE                | TIME    | PERSON P | PERSON R | ANIMAL P | ANIMAL R | FP tot
---------------------|---------|----------|----------|----------|----------|-------
-YOLO+BLIP           | 26 min  | 97.4%    | 100%     | 100%     | 88.9%    | 5
-YOLO+BLIP+Fallback  | 28 min  | 98.1%    | 100%     | 100%     | 88.9%    | 4
-YOLO+Vision         | 52 min  | 98.2%    | 100%     | 100%     | 88.9%    | 4
+**Test cameras:** Reolink 4K
+- Daytime: 20 fps
+- Nighttime: 12 fps
+- Resolution: 3840×2160
 
-⚠️ Person False Negatives = 0 in all modes — no missed persons.
+> ℹ️ Parameters tuned for Reolink 4K footage. Other cameras with similar specs (4K, 12-20fps) should work well with default parameters. Lower resolution or fps cameras may need stride/occurrence adjustments — see [YOLO Tuning](docs/benchmarks/yolo-tuning.md).
 
-Dataset: Temporale (6h empty videos)
+Tested on **521 videos + 480 images** (1 day of NVR footage, 8 cameras, mixed outdoor scenes).  
+Hardware: Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) / Vulkan (Windows)
 
-STRIDE | WARMUP | OCC | GAP | PRE | TIME   | FP | FN
--------|--------|-----|-----|-----|--------|----|----
-0.6    | 5      | 3   | 3   | 20  | X min  | X  | X
-0.8    | 3      | 5   | 2   | 10  | X min  | X  | X
-1.0    | 2      | 3   | 3   | 15  | X min  | X  | X
+> 📖 Full benchmark details: [docs/benchmarks.md](docs/benchmarks.md)
 
+### Performance
+
+| Mode | Linux GPU | Windows GPU | Linux CPU | Windows CPU |
+|------|-----------|-------------|-----------|-------------|
+| YOLO only (img) | 00:25 | 00:30 | 00:52 | 01:02 |
+| YOLO only (vid) | 42:15 | 42:43 | 01:00:14 | 01:13:06 |
+| +BLIP | 02:51 | 03:09 | 07:50 | 05:10 |
+| +BLIP+Fallback | 02:51 | 07:26 | — | — |
+| +Vision | 15:55 | 38:12 | — | — |
+
+> ⚠️ **Timings depend on your footage characteristics:**
+> - **YOLO**: scales with video length — longer videos = more frames to analyze. Test set: ~30% short clips (25-30s), ~40% medium (1 min), ~30% long (3+ min).
+> - **Vision**: varies significantly by scene complexity — ambiguous scenes (shadows, partial objects, night) trigger longer AI reasoning. Simple scenes can be as fast as ~1-2s/video, complex ones up to ~15s/video.
+> - **BLIP**: largely unaffected by video length — processes only extracted keyframes.
+
+### ⏱️ Total Pipeline Time (521 videos + 480 images)
+
+| Pipeline | Linux GPU | Windows GPU | Linux CPU | Windows CPU |
+|----------|-----------|-------------|-----------|-------------|
+| YOLO+BLIP | ~46 min | ~47 min | ~1h 09 min | ~1h 19 min |
+| YOLO+BLIP+Fallback | ~48 min | ~54 min | — | — |
+| YOLO+Vision | ~58 min | ~1h 21 min | — | — |
+
+> ℹ️ CPU times measured with standard PyTorch build (MKL). ROCm build on CPU is significantly slower — see [docs/benchmarks.md](docs/benchmarks.md).
+
+### Accuracy (YOLO + BLIP, default params)
+
+> 📖 **Precision** = of all videos classified as X, how many were actually X (false positive rate).  
+> **Recall** = of all real X videos, how many were correctly found (false negative rate).  
+> **Global accuracy** = percentage of correctly classified videos overall.
+
+| Category | Precision | Recall |
+|----------|-----------|--------|
+| PERSON | 95.9% | 100.0% |
+| VEHICLE | 100.0% | 91.7% |
+| ANIMAL | 95.2% | 76.9% |
+| **Global accuracy** | **98.27%** | |
+
+### Accuracy comparison by mode
+
+| Mode | Global Acc | Avg Recall | Notes |
+|------|------------|------------|-------|
+| YOLO+BLIP | 98.27% | 89.53% | Fast, recommended default |
+| YOLO+BLIP+Fallback | 97.89% | 88.25% | ⚠️ May worsen results |
+| YOLO+Vision | 98.46% | 91.92% | Best accuracy, slower |
+
+> 🎯 **0 missed persons (FN=0)** across all test runs — the system never fails to detect a real person. False positives (shadows, reflections) are filtered by the Vision refinement step.
 
 Per il README li puoi citare come known limitations:
 
 ⚠️ Partial detections (person visible only through glass or partially behind obstacles) may produce inconsistent results depending on lighting and angle. YOLO may detect the person while Vision cannot confirm from the full frame.
-### ⏱️ Performance Benchmarks TODO
-| Hardware | Pipeline | Avg Speed (clip lenght 25secs - 3min) |
-| :--- | :--- | :--- |
-| **AMD RX 9060 XT 16 GB** | YOLO + CLIPBLIP | ~1.2s |
-| **CPU Ryzen 5 9600x** | YOLO + CLIP | ~10.5s |
-
-### 📈 Detailed Analysis: 
-* For more hardware benchmarks and test results check out our [**Full Test Report**](docs/tests.md)
-
-
 
 ## 🤝 Contributing
 
