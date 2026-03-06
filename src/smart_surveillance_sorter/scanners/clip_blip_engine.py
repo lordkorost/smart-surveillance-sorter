@@ -150,29 +150,31 @@ class ClipBlipEngine:
         bbox       = frame.get("bbox")  # [x1, y1, x2, y2] in pixel assoluti
 
         # --- Immagini ---
-        log.debug(f"Loading crop: {crop_path}")
-        crop_img  = self.preprocess(Image.open(crop_path).convert("RGB")).unsqueeze(0).to(self.DEVICE)
-        log.debug(f"Loading frame: {frame_path}")
-        frame_img = self.preprocess(Image.open(frame_path).convert("RGB")).unsqueeze(0).to(self.DEVICE) if frame_path else crop_img
+      
+        try:
+            crop_img  = self.preprocess(Image.open(crop_path).convert("RGB")).unsqueeze(0).to(self.DEVICE)
+            log.debug(f"Loading frame: {frame_path}")
+            frame_img = self.preprocess(Image.open(frame_path).convert("RGB")).unsqueeze(0).to(self.DEVICE) if frame_path else crop_img
 
-        # --- BLIP caption ---
-        log.debug(f"Running BLIP on: {crop_path}")
-        raw_img = Image.open(crop_path).convert("RGB")
-        blip_inputs = self.blip_processor(images=raw_img, return_tensors="pt").to(self.DEVICE)
-        #t0 = time.time()
-        log.debug(f"BLIP generate start")
-        caption = self.blip_processor.decode(self.blip_model.generate(**blip_inputs)[0], skip_special_tokens=True)
-        log.debug(f"BLIP done: {caption}")
-        #log.debug(f"⏱️ BLIP: {time.time()-t0:.3f}s")
+            # --- BLIP caption ---
+            raw_img = Image.open(crop_path).convert("RGB")
+            blip_inputs = self.blip_processor(images=raw_img, return_tensors="pt").to(self.DEVICE)
+            caption = self.blip_processor.decode(self.blip_model.generate(**blip_inputs)[0], skip_special_tokens=True)
+        except Exception as e:
+            log.warning(f"Skipping missing/corrupt frame: {crop_path} — {e}")
+            return None
+        
+        
+       
+        
         # --- CLIP scores su crop e frame ---
         fake_prompts = [desc for descs in self.FAKE_KEYS.values() for desc in descs]
         all_prompts  = current_main_class + fake_prompts
         #t0 = time.time()
         clip_crop  = self._get_clip_score(crop_img, all_prompts)
-        #log.debug(f"⏱️ CLIP crop: {time.time()-t0:.3f}s")
-        #t0 = time.time()
+        
         clip_frame = self._get_clip_score(frame_img, all_prompts)
-        #log.debug(f"⏱️ CLIP frame: {time.time()-t0:.3f}s")
+        
 
         # Pesi crop/frame (sovrascrivibili per camera)
         w_crop  = active_rules["FINAL_WEIGHT_CROP"]
@@ -316,6 +318,8 @@ class ClipBlipEngine:
             is_night = is_night_astronomic(dt, self.lat, self.lon)
 
             frame_res = self._score_frame(frame, active_rules, is_night)
+            if frame_res is None:
+                continue
             frames_list.append(frame_res)
 
         video_path = video_data.get("video_path")
