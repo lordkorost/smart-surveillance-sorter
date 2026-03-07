@@ -155,14 +155,97 @@ def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
 # CAMERAS
 # ==============================================================================
 
+# def load_camera_details(cam_id):
+#     empty = ["", "", "", "", "", False, "", 0.49, 0.55, 0.30, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+#     if not cam_id:
+#         return empty
+#     cameras = load_json(CAMERAS_JSON)
+#     cam = cameras.get(cam_id, {})
+#     br  = cam.get("blip_rules", {})
+#     tn  = cam.get("thresholds_night", {})
+#     return [
+#         cam.get("name", ""),
+#         cam.get("location", ""),
+#         ", ".join(cam.get("search_patterns", [])),
+#         cam.get("priority", "person"),
+#         cam.get("desc", ""),
+#         cam.get("dynamic_stride", False),
+#         ", ".join(cam.get("filters", {}).get("ignore_labels", [])),
+#         cam.get("thresholds", {}).get("person",  0.49),
+#         cam.get("thresholds", {}).get("vehicle", 0.55),
+#         cam.get("thresholds", {}).get("animal",  0.30),
+#         tn.get("person",  -1.0),
+#         tn.get("vehicle", -1.0),
+#         tn.get("animal",  -1.0),
+#         br.get("FAKE_WEIGHTS", {}).get("GROUND", 1.0),
+#         br.get("FAKE_WEIGHTS", {}).get("GARDEN", 1.0),
+#         br.get("FAKE_WEIGHTS", {}).get("SHOE",   1.0),
+#         br.get("FAKE_WEIGHTS", {}).get("WOOD",   1.0),
+#         br.get("THRESHOLD", {}).get("PERSON",  -1.0),
+#         br.get("THRESHOLD", {}).get("VEHICLE", -1.0),
+#         br.get("THRESHOLD", {}).get("ANIMAL",  -1.0),
+#         br.get("FAKE_PENALTY_WEIGHT", {}).get("PERSON",  -1.0),
+#         br.get("FAKE_PENALTY_WEIGHT", {}).get("ANIMAL",  -1.0),
+#         br.get("FAKE_PENALTY_WEIGHT", {}).get("VEHICLE", -1.0),
+#     ]
+
+# def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ignore,
+#                        th_p, th_v, th_a, nth_p, nth_v, nth_a,
+#                        fw_ground, fw_garden, fw_shoe, fw_wood,
+#                        thr_person, thr_vehicle, thr_animal,
+#                        fpw_person, fpw_animal, fpw_vehicle):
+#     cameras = load_json(CAMERAS_JSON)
+#     thresholds_night = {}
+#     if float(nth_p) >= 0: thresholds_night["person"]  = float(nth_p)
+#     if float(nth_v) >= 0: thresholds_night["vehicle"] = float(nth_v)
+#     if float(nth_a) >= 0: thresholds_night["animal"]  = float(nth_a)
+#     threshold_override = {}
+#     if float(thr_person)  >= 0: threshold_override["PERSON"]  = float(thr_person)
+#     if float(thr_vehicle) >= 0: threshold_override["VEHICLE"] = float(thr_vehicle)
+#     if float(thr_animal)  >= 0: threshold_override["ANIMAL"]  = float(thr_animal)
+#     penalty_override = {}
+#     if float(fpw_person)  >= 0: penalty_override["PERSON"]  = float(fpw_person)
+#     if float(fpw_animal)  >= 0: penalty_override["ANIMAL"]  = float(fpw_animal)
+#     if float(fpw_vehicle) >= 0: penalty_override["VEHICLE"] = float(fpw_vehicle)
+#     blip_rules = {"FAKE_WEIGHTS": {"GROUND": float(fw_ground), "GARDEN": float(fw_garden),
+#                                    "SHOE": float(fw_shoe), "WOOD": float(fw_wood)}}
+#     if threshold_override: blip_rules["THRESHOLD"] = threshold_override
+#     if penalty_override:   blip_rules["FAKE_PENALTY_WEIGHT"] = penalty_override
+#     cam_data = {
+#         "name": name, "location": loc,
+#         "search_patterns": [p.strip() for p in patterns.split(",") if p.strip()],
+#         "priority": priority, "desc": desc, "dynamic_stride": dynamic,
+#         "filters": {"ignore_labels": [i.strip() for i in ignore.split(",") if i.strip()]},
+#         "thresholds": {"person": float(th_p), "vehicle": float(th_v), "animal": float(th_a)},
+#         "blip_rules": blip_rules,
+#     }
+#     if thresholds_night:
+#         cam_data["thresholds_night"] = thresholds_night
+#     cameras[cam_id] = cam_data
+#     save_json(cameras, CAMERAS_JSON)
+#     return f"✅ Cam {cam_id} ({name}) saved!"
+
+# def add_new_camera():
+#     cameras = load_json(CAMERAS_JSON)
+#     existing_ids = sorted([int(k) for k in cameras.keys()])
+#     next_id = f"{max(existing_ids) + 1:02d}" if existing_ids else "00"
+#     cameras[next_id] = {
+#         "name": "Nuova Cam", "search_patterns": [f"_{next_id}_"],
+#         "thresholds": {"person": 0.49, "vehicle": 0.55, "animal": 0.30},
+#         "blip_rules": {"FAKE_WEIGHTS": {"GROUND": 1.0, "GARDEN": 1.0, "SHOE": 1.0, "WOOD": 1.0}}
+#     }
+#     save_json(cameras, CAMERAS_JSON)
+#     return gr.update(choices=list(cameras.keys()), value=next_id)
+
 def load_camera_details(cam_id):
-    empty = ["", "", "", "", "", False, "", 0.49, 0.55, 0.30, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+    empty = ["", "", "", "", "", False, "", 0.49, 0.55, 0.30, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
     if not cam_id:
         return empty
     cameras = load_json(CAMERAS_JSON)
     cam = cameras.get(cam_id, {})
     br  = cam.get("blip_rules", {})
     tn  = cam.get("thresholds_night", {})
+    fw  = br.get("FAKE_WEIGHTS", {})
     return [
         cam.get("name", ""),
         cam.get("location", ""),
@@ -177,10 +260,10 @@ def load_camera_details(cam_id):
         tn.get("person",  -1.0),
         tn.get("vehicle", -1.0),
         tn.get("animal",  -1.0),
-        br.get("FAKE_WEIGHTS", {}).get("GROUND", 1.0),
-        br.get("FAKE_WEIGHTS", {}).get("GARDEN", 1.0),
-        br.get("FAKE_WEIGHTS", {}).get("SHOE",   1.0),
-        br.get("FAKE_WEIGHTS", {}).get("WOOD",   1.0),
+        fw.get("GROUND", -1.0),   # -1.0 = not set = use global default
+        fw.get("GARDEN", -1.0),
+        fw.get("SHOE",   -1.0),
+        fw.get("WOOD",   -1.0),
         br.get("THRESHOLD", {}).get("PERSON",  -1.0),
         br.get("THRESHOLD", {}).get("VEHICLE", -1.0),
         br.get("THRESHOLD", {}).get("ANIMAL",  -1.0),
@@ -189,28 +272,43 @@ def load_camera_details(cam_id):
         br.get("FAKE_PENALTY_WEIGHT", {}).get("VEHICLE", -1.0),
     ]
 
+
+# 2) save_single_camera — riga 185
+# Costruisce FAKE_WEIGHTS solo con i valori >= 0 (omette le chiavi a -1)
+
 def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ignore,
                        th_p, th_v, th_a, nth_p, nth_v, nth_a,
                        fw_ground, fw_garden, fw_shoe, fw_wood,
                        thr_person, thr_vehicle, thr_animal,
                        fpw_person, fpw_animal, fpw_vehicle):
     cameras = load_json(CAMERAS_JSON)
+
     thresholds_night = {}
     if float(nth_p) >= 0: thresholds_night["person"]  = float(nth_p)
     if float(nth_v) >= 0: thresholds_night["vehicle"] = float(nth_v)
     if float(nth_a) >= 0: thresholds_night["animal"]  = float(nth_a)
+
     threshold_override = {}
     if float(thr_person)  >= 0: threshold_override["PERSON"]  = float(thr_person)
     if float(thr_vehicle) >= 0: threshold_override["VEHICLE"] = float(thr_vehicle)
     if float(thr_animal)  >= 0: threshold_override["ANIMAL"]  = float(thr_animal)
+
     penalty_override = {}
     if float(fpw_person)  >= 0: penalty_override["PERSON"]  = float(fpw_person)
     if float(fpw_animal)  >= 0: penalty_override["ANIMAL"]  = float(fpw_animal)
     if float(fpw_vehicle) >= 0: penalty_override["VEHICLE"] = float(fpw_vehicle)
-    blip_rules = {"FAKE_WEIGHTS": {"GROUND": float(fw_ground), "GARDEN": float(fw_garden),
-                                   "SHOE": float(fw_shoe), "WOOD": float(fw_wood)}}
+
+    # FAKE_WEIGHTS: salva solo i valori >= 0, omette le chiavi a -1
+    fake_weights = {}
+    if float(fw_ground) >= 0: fake_weights["GROUND"] = float(fw_ground)
+    if float(fw_garden) >= 0: fake_weights["GARDEN"] = float(fw_garden)
+    if float(fw_shoe)   >= 0: fake_weights["SHOE"]   = float(fw_shoe)
+    if float(fw_wood)   >= 0: fake_weights["WOOD"]   = float(fw_wood)
+
+    blip_rules = {"FAKE_WEIGHTS": fake_weights}
     if threshold_override: blip_rules["THRESHOLD"] = threshold_override
     if penalty_override:   blip_rules["FAKE_PENALTY_WEIGHT"] = penalty_override
+
     cam_data = {
         "name": name, "location": loc,
         "search_patterns": [p.strip() for p in patterns.split(",") if p.strip()],
@@ -221,9 +319,14 @@ def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ign
     }
     if thresholds_night:
         cam_data["thresholds_night"] = thresholds_night
+
     cameras[cam_id] = cam_data
     save_json(cameras, CAMERAS_JSON)
     return f"✅ Cam {cam_id} ({name}) saved!"
+
+
+# 3) add_new_camera — riga 221
+# Nuova camera senza FAKE_WEIGHTS (vuoto = usa global default)
 
 def add_new_camera():
     cameras = load_json(CAMERAS_JSON)
@@ -232,15 +335,18 @@ def add_new_camera():
     cameras[next_id] = {
         "name": "Nuova Cam", "search_patterns": [f"_{next_id}_"],
         "thresholds": {"person": 0.49, "vehicle": 0.55, "animal": 0.30},
-        "blip_rules": {"FAKE_WEIGHTS": {"GROUND": 1.0, "GARDEN": 1.0, "SHOE": 1.0, "WOOD": 1.0}}
+        "blip_rules": {"FAKE_WEIGHTS": {}}
     }
     save_json(cameras, CAMERAS_JSON)
     return gr.update(choices=list(cameras.keys()), value=next_id)
+
 
 def delete_camera(cam_id):
     if not cam_id:
         return gr.update(), "⚠️ Select a camera."
     cameras = load_json(CAMERAS_JSON)
+    if len(cameras) <= 1:
+        return gr.update(), "⚠️ Cannot delete the last camera."
     if cam_id in cameras:
         cam_name = cameras[cam_id].get("name", "")
         del cameras[cam_id]
@@ -248,6 +354,17 @@ def delete_camera(cam_id):
         new_ids = list(cameras.keys())
         return gr.update(choices=new_ids, value=new_ids[0] if new_ids else None), f"🗑️ {cam_id} ({cam_name}) deleted."
     return gr.update(), "❌ Camera not found."
+# def delete_camera(cam_id):
+#     if not cam_id:
+#         return gr.update(), "⚠️ Select a camera."
+#     cameras = load_json(CAMERAS_JSON)
+#     if cam_id in cameras:
+#         cam_name = cameras[cam_id].get("name", "")
+#         del cameras[cam_id]
+#         save_json(cameras, CAMERAS_JSON)
+#         new_ids = list(cameras.keys())
+#         return gr.update(choices=new_ids, value=new_ids[0] if new_ids else None), f"🗑️ {cam_id} ({cam_name}) deleted."
+#     return gr.update(), "❌ Camera not found."
 
 # ==============================================================================
 # ENGINE AVAILABILITY
@@ -936,12 +1053,12 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             cth_nv = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Vehicle night")
                             cth_na = gr.Slider(-1, 1, step=0.01, value=-1.0, label="Animal night")
                         gr.Markdown("### 🎛️ CLIP+BLIP Override  (-1 = use global)")
-                        gr.Markdown("**Fake Weights**")
+                        gr.Markdown("**Fake Weights** (-1 = use global)")
                         with gr.Row():
-                            fw_ground = gr.Slider(0, 1, step=0.05, label="GROUND")
-                            fw_garden = gr.Slider(0, 1, step=0.05, label="GARDEN")
-                            fw_shoe   = gr.Slider(0, 1, step=0.05, label="SHOE")
-                            fw_wood   = gr.Slider(0, 1, step=0.05, label="WOOD")
+                            fw_ground = gr.Slider(-1, 1, step=0.05, value=-1.0, label="GROUND")
+                            fw_garden = gr.Slider(-1, 1, step=0.05, value=-1.0, label="GARDEN")
+                            fw_shoe   = gr.Slider(-1, 1, step=0.05, value=-1.0, label="SHOE")
+                            fw_wood   = gr.Slider(-1, 1, step=0.05, value=-1.0, label="WOOD")
                         gr.Markdown("**THRESHOLD override**")
                         with gr.Row():
                             cam_thr_p = gr.Slider(-1, 1, step=0.01, value=-1.0, label="PERSON")
