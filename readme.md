@@ -79,9 +79,9 @@ chmod +x install.sh
 
 **Windows:**
 ```bat
-install.bat --use-rocm     :: AMD GPU (ROCm 7.2)
-install.bat --use-cuda     :: NVIDIA GPU
-install.bat --use-cpu      :: CPU only
+.\install.bat --use-rocm     :: AMD GPU (ROCm 7.2)
+.\install.bat --use-cuda     :: NVIDIA GPU
+.\install.bat --use-cpu      :: CPU only
 ```
 
 > ℹ️ Windows requires Python 3.12 installed and added to PATH.  
@@ -90,7 +90,7 @@ install.bat --use-cpu      :: CPU only
 #### 3. Launch
 ```bash
 ./run.sh      # Linux
-run.bat       # Windows
+.\run.bat     # Windows
 ```
 
 ---

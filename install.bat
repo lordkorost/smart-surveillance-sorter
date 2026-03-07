@@ -7,7 +7,7 @@ echo  Windows
 echo ==========================================
 echo.
 
-:: Gestione parametri
+:: Parse arguments
 set MODE=auto
 for %%a in (%*) do (
     if "%%a"=="--use-rocm" set MODE=rocm
@@ -15,12 +15,12 @@ for %%a in (%*) do (
     if "%%a"=="--use-cpu"  set MODE=cpu
 )
 
-:: 0. Abilita esecuzione script PowerShell (necessario per attivare la venv)
-echo Configurazione PowerShell...
+:: 0. Enable PowerShell script execution (required to activate venv)
+echo Configuring PowerShell...
 powershell -Command "Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force" >nul 2>&1
 
-:: 1. Cerca Python 3.12
-echo Ricerca Python 3.12...
+:: 1. Find Python 3.12
+echo Looking for Python 3.12...
 set PYTHON_BIN=
 for %%p in (
     "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
@@ -32,30 +32,30 @@ for %%p in (
         goto :found_python
     )
 )
-:: Prova con py launcher
+:: Try py launcher
 py -3.12 --version >nul 2>&1
 if %errorlevel% == 0 (
     set PYTHON_BIN=py -3.12
     goto :found_python
 )
 echo.
-echo ERRORE: Python 3.12 non trovato.
-echo Scaricalo da: https://www.python.org/downloads/release/python-31212/
-echo Durante l'installazione seleziona "Add Python to PATH"
+echo ERROR: Python 3.12 not found.
+echo Download from: https://www.python.org/downloads/release/python-31212/
+echo During installation, select "Add Python to PATH"
 echo.
 pause
 exit /b 1
 
 :found_python
-echo Trovato: %PYTHON_BIN%
+echo Found: %PYTHON_BIN%
 echo.
 
-:: 2. Crea venv
+:: 2. Create virtual environment
 if exist .venv (
-    echo Rimozione venv esistente...
+    echo Removing existing .venv...
     rmdir /s /q .venv
 )
-echo Creazione venv...
+echo Creating virtual environment...
 "%PYTHON_BIN%" -m venv .venv
 if %errorlevel% neq 0 (
     py -3.12 -m venv .venv
@@ -73,7 +73,7 @@ if "%MODE%"=="cpu"  goto :install_cpu
 nvidia-smi >nul 2>&1
 if %errorlevel% == 0 goto :install_cuda
 
-:: Auto-detect AMD ROCm (controlla se rocminfo esiste)
+:: Auto-detect AMD ROCm
 where rocminfo >nul 2>&1
 if %errorlevel% == 0 goto :install_rocm
 
@@ -81,10 +81,10 @@ if %errorlevel% == 0 goto :install_rocm
 goto :install_cpu
 
 :install_rocm
-echo GPU AMD rilevata - installazione PyTorch ROCm 7.2 per Windows...
-echo Richiede driver AMD Adrenalin 26.1.1 o superiore.
+echo AMD GPU detected - installing PyTorch ROCm 7.2 for Windows...
+echo Requires AMD Adrenalin driver 26.1.1 or later.
 echo.
-echo Step 1/2: ROCm SDK (download pesante, attendere)...
+echo Step 1/2: ROCm SDK (large download, please wait)...
 pip install --no-cache-dir ^
     https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_core-7.2.0.dev0-py3-none-win_amd64.whl ^
     https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_devel-7.2.0.dev0-py3-none-win_amd64.whl ^
@@ -98,63 +98,38 @@ pip install --no-cache-dir ^
 goto :install_deps
 
 :install_cuda
-echo GPU NVIDIA rilevata - installazione PyTorch CUDA...
+echo NVIDIA GPU detected - installing PyTorch CUDA...
 pip install torch==2.5.1+cu124 torchvision==0.20.1+cu124 torchaudio==2.5.1+cu124 ^
     --extra-index-url https://download.pytorch.org/whl/cu124 --quiet
 goto :install_deps
 
 :install_cpu
-echo Nessuna GPU rilevata - installazione PyTorch CPU (con MKL)...
-echo Per AMD: installa driver Adrenalin 26.1.1+ e rilancia con --use-rocm
-echo Per NVIDIA: rilancia con --use-cuda
+echo No GPU detected - installing PyTorch CPU (with MKL)...
+echo For AMD: install Adrenalin driver 26.1.1+ and re-run with --use-rocm
+echo For NVIDIA: re-run with --use-cuda
 echo.
-echo Nota: PyTorch standard con MKL per prestazioni CPU ottimali.
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --quiet
 goto :install_deps
 
 :install_deps
 echo.
-echo Installazione dipendenze...
-:: Filtra torch/torchvision/torchaudio dal requirements.txt
-python -c "
-lines = open('requirements.txt').readlines()
-filtered = [l for l in lines if not l.lower().startswith(('torch','torchvision','torchaudio','pytorch-triton','rocm'))]
-open('_req_tmp.txt', 'w').writelines(filtered)
-"
+echo Installing dependencies...
+python filter_requirements.py
 pip install -r _req_tmp.txt --quiet
 del _req_tmp.txt
 
-:: Crea cartelle necessarie
 if not exist models mkdir models
 if not exist logs mkdir logs
 
-:: Installa pacchetto
-echo Installazione pacchetto...
+echo Installing package...
 pip install -e . --quiet
 
-:: Verifica
 echo.
-echo Verifica installazione...
-python -c "
-import sys, torch
-print(f'Python  : {sys.version.split()[0]}')
-print(f'PyTorch : {torch.__version__}')
-if torch.cuda.is_available():
-    print(f'GPU     : {torch.cuda.get_device_name(0)}')
-    try:
-        x = torch.rand(1, device='cuda')
-        print('VRAM    : OK')
-    except Exception as e:
-        print(f'VRAM    : FAILED ({e})')
-else:
-    print('GPU     : Non rilevata (CPU mode)')
-    mkl_ok = torch.backends.mkl.is_available()
-    print(f'MKL     : {\"OK\" if mkl_ok else \"NOT FOUND - prestazioni CPU ridotte\"}')
-    print('         Per AMD: installa driver Adrenalin 26.1.1+ e rilancia con --use-rocm')
-"
+echo Verifying installation...
+python verify_install.py
 
 echo.
-echo Installazione completata!
-echo Avvia con: run.bat
+echo Installation complete!
+echo Launch with: .\run.bat
 echo.
 pause
