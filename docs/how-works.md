@@ -55,6 +55,27 @@ A well-configured NVR makes every subsequent step faster and more accurate.
 
 ---
 
+## 🎯 Subject-Based Detection vs Motion Detection
+
+An alternative approach would have been classic motion detection — flag any video where pixels change. However, this was deliberately avoided.
+
+Motion detection catches everything: wind, rain, spider webs, headlights, shadows. The NVR already does this and still generates hundreds of false recordings.
+
+The key insight is that **everything we care about has a subject**:
+- **Persons** — move on their own ✅
+- **Animals** — move on their own ✅  
+- **Vehicles** — only move when driven by a person → detecting the person while getting in or out a vehicle is equivalent to detecting a new vehicle event ✅
+- **Wind, rain, spider webs** — not subjects → YOLO ignores them with the right confidence settings ✅
+
+This is why vehicles can be safely ignored on a parking camera — any car entering or leaving must have a driver, who will be detected getting in or out. The same logic applies to a barn camera: ignore the livestock that are always there, detect the unexpected subject (person, predator) that represents a real event.
+
+SSS doesn't detect movement — it detects **intent**.
+
+> 📖 See [Mode Comparison](benchmarks/mode-comparison.md) for benchmark results across different modes and ignore_labels configurations.  
+> 📖 See [Camera Configuration](cameras-config.md) for per-camera ignore_labels setup and examples.
+
+---
+
 ## Person First — Always
 
 In a security context, **persons have absolute priority** — even at the cost of some false positives.

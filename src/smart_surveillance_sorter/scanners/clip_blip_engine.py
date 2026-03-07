@@ -102,7 +102,7 @@ class ClipBlipEngine:
         # Coordinate per calcolo notte astronomica
         self.city_name = self.settings.get("city", "Roma")
         self.lat, self.lon = get_smart_coordinates(self.city_name)
-        log.info(f"ClipBlipEngine  — city={self.city_name} ({self.lat}, {self.lon})")
+        log.debug(f"ClipBlipEngine  — city={self.city_name} ({self.lat}, {self.lon})")
 
         # Mappa label YOLO → classe principale
         self.label_to_main_class = {}
@@ -153,7 +153,7 @@ class ClipBlipEngine:
       
         try:
             crop_img  = self.preprocess(Image.open(crop_path).convert("RGB")).unsqueeze(0).to(self.DEVICE)
-            log.debug(f"Loading frame: {frame_path}")
+            #log.debug(f"Loading frame: {frame_path}")
             frame_img = self.preprocess(Image.open(frame_path).convert("RGB")).unsqueeze(0).to(self.DEVICE) if frame_path else crop_img
 
             # --- BLIP caption ---
