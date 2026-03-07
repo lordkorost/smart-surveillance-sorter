@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 import shutil
 
@@ -16,8 +17,8 @@ class FileSorter:
         
         # Determina la strategia
         self.inplace = self.input_dir in self.work_dir.parents or self.input_dir == self.work_dir
-        self.method = "COPY" if (self.is_test or not self.inplace) else "MOVE"
-        
+        self.method = "COPY" if self.is_test else "MOVE"
+         #self.method = "COPY" if (self.is_test or not self.inplace) else "MOVE"
         # Struttura cartelle dal settings
         storage_cfg = settings.get("storage_settings", {})
         self.structure_type = storage_cfg.get("structure_type", "camera_first")
@@ -97,16 +98,24 @@ class FileSorter:
         # processed_videos = {}
         # processed_files = set() 
       
-       
-        import os
-        if os.access(self.input_dir, os.W_OK):
-            # Caso normale: scriviamo nell'input
+        if self.inplace:
             self.dest_base = self.input_dir
-            log.info(f"Dir={self.input_dir}")
         else:
-            self.dest_base = self.work_dir / "SMI_SORTED_RESULTS"
+            self.dest_base = self.work_dir
             self.dest_base.mkdir(parents=True, exist_ok=True)
-            log.warning(f"Input is not writeable! Risults on folder={self.dest_base}")
+            if not os.access(self.work_dir, os.W_OK):
+                self.dest_base = self.work_dir / "SMI_SORTED_RESULTS"
+                self.dest_base.mkdir(parents=True, exist_ok=True)
+                log.warning(f"Output dir not writeable! Results in folder={self.dest_base}")
+        # import os
+        # if os.access(self.input_dir, os.W_OK):
+        #     # Caso normale: scriviamo nell'input
+        #     self.dest_base = self.input_dir
+        #     log.info(f"Dir={self.input_dir}")
+        # else:
+        #     self.dest_base = self.work_dir / "SMI_SORTED_RESULTS"
+        #     self.dest_base.mkdir(parents=True, exist_ok=True)
+        #     log.warning(f"Input is not writeable! Risults on folder={self.dest_base}")
         # --- CARICAMENTO MAPPING REALE ---
         from smart_surveillance_sorter.utils import get_camera_mapping 
         camera_mapping = get_camera_mapping() 
@@ -190,7 +199,10 @@ class FileSorter:
                 if frames_dir.exists() and not any(frames_dir.iterdir()):
                     frames_dir.rmdir()
                     log.debug(f"🗑️ Removed empty frames dir: {frames_dir}")
-
+            index_file = self.input_dir / "index.json"
+            if index_file.exists():
+                index_file.unlink()
+                log.debug(f"🗑️ Removed index.json")
         
 
     def cleanup(self):

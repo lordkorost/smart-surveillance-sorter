@@ -1,4 +1,5 @@
-# check.py
+# verify_install.py
+import os
 import sys, torch
 
 print('Python  :', sys.version.split()[0])
@@ -15,4 +16,5 @@ else:
     print('GPU     : Not detected (CPU mode)')
     print('MKL     : {}'.format('OK' if torch.backends.mkl.is_available() else 'NOT FOUND'))
 
-print('End')          # <‑‑ NEW
+print('End')
+os._exit(0)        

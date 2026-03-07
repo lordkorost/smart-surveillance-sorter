@@ -63,7 +63,8 @@ def main():
     
     if args.output_dir is None:
         output_dir = args.dir
-    
+    else:
+        output_dir = args.output_dir
     if not check_dir(Path(output_dir),is_writeable=True):
         log.critical(f"Output dir is not writeable!")
         sys.exit(1)

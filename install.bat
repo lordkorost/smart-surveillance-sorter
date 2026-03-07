@@ -122,11 +122,12 @@ if not exist models mkdir models
 if not exist logs mkdir logs
 
 echo Installing package...
-pip install -e . --quiet
+pip install -e .
 
 echo.
+echo.
 echo Verifying installation...
-python verify_install.py
+python -c "import sys, torch; print('Python  :', sys.version.split()[0]); print('PyTorch :', torch.__version__); print('GPU     :', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'Not detected (CPU mode)'); print('VRAM    : OK') if torch.cuda.is_available() else print('MKL     :', 'OK' if torch.backends.mkl.is_available() else 'NOT FOUND')"
 
 echo.
 echo Installation complete!

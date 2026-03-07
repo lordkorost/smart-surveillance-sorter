@@ -108,6 +108,25 @@ sss-rt --dir /mnt/nvr/2026-03-06 --mode full --refine --vision --interval 120
 > ℹ️ You can switch between real-time and normal mode on the same folder. Running `sss-rt` after a normal `sss` run (or vice versa) works correctly — the resume mechanism is shared.
 
 ---
+## 📦 Cumulative Archive Mode
+
+By keeping the same `--output-dir` across multiple runs with different input folders, 
+SSS builds a permanent categorized archive automatically:
+```bash
+# Day 1
+sss --dir /nvr/2026-03-01 --output-dir /archive
+
+# Day 2  
+sss --dir /nvr/2026-03-02 --output-dir /archive
+
+# Day N...
+sss --dir /nvr/2026-03-N --output-dir /archive
+```
+
+Result: `/archive/camera_name/person/` contains every person detection 
+from all processed days — ready to search without ever watching a single video.
+
+---
 
 ## ⚠️ What to Avoid
 

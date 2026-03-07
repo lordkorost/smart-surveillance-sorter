@@ -38,10 +38,11 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 - **Highly Customizable** – Fine-tune settings to adapt to any camera, scenario, or environment.
 - **Web UI** – An intuitive Gradio-based interface to configure and launch the sorter in all modes.
 - **Test Mode** – Built-in sandbox to verify your configuration before running it on real production folders.
-- **Intelligent Early Exit** – A smart mechanism that stops video analysis once a detection is confirmed, saving significant time.
-- **Real-Time & Batch** – Works on historical archives or in constant monitoring mode as your NVR saves new files.
-- **Total Privacy** – Runs 100% locally. No data ever leaves your network.
 - **Resilient** – Automatic resume at every stage. If the power goes out, it picks up exactly where it left off.
+- **Cumulative Archive** – Use a fixed output folder across multiple runs to automatically build a permanent categorized archive across days, weeks, or months.
+- **Real-Time & Batch** – Works on historical archives or in constant monitoring mode as your NVR saves new files.
+- **Intelligent Early Exit** – A smart mechanism that stops video analysis once a detection is confirmed, saving significant time.
+- **Total Privacy** – Runs 100% locally. No data ever leaves your network.
 - **Lens Cleanliness Check** – Automatically monitors camera lens status using Vision models (Ollama).
 
 ---
