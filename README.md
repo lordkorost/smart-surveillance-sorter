@@ -10,7 +10,7 @@ Organize your NVR videos using the power of YOLO, CLIP, BLIP, and Vision models 
 Designed for those overwhelmed by hundreds of useless recordings caused by wind, insects, or leaves, this tool scans every video and automatically categorizes it into: **PERSON**, **ANIMAL**, **VEHICLE**, or **OTHERS**.
 
 <div align="center">
-  <img src="docs/assets/sorter.gif" alt="Smart Surveillance Sorter demo" width="270">
+  <img src="docs/assets/sorter.gif" alt="Demo" width="270">
 </div>
 
 ---
@@ -22,19 +22,21 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 - [Benchmarks](#benchmarks)
 
 ## Documentation
-- [Scanning Logic & Early Exit](docs/scanning-logic.md)
-- [CLI Reference Guide](docs/cli_reference.md) for all available flags and examples.
-- [Tuning Guide](docs/tuning-guide.md) to learn how to handle specific edge cases
-- [AMD GPU Setup](docs/gpu-setup-amd.md)
-- [Benchmarks](docs/benchmarks.md)
-- [Camera Configuration](docs/cameras-config.md)
 
+| Getting Started | Configuration | Advanced | Benchmarks |
+|----------------|---------------|----------|------------|
+| [How It Works](docs/how-works.md) | [Camera Config](docs/cameras-config.md) | [Real-Time & Resume](docs/realtime-resume.md) | [Benchmarks Index](docs/benchmarks-index.md) |
+| [Mode Comparison](docs/mode-compare.md) | [Tuning Guide](docs/tuning-guide.md) | [Lens Health Check](docs/lens-health.md) | [Model Comparison](docs/model-comparison.md) |
+| [WebUI Guide](docs/webui.md) | [CLIP/BLIP Settings](docs/blip-clip-config.md) | [Manual Install](docs/manual-install.md) | [YOLO Model Comparison](docs/yolo-model-comparison.md) |
+| [CLI Reference](docs/cli-usage.md) | [YOLO Tuning](docs/yolo-tuning.md) | [AMD GPU Setup](docs/gpu-setup-amd.md) | |
+| [Testing Guide](docs/testing-guide.md) | [Edge Cases](docs/edge-cases.md) | | |
+
+---
 
 ## Features
 
 - **Hybrid Pipeline** – YOLO for speed → CLIP+BLIP for precision → Vision (Ollama) for uncertain cases (optional).
 - **Highly Customizable** – Fine-tune settings to adapt to any camera, scenario, or environment.
-- **Web UI** – An intuitive Gradio-based interface to configure and launch the sorter in all modes.
 - **Test Mode** – Built-in sandbox to verify your configuration before running it on real production folders.
 - **Resilient** – Automatic resume at every stage. If the power goes out, it picks up exactly where it left off.
 - **Cumulative Archive** – Use a fixed output folder across multiple runs to automatically build a permanent categorized archive across days, weeks, or months.
@@ -43,8 +45,10 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 - **Total Privacy** – Runs 100% locally. No data ever leaves your network.
 - **Lens Cleanliness Check** – Automatically monitors camera lens status using Vision models (Ollama).
 
----
+**Web UI** – An intuitive Gradio-based interface to configure and launch the sorter in all modes.
 
+![WebUI](docs/assets/webui-run-scan.png)
+---
 ## Quick Start
 
 ### Requirements
