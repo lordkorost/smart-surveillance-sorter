@@ -1,6 +1,6 @@
 # 🔴 AMD GPU Setup
 
-This guide covers AMD GPU setup for Smart Surveillance Sorter on Linux and Windows.
+This guide covers AMD GPU driver installation for Smart Surveillance Sorter on Linux and Windows.
 
 > ⚠️ **AMD ROCm is officially supported only for specific AMD GPUs.** Check the [official AMD ROCm compatibility list](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html) before proceeding.
 
@@ -56,15 +56,13 @@ chmod +x install.sh
 ./install.sh --use-rocm
 ```
 
-The installer will install PyTorch with ROCm 6.4 support inside the virtual environment.
-
 ### Step 4 — Verify GPU is detected
 
 ```bash
 ./run.sh
 ```
 
-In the WebUI → Settings → General → Device should show `cuda` available. In the terminal you should see:
+In the terminal you should see:
 
 ```
 Backend : ROCm/HIP (AMD)
@@ -73,30 +71,6 @@ VRAM    : ✅ OK
 ```
 
 > ℹ️ On Linux, AMD GPUs are exposed via the CUDA compatibility layer in PyTorch — `torch.cuda.is_available()` returns `True` for ROCm GPUs. This is expected behavior.
-
----
-
-### Manual Installation (advanced)
-
-If you prefer to set up the environment manually instead of using `install.sh`:
-
-```bash
-# Create venv
-python3.12 -m venv .venv
-source .venv/bin/activate
-
-# Install PyTorch ROCm 6.4
-pip install torch==2.9.1+rocm6.4 torchvision==0.24.1+rocm6.4 torchaudio==2.9.1+rocm6.4 \
-    --index-url https://download.pytorch.org/whl/rocm6.4
-
-# Install dependencies (excluding torch)
-grep -v "^torch\|^torchvision\|^torchaudio" requirements.txt | pip install -r /dev/stdin
-
-# Install package
-pip install -e .
-```
-
-> ⚠️ Key versions: **PyTorch 2.9.1+rocm6.4** and **ultralytics** from `requirements.txt`. Do not mix different PyTorch versions.
 
 ---
 
@@ -174,44 +148,12 @@ The installer downloads and installs the ROCm SDK and PyTorch ROCm 7.2 wheels di
 ```
 
 In the terminal you should see:
+
 ```
 Backend : ROCm/HIP (AMD)
 GPU     : AMD Radeon RX ...
 VRAM    : OK
 ```
-
----
-
-### Manual Installation (advanced)
-
-If you prefer to set up the environment manually instead of using `install.bat`:
-
-```bat
-:: Create venv
-py -3.12 -m venv .venv
-.venv\Scripts\activate.bat
-
-:: Install ROCm SDK
-pip install --no-cache-dir ^
-    https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_core-7.2.0.dev0-py3-none-win_amd64.whl ^
-    https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_devel-7.2.0.dev0-py3-none-win_amd64.whl ^
-    https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_libraries_custom-7.2.0.dev0-py3-none-win_amd64.whl ^
-    https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm-7.2.0.dev0.tar.gz
-
-:: Install PyTorch ROCm 7.2
-pip install --no-cache-dir ^
-    https://repo.radeon.com/rocm/windows/rocm-rel-7.2/torch-2.9.1+rocmsdk20260116-cp312-cp312-win_amd64.whl ^
-    https://repo.radeon.com/rocm/windows/rocm-rel-7.2/torchaudio-2.9.1+rocmsdk20260116-cp312-cp312-win_amd64.whl ^
-    https://repo.radeon.com/rocm/windows/rocm-rel-7.2/torchvision-0.24.1+rocmsdk20260116-cp312-cp312-win_amd64.whl
-
-:: Install dependencies (excluding torch)
-pip install -r requirements.txt
-
-:: Install package
-pip install -e .
-```
-
-> ⚠️ Key versions: **PyTorch 2.9.1+rocm7.2** and **ultralytics** from `requirements.txt`. Do not mix different PyTorch versions — ROCm builds are not interchangeable with standard CUDA builds.
 
 ---
 
