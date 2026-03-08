@@ -18,6 +18,7 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 ## Table of Contents
 - [Features](#features)
 - [Quick Start](#quick-start)
+- [First Configuration](#configuration)
 - [Benchmarks](#benchmarks)
 
 ## Documentation
