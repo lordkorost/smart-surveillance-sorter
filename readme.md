@@ -17,9 +17,7 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 
 ## Table of Contents
 - [Features](#features)
-- [Requirements](#requirements)  
 - [Quick Start](#quick-start)
-- [Documentation](#documentation)
 - [Benchmarks](#benchmarks)
 - [Contributing](#contributing)
 - [License](#license)
@@ -216,7 +214,7 @@ Please open an Issue before starting major changes to discuss the approach.
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE.txt) file for details.
 
 
 
