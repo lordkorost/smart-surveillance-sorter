@@ -1,4 +1,4 @@
-# 🛡️ Smart Surveillance Sorter
+# Smart Surveillance Sorter
 
 ![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
 ![Status](https://img.shields.io/badge/status-stable-green.svg)
@@ -9,28 +9,29 @@
 Organize your NVR videos using the power of YOLO, CLIP, BLIP, and Vision models (Ollama).
 Designed for those overwhelmed by hundreds of useless recordings caused by wind, insects, or leaves, this tool scans every video and automatically categorizes it into: **PERSON**, **ANIMAL**, **VEHICLE**, or **OTHERS**.
 
+![Smart Surveillance Sorter demo](docs/assets/sorter.gif)
+
 ---
 
-## 📋 Table of Contents
+## Table of Contents
+- [Features](#-key-features)
+- [Requirements](#-requirements)  
+- [Quick Start](#-quick-start)
+- [Documentation](#-documentation)
+- [Benchmarks](#-benchmarks)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-- [✨ Features](#-key-features)
-- [🔧 Requirements](#-requirements)  
-- [🚀 Quick Start](#-quick-start)
-- [📦 Installation](#-installation)
-- [📖 Documentation](#-documentation)
-- [📊 Benchmarks](#-benchmarks)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
-
-## 📖 Documentation
-
+## Documentation
 - [Scanning Logic & Early Exit](docs/scanning-logic.md)
-- [Tuning Guide](docs/tuning-guide.md)
-- [Windows GPU Setup](docs/windows-gpu.md)
+- [CLI Reference Guide](docs/cli_reference.md) for all available flags and examples.
+- [Tuning Guide](docs/tuning-guide.md) to learn how to handle specific edge cases
+- [AMD GPU Setup](docs/gpu-setup-amd.md)
 - [Benchmarks](docs/benchmarks.md)
 - [Camera Configuration](docs/cameras-config.md)
 
-## ✨ Features
+
+## Features
 
 - **Hybrid Pipeline** – YOLO for speed → CLIP+BLIP for precision → Vision (Ollama) for uncertain cases (optional).
 - **Highly Customizable** – Fine-tune settings to adapt to any camera, scenario, or environment.
@@ -39,32 +40,37 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 - **Resilient** – Automatic resume at every stage. If the power goes out, it picks up exactly where it left off.
 - **Cumulative Archive** – Use a fixed output folder across multiple runs to automatically build a permanent categorized archive across days, weeks, or months.
 - **Real-Time & Batch** – Works on historical archives or in constant monitoring mode as your NVR saves new files.
-- **Intelligent Early Exit** – A smart mechanism that stops video analysis once a detection is confirmed, saving significant time.
+- **Early Exit** – A smart mechanism that stops video analysis once a detection is confirmed, saving significant time.
 - **Total Privacy** – Runs 100% locally. No data ever leaves your network.
 - **Lens Cleanliness Check** – Automatically monitors camera lens status using Vision models (Ollama).
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### 🛠️ Requirements
+### Requirements
 
-- **Python 3.12** — required (both Linux and Windows)
+- **Python 3.12**
 - **RAM:** 12GB minimum, 16GB recommended
 - **VRAM:** 8GB minimum for GPU mode, 12GB+ for Vision/Ollama
 - **Ollama** — required for Vision mode (recommended model: `qwen3-vl:8b`)
+- **AMD GPU:** Latest AMD drivers + ROCm — see [AMD GPU Setup](docs/gpu-setup-amd.md)
+- **NVIDIA GPU:** CUDA drivers
 
-> ℹ️ CPU mode works on any modern system but is significantly slower — see [Benchmarks](#-benchmarks).
+>[!NOTE]
+> CPU mode works on any modern system but is significantly slower — see [Benchmarks](#-benchmarks).
 
 ---
 
-### 📦 Installation
+### Installation
 
 #### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/smart-surveillance-sorter.git
+git clone https://github.com/lordkorost/smart-surveillance-sorter.git
 cd smart-surveillance-sorter
 ```
+>[!TIP]
+>No Git? Download the ZIP directly from the [GitHub releases page](https://github.com/lordkorost/smart-surveillance-sorter/releases) or click **Code → Download ZIP** on the repository page.
 
 #### 2. Run the installer
 
@@ -75,16 +81,16 @@ chmod +x install.sh
 ./install.sh --use-cuda    # NVIDIA GPU
 ./install.sh --use-cpu     # CPU only
 ```
-> ℹ️ **Linux:** `sudo apt install python3.12 python3.12-venv` (Ubuntu 22.04/24.04)
+> **Linux:** `sudo apt install python3.12 python3.12-venv` (Ubuntu 22.04/24.04)
 
 **Windows:**
 ```bat
-.\install.bat --use-rocm     :: AMD GPU (ROCm 7.2)
+.\install.bat --use-rocm     :: AMD GPU
 .\install.bat --use-cuda     :: NVIDIA GPU
 .\install.bat --use-cpu      :: CPU only
 ```
-
-> ℹ️ Windows requires Python 3.12 installed and added to PATH.  
+>[!NOTE]
+> Windows requires Python 3.12 installed and added to PATH.  
 > Download: https://www.python.org/downloads/release/python-31212/
 
 #### 3. Launch
@@ -92,26 +98,12 @@ chmod +x install.sh
 ./run.sh      # Linux
 .\run.bat     # Windows
 ```
-
-> ℹ️ **CPU mode** works out of the box on any modern system — just run `./install.sh --use-cpu` (Linux) or `.\install.bat --use-cpu` (Windows). No additional drivers required. PyTorch is installed with MKL for optimal CPU performance. See [Benchmarks](#-benchmarks) for expected processing times.
+>[!NOTE]
+> **CPU mode** works out of the box on any modern system — just run `./install.sh --use-cpu` (Linux) or `.\install.bat --use-cpu` (Windows). No additional drivers required. PyTorch is installed with MKL for optimal CPU performance. See [Benchmarks](#-benchmarks) for expected processing times.
 ---
 
 
-### 🖥️ GPU Setup
-
-| GPU | Linux | Windows |
-|-----|-------|---------|
-| NVIDIA | CUDA 12.x driver | CUDA 12.x driver |
-| AMD | ROCm 7.2 | Adrenalin 26.2.2 + Ollama version from AMD Adrenalin - AI Bundle - Ollama |
-
-Without this, Ollama runs on CPU only.
-> 📖 **AMD GPU detailed setup:** [docs/gpu-setup-amd.md](docs/gpu-setup-amd.md)
-> ⚠️ **AMD GPU on Windows + Ollama (Vision mode):** Ollama must be installed from the **AMD Adrenalin AI Bundle** (not from ollama.com). Set `OLLAMA_VULKAN=1` as a system environment variable to enable GPU acceleration. 
-
-#### **CLI Usage**
-If you prefer using the terminal, check out our [**CLI Reference Guide**](docs/cli_reference.md) for all available flags and examples.
-
-### ⚙️ Configuration
+### Configuration
 
 Before running the sorter, you need to set up your environment. You can do this via the Web UI or by manually editing the files in the config/ folder.
 * Set your Location: Open config/settings.json and set your city. This is required to calculate sunrise/sunset times for accurate day/night detection.
@@ -127,31 +119,26 @@ Dahua (es: 2026-02-28_06-34-26_cam1.mp4)
 "timestamp_format": "%Y-%m-%d_%H-%M-%S",
 "filename_template": "{timestamp}_{nvr_name}{camera_id}"
 ```
-* Cameras Setup: Define your cameras in config/cameras.json. You can use [**cameras_example.json**](docs/cameras_setting.md) as a template.
+* Cameras Setup: Define your cameras in config/cameras.json. You can use [**cameras setting guide**](docs/cameras_setting.md) as reference.
 
-#### 🛠️ Deep Dive:
-* For a detailed explanation of all settings, see [**Advanced Configuration Guide**](docs/advanced_conf_guide.md)
-* To learn how to handle specific edge cases (like garden gnomes or moving leaves), check [**Tuning & False Positives Guide**](docs/setting_tips.md)
+> [!CAUTION]
+> Always use **Test Mode** first! Before letting the sorter move your real NVR recordings, run it with the `--test` flag (or enable "Test Mode" in the Web UI). In this mode, the software will copy files instead of moving them, allowing you to verify detection and categorization for your specific camera setup. See the [Testing Guide](docs/testing-guide.md) for details.
 
-⚠️ IMPORTANT: Test Before Use!
->[!CAUTION]
-> Always use the "Test Mode" first! 
-> Before letting the sorter move your real NVR recordings, run it with the --test flag (or enable "Test Mode" in the Web UI). In this mode, the software will copy files instead of moving them, allowing you to verify if the detection and categorization are working as expected for your specific camera angles.
-
-
-## 📊 Benchmarks
+## Benchmarks
 
 **Test cameras:** Reolink 4K
 - Daytime: 20 fps
 - Nighttime: 12 fps
 - Resolution: 3840×2160
 
-> ℹ️ Parameters tuned for Reolink 4K footage. Other cameras with similar specs (4K, 12-20fps) should work well with default parameters. Lower resolution or fps cameras may need stride/occurrence adjustments — see [YOLO Tuning](docs/benchmarks/yolo-tuning.md).
+>[!NOTE]
+> Parameters tuned for Reolink 4K footage. Other cameras with similar specs (4K, 12-20fps) should work well with default parameters. Lower resolution or fps cameras may need stride/occurrence adjustments — see [YOLO Tuning](docs/benchmarks/yolo-tuning.md).
 
 Tested on **521 videos + 480 images** (1 day of NVR footage, 8 cameras, mixed outdoor scenes).  
 Hardware: Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) / Vulkan (Windows)
 
-> 📖 Full benchmark details: [docs/benchmarks.md](docs/benchmarks.md)
+>[!TIP]
+> Full benchmark details: [docs/benchmarks.md](docs/benchmarks.md)
 
 ### Performance
 
@@ -163,12 +150,12 @@ Hardware: Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) / Vulkan (Windows)
 | +BLIP+Fallback | 02:51 | 07:26 | — | — |
 | +Vision | 15:55 | 38:12 | — | — |
 
-> ⚠️ **Timings depend on your footage characteristics:**
+> **Timings depend on your footage characteristics:**
 > - **YOLO**: scales with video length — longer videos = more frames to analyze. Test set: ~30% short clips (25-30s), ~40% medium (1 min), ~30% long (3+ min).
 > - **Vision**: varies significantly by scene complexity — ambiguous scenes (shadows, partial objects, night) trigger longer AI reasoning. Simple scenes can be as fast as ~1-2s/video, complex ones up to ~15s/video.
 > - **BLIP**: largely unaffected by video length — processes only extracted keyframes.
 
-### ⏱️ Total Pipeline Time (521 videos + 480 images)
+### Total Pipeline Time (521 videos + 480 images)
 
 | Pipeline | Linux GPU | Windows GPU | Linux CPU | Windows CPU |
 |----------|-----------|-------------|-----------|-------------|
@@ -176,11 +163,12 @@ Hardware: Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) / Vulkan (Windows)
 | YOLO+BLIP+Fallback | ~48 min | ~54 min | — | — |
 | YOLO+Vision | ~58 min | ~1h 21 min | — | — |
 
-> ℹ️ CPU times measured with standard PyTorch build (MKL). ROCm build on CPU is significantly slower — see [docs/benchmarks.md](docs/benchmarks.md).
+>[!NOTE]
+> CPU times measured with standard PyTorch build (MKL). ROCm build on CPU is significantly slower — see [docs/benchmarks.md](docs/benchmarks.md).
 
 ### Accuracy (YOLO + BLIP, default params)
 
-> 📖 **Precision** = of all videos classified as X, how many were actually X (false positive rate).  
+> **Precision** = of all videos classified as X, how many were actually X (false positive rate).  
 > **Recall** = of all real X videos, how many were correctly found (false negative rate).  
 > **Global accuracy** = percentage of correctly classified videos overall.
 
@@ -196,16 +184,15 @@ Hardware: Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) / Vulkan (Windows)
 | Mode | Global Acc | Avg Recall | Notes |
 |------|------------|------------|-------|
 | YOLO+BLIP | 98.27% | 89.53% | Fast, recommended default |
-| YOLO+BLIP+Fallback | 97.89% | 88.25% | ⚠️ May worsen results |
+| YOLO+BLIP+Fallback | 97.89% | 88.25% | May worsen results |
 | YOLO+Vision | 98.46% | 91.92% | Best accuracy, slower |
 
-> 🎯 **0 missed persons (FN=0)** across all test runs — the system never fails to detect a real person. False positives (shadows, reflections) are filtered by the Vision refinement step.
+**0 missed persons (FN=0)** across all test runs — the system never fails to detect a real person. False positives (shadows, reflections) are filtered by the Vision refinement step.
 
-Per il README li puoi citare come known limitations:
+>[!NOTE]
+>Partial detections (person visible only through glass or partially behind obstacles) may produce inconsistent results depending on lighting and angle. YOLO may detect the person while Vision cannot confirm from the full frame.
 
-⚠️ Partial detections (person visible only through glass or partially behind obstacles) may produce inconsistent results depending on lighting and angle. YOLO may detect the person while Vision cannot confirm from the full frame.
-
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! If you want to improve the project:
 
@@ -225,7 +212,7 @@ Contributions are welcome! If you want to improve the project:
 Please open an Issue before starting major changes to discuss the approach.
 
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
