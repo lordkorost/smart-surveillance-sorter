@@ -52,7 +52,7 @@
     },
     "vision_settings": {
         "model_name": "qwen3-vl:8b",
-        "temperature": 1,
+        "temperature": 0.3,
         "num_predict": 1024,
         "top_k": 20,
         "top_p": 0.95,

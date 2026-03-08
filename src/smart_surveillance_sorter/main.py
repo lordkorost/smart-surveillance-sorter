@@ -133,6 +133,7 @@ def main():
             health_report_path = Path(output_dir) / LENS_HEALTH
             save_json(lens_status, health_report_path)
             log.info(f"Report saved in={health_report_path}")
+            scanner._print_lens_status()
         except Exception as e:
             log.error(f"Error during check clean: error={e}")
         finally:

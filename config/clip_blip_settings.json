@@ -3,7 +3,7 @@
 
     "clip_model": "ViT-L-14",
     "clip_pretrained": "openai",
-    "blip_model": "Salesforce/blip-image-captioning-base",
+    "blip_model": "Salesforce/blip-image-captioning-large",
 
     "MAIN_CLASSES": ["PERSON", "ANIMAL", "VEHICLE"],
 

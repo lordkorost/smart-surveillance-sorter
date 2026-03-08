@@ -48,14 +48,6 @@
             "person": 0.49,
             "vehicle": 0.55,
             "animal": 0.3
-        },
-        "blip_rules": {
-            "FAKE_WEIGHTS": {
-                "GROUND": 1.0,
-                "GARDEN": 1.0,
-                "SHOE": 1.0,
-                "WOOD": 1.0
-            }
         }
     },
     "02": {
@@ -163,12 +155,6 @@
             "person": 0.49,
             "vehicle": 0.55,
             "animal": 0.3
-        },
-        "blip_rules": {
-            "FAKE_WEIGHTS": {
-                "GROUND": 1.0,
-                "GARDEN": 1.0
-            }
         }
     },
     "06": {
@@ -191,14 +177,6 @@
             "person": 0.49,
             "vehicle": 0.55,
             "animal": 0.3
-        },
-        "blip_rules": {
-            "FAKE_WEIGHTS": {
-                "GROUND": 1.0,
-                "GARDEN": 1.0,
-                "SHOE": 1.0,
-                "WOOD": 1.0
-            }
         }
     },
     "07": {
@@ -230,14 +208,6 @@
             "person": 0.49,
             "vehicle": 0.55,
             "animal": 0.3
-        },
-        "blip_rules": {
-            "FAKE_WEIGHTS": {
-                "GROUND": 1.0,
-                "GARDEN": 1.0,
-                "SHOE": 1.0,
-                "WOOD": 1.0
-            }
         }
     }
 }

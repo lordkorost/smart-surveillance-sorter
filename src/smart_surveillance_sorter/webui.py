@@ -642,6 +642,7 @@ def run_check_clean(input_dir, output_dir):
         raw_index = build_index(input_dir, scanner.settings)
         scanner.full_index = associate_files(raw_index, Path(input_dir))
         lens_status = scanner.check_cameras_clean()
+        scanner._print_lens_status()
         health_report_path = Path(output_dir) / LENS_HEALTH
         save_json(lens_status, health_report_path)
         lines = [f"Camera {cam}: {status}" for cam, status in lens_status.items()]

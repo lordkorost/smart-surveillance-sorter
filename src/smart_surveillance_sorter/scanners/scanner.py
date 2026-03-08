@@ -175,6 +175,7 @@ class Scanner():
         if self.is_check_clean:
             log_resource_usage(log, "VISION")
             self.lens_status = self.check_cameras_clean()
+            self._print_lens_status()
             # Percorso del file JSON di report
             health_report_path = Path(self.output_dir) / LENS_HEALTH
             save_json(self.lens_status, health_report_path)
@@ -873,7 +874,7 @@ class Scanner():
         """
         log.info("Lens Health Check Start")
         results = {}
-        lat, lon = get_smart_coordinates(self.settings.get("city_name", ""))
+        lat, lon = get_smart_coordinates(self.settings.get("city", ""))
 
         for cam_id, records in self.full_index.items():
             # 1. Recuperiamo il riferimento 'pulito' (es: checks/00.jpg)
@@ -945,7 +946,19 @@ class Scanner():
         log.info("-" * 50)
         for line in self._get_final_summary(total_time).split("\n"):
             log.info(line)
-    log.info("-" * 50)
+        log.info("-" * 50)
+
+    def _print_lens_status(self):
+        if not self.lens_status:
+            return
+        log.info("─" * 40)
+        log.info("🔍 Lens Health Report:")
+        for cam_id, status in self.lens_status.items():
+            cam_info = self.cameras_config.get(str(cam_id), {})
+            cam_name = cam_info.get("name", f"Camera_{cam_id}")
+            icon = "✅" if status == "clean" else "⚠️" if status == "dirty" else "❓"
+            log.info(f"  {icon} Camera {cam_id} ({cam_name}): {status.upper()}")
+        log.info("─" * 40)
 
     def _finalize_results(self, source_list, engine="yolo"):
         """
