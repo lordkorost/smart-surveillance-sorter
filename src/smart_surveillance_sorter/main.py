@@ -3,7 +3,8 @@ import sys
 from pathlib import Path
 import time
 from smart_surveillance_sorter.compare_results import compare_results
-from smart_surveillance_sorter.constants import FINAL_REPORT, GROUND_TRUTH
+from smart_surveillance_sorter.constants import FINAL_REPORT, GROUND_TRUTH, LENS_HEALTH
+from smart_surveillance_sorter.file_utils import associate_files, build_index
 from smart_surveillance_sorter.generate_ground_truth import check_duplicates_with_log, genera_ground_truth
 from smart_surveillance_sorter.logger import get_logger
 from smart_surveillance_sorter.scanners.scanner import Scanner
@@ -120,6 +121,23 @@ def main():
     to_remove = ['dir', 'output_dir', 'ground', 'compare', 'gt', 'res']
     for key in to_remove:
         params.pop(key, None)
+
+        # --- CHECK CLEAN STANDALONE ---
+    if args.is_check_clean and not args.is_refine:
+        log.info(f"Check Clean standalone mode — input={input_dir}")
+        try:
+            scanner = Scanner(**params)
+            raw_index = build_index(input_dir, scanner.settings)
+            scanner.full_index = associate_files(raw_index, Path(input_dir))
+            lens_status = scanner.check_cameras_clean()
+            health_report_path = Path(output_dir) / LENS_HEALTH
+            save_json(lens_status, health_report_path)
+            log.info(f"Report saved in={health_report_path}")
+        except Exception as e:
+            log.error(f"Error during check clean: error={e}")
+        finally:
+            cleanup()
+        sys.exit(0)
 
     start_time = time.time()
     try:

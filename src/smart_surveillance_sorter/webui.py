@@ -10,7 +10,7 @@ from pathlib import Path
 
 import gradio as gr
 
-from smart_surveillance_sorter.constants import CAMERAS_JSON, CLIP_BLIP_JSON, SETTINGS_JSON, MODELS_DIR, PROMPTS_JSON
+from smart_surveillance_sorter.constants import CAMERAS_JSON, CLIP_BLIP_JSON, LENS_HEALTH, SETTINGS_JSON, MODELS_DIR, PROMPTS_JSON
 from smart_surveillance_sorter.logger import get_logger
 from smart_surveillance_sorter.scanners.scanner import Scanner
 from smart_surveillance_sorter.scanners.vision_helpers import build_dynamic_prompt
@@ -151,91 +151,6 @@ def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
     except Exception as e:
         return f"❌ Errore prompt save: {str(e)}"
 
-# ==============================================================================
-# CAMERAS
-# ==============================================================================
-
-# def load_camera_details(cam_id):
-#     empty = ["", "", "", "", "", False, "", 0.49, 0.55, 0.30, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
-#     if not cam_id:
-#         return empty
-#     cameras = load_json(CAMERAS_JSON)
-#     cam = cameras.get(cam_id, {})
-#     br  = cam.get("blip_rules", {})
-#     tn  = cam.get("thresholds_night", {})
-#     return [
-#         cam.get("name", ""),
-#         cam.get("location", ""),
-#         ", ".join(cam.get("search_patterns", [])),
-#         cam.get("priority", "person"),
-#         cam.get("desc", ""),
-#         cam.get("dynamic_stride", False),
-#         ", ".join(cam.get("filters", {}).get("ignore_labels", [])),
-#         cam.get("thresholds", {}).get("person",  0.49),
-#         cam.get("thresholds", {}).get("vehicle", 0.55),
-#         cam.get("thresholds", {}).get("animal",  0.30),
-#         tn.get("person",  -1.0),
-#         tn.get("vehicle", -1.0),
-#         tn.get("animal",  -1.0),
-#         br.get("FAKE_WEIGHTS", {}).get("GROUND", 1.0),
-#         br.get("FAKE_WEIGHTS", {}).get("GARDEN", 1.0),
-#         br.get("FAKE_WEIGHTS", {}).get("SHOE",   1.0),
-#         br.get("FAKE_WEIGHTS", {}).get("WOOD",   1.0),
-#         br.get("THRESHOLD", {}).get("PERSON",  -1.0),
-#         br.get("THRESHOLD", {}).get("VEHICLE", -1.0),
-#         br.get("THRESHOLD", {}).get("ANIMAL",  -1.0),
-#         br.get("FAKE_PENALTY_WEIGHT", {}).get("PERSON",  -1.0),
-#         br.get("FAKE_PENALTY_WEIGHT", {}).get("ANIMAL",  -1.0),
-#         br.get("FAKE_PENALTY_WEIGHT", {}).get("VEHICLE", -1.0),
-#     ]
-
-# def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ignore,
-#                        th_p, th_v, th_a, nth_p, nth_v, nth_a,
-#                        fw_ground, fw_garden, fw_shoe, fw_wood,
-#                        thr_person, thr_vehicle, thr_animal,
-#                        fpw_person, fpw_animal, fpw_vehicle):
-#     cameras = load_json(CAMERAS_JSON)
-#     thresholds_night = {}
-#     if float(nth_p) >= 0: thresholds_night["person"]  = float(nth_p)
-#     if float(nth_v) >= 0: thresholds_night["vehicle"] = float(nth_v)
-#     if float(nth_a) >= 0: thresholds_night["animal"]  = float(nth_a)
-#     threshold_override = {}
-#     if float(thr_person)  >= 0: threshold_override["PERSON"]  = float(thr_person)
-#     if float(thr_vehicle) >= 0: threshold_override["VEHICLE"] = float(thr_vehicle)
-#     if float(thr_animal)  >= 0: threshold_override["ANIMAL"]  = float(thr_animal)
-#     penalty_override = {}
-#     if float(fpw_person)  >= 0: penalty_override["PERSON"]  = float(fpw_person)
-#     if float(fpw_animal)  >= 0: penalty_override["ANIMAL"]  = float(fpw_animal)
-#     if float(fpw_vehicle) >= 0: penalty_override["VEHICLE"] = float(fpw_vehicle)
-#     blip_rules = {"FAKE_WEIGHTS": {"GROUND": float(fw_ground), "GARDEN": float(fw_garden),
-#                                    "SHOE": float(fw_shoe), "WOOD": float(fw_wood)}}
-#     if threshold_override: blip_rules["THRESHOLD"] = threshold_override
-#     if penalty_override:   blip_rules["FAKE_PENALTY_WEIGHT"] = penalty_override
-#     cam_data = {
-#         "name": name, "location": loc,
-#         "search_patterns": [p.strip() for p in patterns.split(",") if p.strip()],
-#         "priority": priority, "desc": desc, "dynamic_stride": dynamic,
-#         "filters": {"ignore_labels": [i.strip() for i in ignore.split(",") if i.strip()]},
-#         "thresholds": {"person": float(th_p), "vehicle": float(th_v), "animal": float(th_a)},
-#         "blip_rules": blip_rules,
-#     }
-#     if thresholds_night:
-#         cam_data["thresholds_night"] = thresholds_night
-#     cameras[cam_id] = cam_data
-#     save_json(cameras, CAMERAS_JSON)
-#     return f"✅ Cam {cam_id} ({name}) saved!"
-
-# def add_new_camera():
-#     cameras = load_json(CAMERAS_JSON)
-#     existing_ids = sorted([int(k) for k in cameras.keys()])
-#     next_id = f"{max(existing_ids) + 1:02d}" if existing_ids else "00"
-#     cameras[next_id] = {
-#         "name": "Nuova Cam", "search_patterns": [f"_{next_id}_"],
-#         "thresholds": {"person": 0.49, "vehicle": 0.55, "animal": 0.30},
-#         "blip_rules": {"FAKE_WEIGHTS": {"GROUND": 1.0, "GARDEN": 1.0, "SHOE": 1.0, "WOOD": 1.0}}
-#     }
-#     save_json(cameras, CAMERAS_JSON)
-#     return gr.update(choices=list(cameras.keys()), value=next_id)
 
 def load_camera_details(cam_id):
     empty = ["", "", "", "", "", False, "", 0.49, 0.55, 0.30, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
@@ -354,17 +269,6 @@ def delete_camera(cam_id):
         new_ids = list(cameras.keys())
         return gr.update(choices=new_ids, value=new_ids[0] if new_ids else None), f"🗑️ {cam_id} ({cam_name}) deleted."
     return gr.update(), "❌ Camera not found."
-# def delete_camera(cam_id):
-#     if not cam_id:
-#         return gr.update(), "⚠️ Select a camera."
-#     cameras = load_json(CAMERAS_JSON)
-#     if cam_id in cameras:
-#         cam_name = cameras[cam_id].get("name", "")
-#         del cameras[cam_id]
-#         save_json(cameras, CAMERAS_JSON)
-#         new_ids = list(cameras.keys())
-#         return gr.update(choices=new_ids, value=new_ids[0] if new_ids else None), f"🗑️ {cam_id} ({cam_name}) deleted."
-#     return gr.update(), "❌ Camera not found."
 
 # ==============================================================================
 # ENGINE AVAILABILITY
@@ -727,6 +631,25 @@ def run_compare(session_dir, gt_file, res_file):
         lines.append(f"❌ Errore: {str(e)}")
     return "\n".join(lines)
 
+def run_check_clean(input_dir, output_dir):
+    if not input_dir:
+        return "⚠️ Input directory is required."
+    if not output_dir:
+        output_dir = input_dir
+    try:
+        from smart_surveillance_sorter.utils import build_index, associate_files
+        scanner = Scanner(mode="full", is_check_clean=True)
+        raw_index = build_index(input_dir, scanner.settings)
+        scanner.full_index = associate_files(raw_index, Path(input_dir))
+        lens_status = scanner.check_cameras_clean()
+        health_report_path = Path(output_dir) / LENS_HEALTH
+        save_json(lens_status, health_report_path)
+        lines = [f"Camera {cam}: {status}" for cam, status in lens_status.items()]
+        lines.append(f"\n✅ Report saved in {health_report_path}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"❌ Error: {e}"
+
 
 # ==============================================================================
 # UI
@@ -776,22 +699,6 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
             run_log    = gr.Textbox(label="📋 Check the terminal for detailed logs",
                                     interactive=False, lines=8)
 
-            # run_btn.click(
-            #     fn=disable_btns,
-            #     outputs=ALL_BTNS,
-            #     queue=False,
-            # ).then(
-            #     fn=run_process,
-            #     inputs=[run_input, run_output, run_mode, run_model,
-            #             run_refine, run_engine, run_fallback, run_check_clean, run_device],
-            #     outputs=run_log,
-            #     queue=True,
-            # ).then(
-            #     fn=enable_btns,
-            #     outputs=ALL_BTNS,
-            #     queue=False,
-            # )
-
         # ── TAB 2: REAL-TIME ──────────────────────────────────────────────────
         with gr.TabItem("🔄 Real-Time"):
             gr.Markdown("_Continuous loop — scans new videos every N seconds._")
@@ -815,30 +722,6 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                 rt_stop_btn  = gr.Button("⏹ Stop", variant="stop")
             rt_status = gr.Markdown("")
             rt_log    = gr.Textbox(label="Log Real-Time", interactive=False, lines=12)
-
-            # rt_start_btn.click(
-            #     fn=disable_btns,
-            #     outputs=ALL_BTNS,
-            #     queue=False,
-            # ).then(
-            #     fn=run_realtime,
-            #     inputs=[rt_input, rt_output, rt_mode, rt_model, rt_engine, rt_device, rt_interval],
-            #     outputs=rt_log,
-            #     queue=True,
-            # ).then(
-            #     fn=enable_btns,
-            #     outputs=ALL_BTNS,
-            #     queue=False,
-            # )
-            # rt_stop_btn.click(
-            #     fn=stop_realtime,
-            #     outputs=rt_status,
-            #     queue=False,
-            # ).then(
-            #     fn=enable_btns,
-            #     outputs=ALL_BTNS,
-            #     queue=False,
-            # )
 
         # ── TAB 3: TEST ───────────────────────────────────────────────────────
         with gr.TabItem("🧪 Test & Tuning"):
@@ -910,6 +793,14 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                     cmp_btn = gr.Button("📊 Compare", variant="primary")
                     cmp_out = gr.Textbox(label="Risultats", interactive=False, lines=20)
                     cmp_btn.click(fn=run_compare, inputs=[cmp_dir, cmp_gt, cmp_res], outputs=cmp_out)
+                with gr.Tab("🔍 Lens Health Check"):
+                    gr.Markdown("_Compare reference images in `/checks` with NVR night images to detect dirty or obstructed lenses._")
+                    with gr.Row():
+                        chk_input  = gr.Textbox(label="Input directory (with NVR images)")
+                        chk_output = gr.Textbox(label="Output directory (default=input)")
+                    chk_btn = gr.Button("🔍 Run Lens Check", variant="primary")
+                    chk_out = gr.Textbox(label="Results", interactive=False, lines=10)
+                    chk_btn.click(fn=run_check_clean, inputs=[chk_input, chk_output], outputs=chk_out)
 
         # ── TAB 5: SETTINGS ───────────────────────────────────────────────────
         with gr.TabItem("⚙️ Settings"):

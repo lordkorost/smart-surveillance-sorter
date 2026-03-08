@@ -9,7 +9,7 @@ from smart_surveillance_sorter.file_utils import associate_files, build_index, s
 from smart_surveillance_sorter.logger import  get_pbar_prefix, log_resource_usage
 from smart_surveillance_sorter.scanners.clip_blip_engine import ClipBlipEngine
 from smart_surveillance_sorter.scanners.yolo_engine import YoloEngine
-from smart_surveillance_sorter.utils import load_json, save_json, save_test_metrics, validate_ollama_setup
+from smart_surveillance_sorter.utils import get_smart_coordinates, is_night_astronomic, load_json, save_json, save_test_metrics, validate_ollama_setup
 from tqdm import tqdm
 from colorama import Fore, Style
 
@@ -705,16 +705,27 @@ class Scanner():
         
         video_to_suspects = {} 
         
-        # Prepariamo la lista dei video da analizzare per la barra
+        # # Prepariamo la lista dei video da analizzare per la barra
+        # pending_videos = []
+        # for cam_id, records in self.full_index.items():
+        #     for record in records:
+        #         if record["video_path"].name not in identified_video_names:
+        #             pending_videos.append((cam_id, record))
+        new_other_paths = {
+            str(r['video_path']) for r in self.final_reports
+            if r.get('category') == 'others'
+            and str(r['video_path']) in {str(v.get('video_path')) for v in self.results}
+        }
+
         pending_videos = []
         for cam_id, records in self.full_index.items():
             for record in records:
-                if record["video_path"].name not in identified_video_names:
+                if str(record["video_path"]) in new_other_paths:
                     pending_videos.append((cam_id, record))
 
-        if not pending_videos:
-            log.info("No video to check in fallback phase.")
-            return
+                if not pending_videos:
+                    log.info("No video to check in fallback phase.")
+                    return
         # 1. INFO Iniziale
         msg_start = f"Start fallback scan (low-confidence recovery) su video={len(pending_videos)}"
         log.info(msg_start)
@@ -755,6 +766,7 @@ class Scanner():
         if self.is_test:
             self.stats["vision_fallback"]["count"] = len(pending_videos)
             self.stats["vision_fallback"]["time"] = time.time() - t_start
+
 
     def _confirm_fallback_vision_vision(self, video_to_suspects):
         self._ensure_vision_initialized() 
@@ -801,10 +813,21 @@ class Scanner():
                         current_priority_idx = priority_idx
                         best_report = report
 
+            # if best_report:
+            #     self.final_reports.append(best_report)
+            #     tqdm.write(f"✨ {Fore.GREEN}RECUPERATO:{Style.RESET_ALL} {v_name} -> {best_report.get('category')}")
             if best_report:
-                self.final_reports.append(best_report)
+                # Rimpiazza l'others in vision_results con il risultato del fallback
+                for i, r in enumerate(self.vision_results):
+                    if r["video_name"] == v_name:
+                        self.vision_results[i] = best_report
+                        break
+                
+                # Salvataggio incrementale
+                vision_cache_file = Path(self.output_dir) / VISION_CACHE
+                save_json(self.vision_results, vision_cache_file)
+                
                 tqdm.write(f"✨ {Fore.GREEN}RECUPERATO:{Style.RESET_ALL} {v_name} -> {best_report.get('category')}")
-
         pbar.close()
 
     def _ensure_vision_initialized(self):
@@ -846,14 +869,15 @@ class Scanner():
     def check_cameras_clean(self):
         """
         Confronta l'immagine di riferimento in /checks con una delle immagini NVR 
-        già presenti nel full_index (fascia 00:00 - 05:00).
+        già presenti nel full_index (notte astronomica).
         """
         log.info("Lens Health Check Start")
         results = {}
+        lat, lon = get_smart_coordinates(self.settings.get("city_name", ""))
 
         for cam_id, records in self.full_index.items():
             # 1. Recuperiamo il riferimento 'pulito' (es: checks/00.jpg)
-            reference_img = self._get_reference_path(cam_id) # Utility che cerca cam_id.jpg/png
+            reference_img = self._get_reference_path(cam_id)
             if not reference_img:
                 log.debug(f"Cam_id={cam_id}] No image found in folder=/checks for this camera.")
                 continue
@@ -862,25 +886,22 @@ class Scanner():
             night_sample = None
             for rec in records:
                 _, timestamp = parse_filename(
-                    rec["video_path"], 
+                    rec["video_path"],
                     self.settings["storage_settings"]["filename_template"],
                     self.settings["storage_settings"]["timestamp_format"]
                 )
-                
-                if timestamp and 0 <= timestamp.hour <= 5:
-                    # Se il record ha delle immagini NVR associate, ne prendiamo una
+
+                if timestamp and is_night_astronomic(timestamp, lat, lon):
                     if rec["nvr_images"]:
-                        night_sample = rec["nvr_images"][0] 
+                        night_sample = rec["nvr_images"][0]
                         break
-            
+
             # 3. Se abbiamo entrambi i file, interroghiamo il Vision Engine
             if night_sample:
                 log.info(f"Cam_id={cam_id}] comparison with image={Path(night_sample).name}")
-             
                 self._ensure_vision_initialized()
-                # Mandiamo la lista [img1, img2] come richiesto
                 status = self.vision_engine.analyze_cleanliness(
-                    [str(reference_img), str(night_sample)], 
+                    [str(reference_img), str(night_sample)],
                     cam_id
                 )
                 results[cam_id] = status
@@ -889,7 +910,7 @@ class Scanner():
                 results[cam_id] = "unknown"
 
         return results
-    
+        
     def _get_reference_path(self, cam_id):
         """
         Cerca l'immagine di riferimento (es. 02.jpg) nella cartella 'checks'.
