@@ -19,8 +19,6 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 - [Features](#features)
 - [Quick Start](#quick-start)
 - [Benchmarks](#benchmarks)
-- [Contributing](#contributing)
-- [License](#license)
 
 ## Documentation
 - [Scanning Logic & Early Exit](docs/scanning-logic.md)
@@ -192,29 +190,9 @@ Hardware: Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) / Vulkan (Windows)
 >[!NOTE]
 >Partial detections (person visible only through glass or partially behind obstacles) may produce inconsistent results depending on lighting and angle. YOLO may detect the person while Vision cannot confirm from the full frame.
 
-## Contributing
-
-Contributions are welcome! If you want to improve the project:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes (`git commit -m 'feat: add my feature'`)
-4. Push to the branch (`git push origin feature/my-feature`)
-5. Open a Pull Request
-
-### Areas where help is appreciated
-- NVIDIA GPU testing and validation
-- Windows compatibility improvements  
-- New NVR filename template support
-- Performance optimizations
-- Documentation translations
-
-Please open an Issue before starting major changes to discuss the approach.
 
 
-## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE.txt) file for details.
 
 
 
