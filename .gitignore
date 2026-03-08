@@ -20,12 +20,6 @@ models/*.pt
 models/*.onnx
 models/*.engine
 checks/*
-scanners/yolo_engine_old.py
-scanner/clip_blip_engine_old.py
-webui_old.py
-config/cameras.json
-config/clip_blip_settings_old.json
-real_time_sorter_old.py
 
 # --- Log ---
 *.log
