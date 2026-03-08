@@ -16,13 +16,13 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 ---
 
 ## Table of Contents
-- [Features](#-key-features)
-- [Requirements](#-requirements)  
-- [Quick Start](#-quick-start)
-- [Documentation](#-documentation)
-- [Benchmarks](#-benchmarks)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [Features](#features)
+- [Requirements](#requirements)  
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
+- [Benchmarks](#benchmarks)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Documentation
 - [Scanning Logic & Early Exit](docs/scanning-logic.md)
