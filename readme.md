@@ -75,6 +75,7 @@ chmod +x install.sh
 ./install.sh --use-cuda    # NVIDIA GPU
 ./install.sh --use-cpu     # CPU only
 ```
+> ℹ️ **Linux:** `sudo apt install python3.12 python3.12-venv` (Ubuntu 22.04/24.04)
 
 **Windows:**
 ```bat

@@ -1,28 +1,14 @@
 {
     "00": {
-        "name": "Orto",
+        "name": "Camera_00",
         "location": "outdoor",
-        "search_patterns": [
-            "_00_",
-            "ch00",
-            "Cam00"
-        ],
+        "search_patterns": ["_00_", "ch00", "Cam00"],
         "priority": "person",
-        "desc": "Garden area with parking spot.",
+        "desc": "",
         "dynamic_stride": false,
         "filters": {
-            "ignore_labels": [
-                "car",
-                "truck",
-                "boat",
-                "motorcycle",
-                "bicycle",
-                "bus",
-                "train"
-            ],
-            "ignore_classes": [
-                "VEHICLE"
-            ]
+            "ignore_labels": [],
+            "ignore_classes": []
         },
         "thresholds": {
             "person": 0.49,
@@ -31,179 +17,16 @@
         }
     },
     "01": {
-        "name": "Porta Giardino",
+        "name": "Camera_01",
         "location": "outdoor",
-        "search_patterns": [
-            "_01_",
-            "ch01",
-            "Cam01"
-        ],
+        "search_patterns": ["_01_", "ch01", "Cam01"],
         "priority": "person",
-        "desc": "Entrance door, garden area",
+        "desc": "",
         "dynamic_stride": false,
         "filters": {
-            "ignore_labels": []
+            "ignore_labels": [],
+            "ignore_classes": []
         },
-        "thresholds": {
-            "person": 0.49,
-            "vehicle": 0.55,
-            "animal": 0.3
-        }
-    },
-    "02": {
-        "name": "Parcheggio",
-        "location": "outdoor",
-        "search_patterns": [
-            "_02_",
-            "ch02",
-            "Cam02"
-        ],
-        "priority": "person",
-        "filters": {
-            "ignore_labels": [
-                "car",
-                "truck",
-                "boat",
-                "motorcycle",
-                "bicycle",
-                "bus",
-                "train"
-            ],
-            "ignore_classes": [
-                "VEHICLE"
-            ]
-        },
-        "desc": "Parking area",
-        "dynamic_stride": true,
-        "thresholds": {
-            "person": 0.49,
-            "vehicle": 0.55,
-            "animal": 0.3
-        }
-    },
-    "03": {
-        "name": "Balcone Corridoio",
-        "location": "outdoor",
-        "search_patterns": [
-            "_03_",
-            "ch03",
-            "Cam03"
-        ],
-        "priority": "person",
-        "filters": {
-            "ignore_labels": [
-                "car",
-                "truck",
-                "boat",
-                "motorcycle",
-                "bicycle",
-                "bus",
-                "train"
-            ],
-            "ignore_classes": [
-                "VEHICLE"
-            ]
-        },
-        "desc": "Balcony area, with garden underneath",
-        "dynamic_stride": false,
-        "thresholds": {
-            "person": 0.49,
-            "vehicle": 0.55,
-            "animal": 0.3
-        }
-    },
-    "04": {
-        "name": "Balcone Cucina",
-        "location": "outdoor",
-        "search_patterns": [
-            "_04_",
-            "ch04",
-            "Cam04"
-        ],
-        "priority": "person",
-        "filters": {
-            "ignore_labels": []
-        },
-        "desc": "Balcony area, with garden underneath. There are some garden gnomes on the lawn.",
-        "dynamic_stride": false,
-        "thresholds": {
-            "person": 0.49,
-            "vehicle": 0.55,
-            "animal": 0.3
-        },
-        "thresholds_night": {
-            "person": 0.4,
-            "vehicle": 0.55,
-            "animal": 0.2
-        }
-    },
-    "05": {
-        "name": "Giardino Mare",
-        "search_patterns": [
-            "_05_",
-            "ch05",
-            "Cam05"
-        ],
-        "location": "outdoor",
-        "priority": "person",
-        "filters": {
-            "ignore_labels": []
-        },
-        "desc": "Garden area. There are some garden gnomes on the lawn.",
-        "dynamic_stride": false,
-        "thresholds": {
-            "person": 0.49,
-            "vehicle": 0.55,
-            "animal": 0.3
-        }
-    },
-    "06": {
-        "name": "Giardino Cancello",
-        "location": "outdoor",
-        "search_patterns": [
-            "_06_",
-            "ch06",
-            "Cam06"
-        ],
-        "priority": "person",
-        "desc": "Garden area, street visible through the gate.",
-        "dynamic_stride": false,
-        "filters": {
-            "ignore_labels": [
-                "bird"
-            ]
-        },
-        "thresholds": {
-            "person": 0.49,
-            "vehicle": 0.55,
-            "animal": 0.3
-        }
-    },
-    "07": {
-        "name": "Ingresso Orto",
-        "location": "outdoor",
-        "search_patterns": [
-            "_07_",
-            "ch07",
-            "Cam07"
-        ],
-        "priority": "person",
-        "filters": {
-            "ignore_labels": [
-                "car",
-                "truck",
-                "boat",
-                "motorcycle",
-                "bicycle",
-                "bus",
-                "train"
-            ],
-            "ignore_classes": [
-                "VEHICLE"
-            ]
-        },
-        "desc": "Entrance door",
-        "dynamic_stride": false,
         "thresholds": {
             "person": 0.49,
             "vehicle": 0.55,

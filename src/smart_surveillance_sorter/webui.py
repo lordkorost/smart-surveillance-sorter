@@ -828,7 +828,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             cmp_gt  = gr.Textbox(label="Path ground_truth.json")
                             cmp_res = gr.Textbox(label="Path classification_results.json")
                     cmp_btn = gr.Button("📊 Compare", variant="primary")
-                    cmp_out = gr.Textbox(label="Risultats", interactive=False, lines=20)
+                    cmp_out = gr.Textbox(label="Results", interactive=False, lines=20)
                     cmp_btn.click(fn=run_compare, inputs=[cmp_dir, cmp_gt, cmp_res], outputs=cmp_out)
                 with gr.Tab("🔍 Lens Health Check"):
                     gr.Markdown("_Compare reference images in `/checks` with NVR night images to detect dirty or obstructed lenses._")
