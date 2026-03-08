@@ -909,7 +909,7 @@ class Scanner():
             else:
                 log.warning(f"Cam_id={cam_id}] No night nvr image found in folder={self.input_dir}")
                 results[cam_id] = "unknown"
-
+        self.lens_status=results
         return results
         
     def _get_reference_path(self, cam_id):

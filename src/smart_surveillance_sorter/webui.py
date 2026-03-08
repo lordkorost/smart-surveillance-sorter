@@ -25,6 +25,40 @@ SETTINGS_BACKUP  = Path(SETTINGS_JSON).parent / "settings_backup.json"
 # ==============================================================================
 # UTILITY
 # ==============================================================================
+def get_system_info():
+    import platform, psutil, torch
+    cpu = platform.processor() or platform.machine()
+    ram_used = psutil.virtual_memory().used / 1024**3
+    ram_total = psutil.virtual_memory().total / 1024**3
+    
+    lines = [
+        f"**CPU:** {cpu}",
+        f"**RAM:** {ram_used:.1f} / {ram_total:.1f} GB",
+        f"**Python:** {platform.python_version()}",
+        f"**PyTorch:** {torch.__version__}",
+    ]
+    
+    if torch.cuda.is_available():
+        gpu = torch.cuda.get_device_name(0)
+        vram_used = torch.cuda.memory_allocated(0) / 1024**3
+        vram_total = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        lines.append(f"**GPU:** {gpu}")
+        lines.append(f"**VRAM:** {vram_used:.1f} / {vram_total:.1f} GB")
+    else:
+        lines.append("**GPU:** Not detected (CPU mode)")
+    
+    # Ollama check
+    try:
+        vision_cfg = load_json(SETTINGS_JSON).get("vision_settings", {})
+        if validate_ollama_setup(vision_cfg):
+            model = vision_cfg.get("model_name", "unknown")
+            lines.append(f"**Ollama:** ✅ Connected ({model})")
+        else:
+            lines.append("**Ollama:** ❌ Not available")
+    except:
+        lines.append("**Ollama:** ❌ Not available")
+    
+    return "\n\n".join(lines)
 
 def disable_btns():
     return [gr.update(interactive=False)] * 3
@@ -637,12 +671,14 @@ def run_check_clean(input_dir, output_dir):
     if not output_dir:
         output_dir = input_dir
     try:
-        from smart_surveillance_sorter.utils import build_index, associate_files
+        from smart_surveillance_sorter.file_utils import build_index, associate_files
         scanner = Scanner(mode="full", is_check_clean=True)
         raw_index = build_index(input_dir, scanner.settings)
         scanner.full_index = associate_files(raw_index, Path(input_dir))
         lens_status = scanner.check_cameras_clean()
         scanner._print_lens_status()
+        # del scanner
+        # import gc; gc.collect()
         health_report_path = Path(output_dir) / LENS_HEALTH
         save_json(lens_status, health_report_path)
         lines = [f"Camera {cam}: {status}" for cam, status in lens_status.items()]
@@ -689,10 +725,10 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                         with gr.Row():
                             run_fallback    = gr.Checkbox(label="🔍 Fallback", value=False,
                                                           info="blip→vision on discordant | vision→NVR imgs low conf.")
-                            run_check_clean = gr.Checkbox(label="🕸️ Check Lens", value=False,
+                            run_check_clean_cb = gr.Checkbox(label="🕸️ Check Lens", value=False,
                                                           info="Only with vision engine")
                         run_engine.change(fn=update_engines_availability, inputs=run_engine,
-                                          outputs=[run_fallback, run_check_clean])
+                                          outputs=[run_fallback, run_check_clean_cb])
                         gr.Markdown("_`blip`: fast. `vision`: Ollama/Qwen (slow)._")
 
             run_btn    = gr.Button("▶ START SCAN", variant="primary", size="lg")
@@ -1020,9 +1056,18 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
 
                 # ── System ────────────────────────────────────────────────────
                 with gr.Tab("🖥️ System"):
-                    stop_btn   = gr.Button("🛑 Turn off WebUI", variant="stop")
-                    status_sys = gr.Markdown("Status: Running")
-                    stop_btn.click(fn=shutdown_server, outputs=status_sys)
+                    sys_info = gr.Markdown("Click Refresh to load system info.")
+                    sys_refresh_btn = gr.Button("🔄 Refresh", variant="secondary")
+                    sys_refresh_btn.click(fn=get_system_info, outputs=sys_info)
+    # ── SHUTDOWN ──────────────────────────────────────────────────────────────
+    with gr.Row():
+        with gr.Column(scale=4):
+            gr.Markdown("")
+        with gr.Row():
+            stop_btn = gr.Button("🛑 Shutdown", variant="stop", size="sm", scale=0)
+            stop_status = gr.Markdown("")
+        stop_btn.click(fn=shutdown_server, outputs=stop_status)
+    
 
     ALL_BTNS = [run_btn, test_btn, rt_start_btn]
 
@@ -1033,7 +1078,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
     ).then(
         fn=run_process,
         inputs=[run_input, run_output, run_mode, run_model,
-                run_refine, run_engine, run_fallback, run_check_clean, run_device],
+                run_refine, run_engine, run_fallback, run_check_clean_cb, run_device],
         outputs=run_log,
         queue=True,
     ).then(

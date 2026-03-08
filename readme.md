@@ -92,8 +92,6 @@ chmod +x install.sh
 .\run.bat     # Windows
 ```
 
-
-
 > ℹ️ **CPU mode** works out of the box on any modern system — just run `./install.sh --use-cpu` (Linux) or `.\install.bat --use-cpu` (Windows). No additional drivers required. PyTorch is installed with MKL for optimal CPU performance. See [Benchmarks](#-benchmarks) for expected processing times.
 ---
 
@@ -103,11 +101,11 @@ chmod +x install.sh
 | GPU | Linux | Windows |
 |-----|-------|---------|
 | NVIDIA | CUDA 12.x driver | CUDA 12.x driver |
-| AMD | ROCm 7.2 | Adrenalin 26.1.2 + Ollama version from AMD Adrenalin - AI Bundle - Ollama |
+| AMD | ROCm 7.2 | Adrenalin 26.2.2 + Ollama version from AMD Adrenalin - AI Bundle - Ollama |
 
+Without this, Ollama runs on CPU only.
 > 📖 **AMD GPU detailed setup:** [docs/gpu-setup-amd.md](docs/gpu-setup-amd.md)
-
-> ⚠️ **AMD GPU on Windows + Ollama (Vision mode):** Set `OLLAMA_VULKAN=1` as a system environment variable to enable GPU acceleration. Without this, Ollama runs on CPU only.
+> ⚠️ **AMD GPU on Windows + Ollama (Vision mode):** Ollama must be installed from the **AMD Adrenalin AI Bundle** (not from ollama.com). Set `OLLAMA_VULKAN=1` as a system environment variable to enable GPU acceleration. 
 
 #### **CLI Usage**
 If you prefer using the terminal, check out our [**CLI Reference Guide**](docs/cli_reference.md) for all available flags and examples.

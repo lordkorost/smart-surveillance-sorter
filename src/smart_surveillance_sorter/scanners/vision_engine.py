@@ -258,7 +258,7 @@ class VisionEngine:
                 "thinking": thinking, 
             }
         
-        return {"category": "others"}
+        return {"category": "others", "thinking": thinking}
     
 
 
