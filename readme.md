@@ -9,7 +9,9 @@
 Organize your NVR videos using the power of YOLO, CLIP, BLIP, and Vision models (Ollama).
 Designed for those overwhelmed by hundreds of useless recordings caused by wind, insects, or leaves, this tool scans every video and automatically categorizes it into: **PERSON**, **ANIMAL**, **VEHICLE**, or **OTHERS**.
 
-![Smart Surveillance Sorter demo](docs/assets/sorter.gif)
+<div align="center">
+  <img src="docs/assets/sorter.gif" alt="Smart Surveillance Sorter demo" width="270">
+</div>
 
 ---
 
