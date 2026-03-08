@@ -15,6 +15,12 @@ env/
 *.jpeg
 *.png
 
+# Eccezioni per la documentazione
+!docs/assets/*.jpg
+!docs/assets/*.jpeg
+!docs/assets/*.png
+!docs/assets/*.gif
+
 # Altri
 models/*.pt
 models/*.onnx
