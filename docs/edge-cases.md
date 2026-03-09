@@ -3,10 +3,10 @@
 This page documents real-world edge cases encountered during testing, with step-by-step diagnosis and configuration fixes. These cases illustrate the tuning workflow described in the [Testing Guide](testing-guide.md).
 
 ## Cases
-- [🪵 Wood piece — fixing false positives with ignore_labels](#-case-study-wood-piece-misclassified-as-bird--camera-06-garden-gate)
-- [🗿 Garden gnomes — Vision desc tuning](#-case-study-garden-gnomes-misclassified-as-persons--camera-04-balcony)
-- [🐄 Livestock camera — selective animal ignoring](#-livestock-camera--selective-animal-ignoring)
-- [🚗 Parking camera — vehicles as background](#-parking-camera--vehicles-as-background)
+- [🪵 Wood piece — fixing false positives with ignore_labels](#case-study-wood-piece-misclassified-as-bird--camera-06-garden-gate)
+- [🗿 Garden gnomes — Vision desc tuning](#case-study-garden-gnomes-misclassified-as-persons--camera-04-balcony)
+- [🐄 Livestock camera — selective animal ignoring](#livestock-camera--selective-animal-ignoring)
+- [🚗 Parking camera — vehicles as background](#parking-camera--vehicles-as-background)
 
 ---
 
