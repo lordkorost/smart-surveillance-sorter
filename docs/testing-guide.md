@@ -1,13 +1,14 @@
-# 🧪 Testing & Tuning Guide
+# Testing & Tuning Guide
 
 This guide explains the recommended workflow to test and tune the system on your own footage. Following this process allows you to build a reliable ground truth and iteratively improve accuracy for your specific cameras and environment.
 
-> 💡 All operations in this guide can also be performed via the **WebUI → Test tab** and **WebUI → Tools tab** without using the CLI.
+>[!TIP]
+> All operations in this guide can also be performed via the **WebUI → Test tab** and **WebUI → Tools tab** without using the CLI.
 
-![Test Tab](../assets/webui-test-tab.png)
-![Tools Tab](../assets/webui-tools-tab.png)
+![Test Tab](assets/webui-test.png)
+![Tools Tab](assets/webui-tools-compare.png)
 
-## 🔄 Full Tuning Workflow
+## Full Tuning Workflow
 
 ### Step 1 — First Run with Sort (Copy Mode)
 
@@ -17,7 +18,8 @@ Run the full pipeline in test mode — files are **copied** not moved, so your o
 sss --dir /path/to/footage --mode full --refine --blip --test
 ```
 
-> ℹ️ `--test` automatically uses COPY instead of MOVE and saves `test_metrics.json` with detailed timing and parameters.
+>[!NOTE]
+> `--test` automatically uses COPY instead of MOVE and saves `test_metrics.json` with detailed timing and parameters.
 
 ---
 
@@ -30,7 +32,8 @@ For each sorted folder:
 - **Others folder** — scan frames looking for missed persons, animals, or vehicles. If found → move to the correct folder.
 - **Animals folder** — verify it's actually an animal and not a garden object or reflection.
 
-> 💡 The frame filename contains the video name — easy to match back to the original.
+>[!TIP]
+> Frames are named after their source video and sorted alongside it — if you sort the folder by filename, frames appear immediately after their video.
 
 ---
 
@@ -44,7 +47,8 @@ sss --dir /path/to/footage --ground
 
 This generates `ground_truth.json` based on the current folder structure. This is your reference for all future comparisons.
 
-> ⚠️ Only run `--ground` after you've finished manual corrections — it reads the current folder structure as the "truth".
+>[!WARNING]
+> Only run `--ground` after you've finished manual corrections — it reads the current folder structure as the "truth".
 
 ---
 
@@ -112,7 +116,7 @@ Compare the new results with the previous ones to verify the fix improved things
 
 ---
 
-### ⚡ Skip YOLO — Test Only BLIP/Vision
+### Skip YOLO — Test Only BLIP/Vision
 
 If you are satisfied with YOLO results and want to test only the refinement step (BLIP, Fallback, or Vision), keep the `extracted_frames` folder and `yolo_scan_res.json` — the system will automatically resume from YOLO results without re-scanning:
 ```bash
@@ -128,7 +132,8 @@ sss --dir /path/to/footage --mode full --refine --vision --no-sort --test
 
 Rename only the `classification_results.json` between runs — leave `yolo_scan_res.json` and `extracted_frames/` untouched.
 
-> ⚠️ Do NOT delete `extracted_frames/` if you want to reuse YOLO results — Vision and BLIP need the extracted frame images to work.
+>[!WARNING]
+> Do NOT delete `extracted_frames/` if you want to reuse YOLO results — Vision and BLIP need the extracted frame images to work.
 
 ### Step 7 — Iterate
 
@@ -142,7 +147,7 @@ Repeat Steps 5-6 until you're satisfied with the results. Typical iteration orde
 
 ---
 
-## 📁 Result Files Reference
+## Result Files Reference
 
 | File | Description |
 |------|-------------|
@@ -154,11 +159,14 @@ Repeat Steps 5-6 until you're satisfied with the results. Typical iteration orde
 | `json/clip_blip_fallback_res.json` | Fallback Vision results (if `--fallback` was used) (used for resume) |
 | `json/vision_cache.json` | Vision mode results cache (for resume) |
 
-> ℹ️ Rename result files before changing parameters — this lets you compare before/after without re-running everything from scratch. YOLO results are cached and reused automatically on resume.
-> ⚠️ Files marked "used for resume" are automatically reused on the next run — delete them only if you want to start fresh from that step. Deleting or rename `yolo_scan_res.json` forces a full YOLO re-scan.
+>[!TIP]
+> Rename result files before changing parameters — this lets you compare before/after without re-running everything from scratch. YOLO results are cached and reused automatically on resume.
+
+>[!WARNING]
+> Files marked "used for resume" are automatically reused on the next run — delete them only if you want to start fresh from that step. Deleting or renaming `yolo_scan_res.json` forces a full YOLO re-scan.
 ---
 
-## 💡 Pro Tips
+## Pro Tips
 
 - **Start with `--mode full`** — even if you only care about persons, running full mode helps identify what YOLO is detecting and why
 - **Check frames before videos** — opening 500 video files takes hours, scanning 500 frame images takes minutes
@@ -169,7 +177,7 @@ Repeat Steps 5-6 until you're satisfied with the results. Typical iteration orde
 
 ---
 
-## ⚠️ Known Hard Cases
+## Known Hard Cases
 
 Some cases are genuinely difficult regardless of tuning:
 
@@ -179,4 +187,4 @@ Some cases are genuinely difficult regardless of tuning:
 | Person running fast | High stride misses fast movement | Keep `vid_stride_sec ≤ 0.6` for active cameras |
 | Partial body through glass | Vision sees empty frame, YOLO sees the limb | YOLO override handles high-confidence cases |
 | Large white dog | Similar silhouette to person from above | Use `--fallback` or `--vision` |
-| Spider web on lens | Covers entire frame, triggers everything | Clean the lens 😄 or add to `FAKE_KEYS` |
+| Spider web on lens | Covers entire frame, triggers everything | Clean the lens  or add to `FAKE_KEYS` |
