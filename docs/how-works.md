@@ -73,7 +73,7 @@ This is why vehicles can be safely ignored on a parking camera — any car enter
 
 SSS doesn't detect movement — it detects **intent**.
 
-> See [Mode Comparison](benchmarks/mode-comparison.md) for benchmark results across different modes and ignore_labels configurations.  
+> See [Mode Comparison](mode-comparison.md) for benchmark results across different modes and ignore_labels configurations.  
 > See [Camera Configuration](cameras-config.md) for per-camera ignore_labels setup and examples.
 
 ---
