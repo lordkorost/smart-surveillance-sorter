@@ -1,12 +1,13 @@
-# 🎛️ CLIP+BLIP Engine Tuning Guide
+# CLIP+BLIP Engine Tuning Guide
 
 Settings are stored in `config/clip_blip_settings.json`. Most values can be overridden per-camera in `config/cameras.json` under `blip_rules`.
 
-> ℹ️ These settings are for the `--blip` engine only. Vision mode (`--vision`) uses different parameters — see [Tuning Guide](tuning-guide.md).
+>[!NOTE]
+> These settings are for the `--blip` engine only. Vision mode (`--vision`) uses different parameters — see [Tuning Guide](tuning-guide.md).
 
 ---
 
-## 🤖 Models
+## Models
 
 ```json
 "clip_model": "ViT-L-14",
@@ -20,11 +21,12 @@ Settings are stored in `config/clip_blip_settings.json`. Most values can be over
 | `clip_pretrained` | `openai` | CLIP pretrained weights. `openai` trained on image-text pairs, well suited for real-world scene understanding. |
 | `blip_model` | `blip-image-captioning-large` | BLIP captioning model. `large` slightly improves animal precision over `base` with ~1 min overhead. |
 
-> 📖 See [Model Comparison](benchmarks/model-comparison.md) for benchmark results across different model combinations.
+>[!TIP]
+> See [Model Comparison](benchmarks/model-comparison.md) for benchmark results across different model combinations.
 
 ---
 
-## 🏷️ FAKE_KEYS — Background Noise Descriptors
+## FAKE_KEYS — Background Noise Descriptors
 
 ```json
 "FAKE_KEYS": {
@@ -37,15 +39,12 @@ Settings are stored in `config/clip_blip_settings.json`. Most values can be over
 
 Text descriptions used by CLIP to identify background noise and false positive sources. If a crop matches one of these descriptions with high similarity, it penalizes the classification score.
 
-**When to add new keys:**
-- Camera with a specific recurring false positive (e.g. garden gnomes, street signs, parked bicycles)
-- Add a descriptive text that CLIP would recognize, e.g. `"GNOME": ["a photo of a garden gnome or statue"]`
-
-> ℹ️ Per-camera weight for each fake key is controlled by `FAKE_WEIGHTS` in `cameras.json`. See [Camera Configuration](cameras-config.md).
+>[!NOTE]
+> Per-camera weight for each fake key is controlled by `FAKE_WEIGHTS` in `cameras.json`. See [Camera Configuration](cameras-config.md).
 
 ---
 
-## 🔍 BLIP_KEYWORDS — Caption Matching
+## BLIP_KEYWORDS — Caption Matching
 
 ```json
 "BLIP_KEYWORDS": {
@@ -64,7 +63,7 @@ Keywords searched in the BLIP caption. If found, `BLIP_BOOST` is added to the ca
 
 ---
 
-## ⚖️ Score Weights
+## Score Weights
 
 ### FINAL_WEIGHT_CROP / FINAL_WEIGHT_FRAME
 
@@ -110,7 +109,7 @@ How much fake/background scores penalize each category. Lower = category is more
 
 ---
 
-## 🎯 THRESHOLD — Minimum Score to Classify
+## THRESHOLD — Minimum Score to Classify
 
 ```json
 "THRESHOLD": {
@@ -132,7 +131,7 @@ Minimum final score required to classify a frame as that category. Scores below 
 
 ---
 
-## 🌙 YOLO_NIGHT_BOOST
+## YOLO_NIGHT_BOOST
 
 ```json
 "YOLO_NIGHT_BOOST": 0.30
@@ -140,11 +139,12 @@ Minimum final score required to classify a frame as that category. Scores below 
 
 Score bonus added to PERSON during nighttime (sunrise/sunset calculated from `city` in `settings.json`). CLIP is less accurate on dark/grainy night footage, so this compensates by giving extra weight to YOLO's person detection at night.
 
-> ⚠️ Increasing this value reduces night FN but may increase night FP on cameras with reflections or insects.
+>[!NOTE]
+> Increasing this value reduces night FN but may increase night FP on cameras with reflections or insects.
 
 ---
 
-## 📦 BBOX_SMALL — Small Object Fix
+## BBOX_SMALL — Small Object Fix
 
 ```json
 "BBOX_SMALL_RATIO":        0.04,
@@ -160,7 +160,7 @@ This fixes false negatives where a person is barely visible but YOLO correctly d
 
 ---
 
-## 📊 AGGREGATION — Video-Level Decision
+## AGGREGATION — Video-Level Decision
 
 ```json
 "ANIMAL_START_THRESHOLD":  0.25,
@@ -191,7 +191,7 @@ More positive frames = lower threshold required = easier to classify the video.
 
 ---
 
-## 🔧 Per-Camera Override
+## Per-Camera Override
 
 Any parameter above can be overridden per-camera in `config/cameras.json` under `blip_rules`:
 
@@ -212,6 +212,6 @@ Any parameter above can be overridden per-camera in `config/cameras.json` under 
     "YOLO_NIGHT_BOOST": 0.40
 }
 ```
-
-> ℹ️ Dict values (FAKE_WEIGHTS, THRESHOLD, BLIP_BOOST) are **merged** with global defaults — you only need to specify the keys you want to override.  
+>[!NOTE]
+> Dict values (FAKE_WEIGHTS, THRESHOLD, BLIP_BOOST) are **merged** with global defaults — you only need to specify the keys you want to override.  
 > Scalar values (BBOX_SMALL_PERSON_BONUS, YOLO_NIGHT_BOOST) **replace** the global value entirely.
