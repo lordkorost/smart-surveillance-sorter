@@ -1,10 +1,23 @@
-# ⚙️ Tuning Guide
+# Tuning Guide
 
 All settings are stored in `config/settings.json` and can be edited via the WebUI (Settings tab) or directly in the file.
 
+![WebUI Settings](assets/webui-settings-general.png)
+
 ---
 
-## 🗂️ General Settings
+## Contents
+- [General Settings](#general-settings)
+- [Storage Settings & Filename Template](#storage-settings--filename-template)
+- [YOLO Settings](#yolo-settings)
+- [Vision Settings (Ollama)](#vision-settings-ollama)
+- [Scoring System](#scoring-system)
+- [Output Mapping](#output-mapping)
+- [CLIP+BLIP Settings](#clipblip-settings)
+- [Vision Prompt Tuning](#vision-prompt-tuning)
+
+---
+## General Settings
 
 ```json
 "city": "Rome"
@@ -22,7 +35,7 @@ Used for weather-based night detection (sunrise/sunset calculation). Change with
 
 ---
 
-## 📁 Storage Settings & Filename Template
+## Storage Settings & Filename Template
 
 ```json
 "storage_settings": {
@@ -59,7 +72,7 @@ The template tells the system how to parse your NVR filenames to extract the cam
 
 ---
 
-## 🎯 YOLO Settings
+## YOLO Settings
 
 ```json
 "yolo_settings": {
@@ -98,7 +111,8 @@ Automatically adjusts the analysis speed based on what YOLO finds:
 | `pre_roll_sec` | `20` | After warmup, keeps slow scan (`vid_stride_sec`) for this many seconds before switching to fast stride. Gives time for slow-moving objects to appear. |
 | `cooldown_sec` | `5` | After a detection ends, stays on slow stride for this many seconds to catch any remaining activity. |
 
-> ℹ️ Dynamic stride is enabled per-camera in `config/cameras.json` with `"dynamic_stride": true`. Cameras without this flag always use `vid_stride_sec`.
+>[!NOTE]
+> Dynamic stride is enabled per-camera in `config/cameras.json` with `"dynamic_stride": true`. Cameras without this flag always use `vid_stride_sec`.
 
 **Tuning tips:**
 - Empty cameras with few detections → increase `stride_fast_sec` (1.5-2.0) for speed
@@ -115,11 +129,12 @@ Automatically adjusts the analysis speed based on what YOLO finds:
 ```
 YOLO class labels mapped to the system categories. Add or remove labels as needed.
 
-> ⚠️ If your camera has trees/bushes, YOLO may detect `bird` with high confidence causing early exit before a person is detected. Use `ignore_labels: ["bird"]` in the camera config.
+> [!TIP]
+> If your camera has trees/bushes, YOLO may detect `bird` with high confidence causing early exit before a person is detected. Use `ignore_labels: ["bird"]` in the camera config. See [Edge Cases](edge-cases.md) for more examples.
 
 ---
 
-## 🧠 Vision Settings (Ollama)
+## Vision Settings (Ollama)
 
 ```json
 "vision_settings": {
@@ -143,13 +158,15 @@ YOLO class labels mapped to the system categories. Add or remove labels as neede
 | `top_k` | `20` | Number of candidate tokens considered at each step |
 | `top_p` | `0.95` | Cumulative probability threshold for token selection |
 
-> ⚠️ Lowering `temperature` below `0.7` significantly increases thinking time without improving accuracy in most cases. Default `1.0` is recommended.
+>[!NOTE]
+> Lowering `temperature` below `0.3` significantly increases thinking time without improving accuracy in most cases. Default `0.3` is recommended.
 
-> ℹ️ **Remote Ollama**: change `ip` and `port` to use a remote server.
+>[!TIP]
+>**Remote Ollama**: change `ip` and `port` to use a remote server.
 
 ---
 
-## ⚖️ Scoring System
+## Scoring System
 
 ```json
 "scoring_system": {
@@ -168,11 +185,12 @@ When Vision says `others` but YOLO detected a person with high confidence, the o
 | `person_min_conf` | `0.58` | Minimum YOLO confidence to trigger person override |
 | `min_total_score_to_skip_override` | `1.2` | If Vision score is above this, override is skipped |
 
-> ⚠️ Lowering `person_min_conf` reduces missed persons (FN) but increases false alarms (FP) from shadows and reflections. `0.58` is the recommended balance.
+>[!NOTE]
+> Lowering `person_min_conf` reduces missed persons (FN) but increases false alarms (FP) from shadows and reflections. `0.58` is the recommended balance.
 
 ---
 
-## 📤 Output Mapping
+## Output Mapping
 
 ```json
 "output_mapping": {
@@ -187,8 +205,48 @@ Customize the output folder names for each category.
 ---
 
 
-## 🎛️ CLIP+BLIP Settings
+## CLIP+BLIP Settings
 
 Advanced per-camera tuning for the CLIP+BLIP engine.
 
-> 📖 See [CLIP+BLIP Tuning Guide](clip-blip-tuning.md) for detailed documentation.
+> See [CLIP+BLIP Tuning Guide](blip-clip-tuning.md) for detailed documentation.
+
+---
+
+## Vision Prompt Tuning
+
+The prompt sent to the Vision model is assembled dynamically from components stored in `config/prompts.json`. It is never a static string — it adapts to the current scan mode, camera configuration, and pipeline stage.
+
+### Prompt Structure
+
+Every prompt is built from these components:
+
+- **System Instruction** — the base role given to the model
+- **Location Context** — the camera `desc` field from `cameras.json`
+- **Detection Hierarchy** — built dynamically from active classes (filtered by `mode` and `ignore_labels`)
+- **Mandatory Rules** — output format constraints
+- **Allowed Output** — the exact list of valid responses the model can return
+
+### Pipeline Variants
+
+| Template | When used |
+|----------|-----------|
+| `standard` | Normal BLIP fallback / Vision scan |
+| `with_crop` | When a crop is available from YOLO |
+| `fallback` | Deep scan when no detections found |
+| `clean_check` | Lens cleanliness check |
+
+### Dynamic Class Filtering
+
+The `Detection Hierarchy` is built at runtime based on:
+1. **`mode`** — `full` includes PERSON/ANIMAL/VEHICLE, `person` only PERSON, etc.
+2. **`ignore_labels`** from the camera config — if a camera ignores `car/truck`, VEHICLE is removed from the hierarchy entirely
+
+This means two cameras can receive completely different prompts even in the same scan.
+
+### Editing Prompts
+
+Use the **WebUI → Settings → Prompt AI** tab to edit all components visually and preview the exact assembled prompt before running a scan.
+
+> [!WARNING]
+> The `templates` section uses Python `.format()` placeholders like `{hierarchy}` and `{allowed_outputs}` — do not remove or rename them or the prompt assembly will fail.
