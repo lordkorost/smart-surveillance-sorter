@@ -176,20 +176,11 @@ class FileSorter:
                 self.dest_base = self.work_dir / "SMI_SORTED_RESULTS"
                 self.dest_base.mkdir(parents=True, exist_ok=True)
                 log.warning(f"Output dir not writeable! Results in folder={self.dest_base}")
-        # import os
-        # if os.access(self.input_dir, os.W_OK):
-        #     # Caso normale: scriviamo nell'input
-        #     self.dest_base = self.input_dir
-        #     log.info(f"Dir={self.input_dir}")
-        # else:
-        #     self.dest_base = self.work_dir / "SMI_SORTED_RESULTS"
-        #     self.dest_base.mkdir(parents=True, exist_ok=True)
-        #     log.warning(f"Input is not writeable! Risults on folder={self.dest_base}")
+
         # --- loading real mapping id -> name ---
         from smart_surveillance_sorter.utils import get_camera_mapping 
         camera_mapping = get_camera_mapping() 
         
-
 
         classificati_paths = {item["video_path"] for item in final_results}
 
@@ -219,14 +210,17 @@ class FileSorter:
         for item in final_results:
             v_path = item["video_path"]
             cam_name = item["camera_name"]
-            #cat = item["category"]
             
             # --- Category ---
             # IF IA return  'nothing', force in 'others'
             cat = item["category"]
             if cat == "nothing":
                 cat = "others"
+            # Apply output_mapping if defined
+            output_mapping = self.settings.get("output_mapping", {})
+            cat = output_mapping.get(cat, cat)
             target_dir = get_safe_path(self.dest_base, cam_name, cat, self.structure_type)
+       
             
             # Move frames dir and crops
             if v_path not in files_processati:

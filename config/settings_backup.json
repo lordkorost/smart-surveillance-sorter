@@ -85,6 +85,6 @@
         "person": "people",
         "animal": "animals",
         "vehicle": "vehicles",
-        "nothing": "others"
+        "others": "others"
     }
 }
