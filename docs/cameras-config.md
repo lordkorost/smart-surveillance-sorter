@@ -185,7 +185,7 @@ YOLO minimum confidence threshold per category. Detections below the threshold a
 - Camera with wooden fence or furniture → increase `WOOD`
 - Camera with floor/pavement → increase `GROUND`
 
-See [CLIP+BLIP Tuning Guide](clip-blip-config.md) for the full list of available fake keys.
+See [CLIP+BLIP Tuning Guide](blip-clip-config.md) for the full list of available fake keys.
 
 ---
 
@@ -253,4 +253,4 @@ See [CLIP+BLIP Tuning Guide](clip-blip-config.md) for the full list of available
 
 ---
 
-> For edge cases and advanced tuning see [Edge Cases](edge-cases.md) and [CLIP+BLIP Tuning Guide](clip-blip-config.md)
+> For edge cases and advanced tuning see [Edge Cases](edge-cases.md) and [CLIP+BLIP Tuning Guide](blip-clip-config.md)
