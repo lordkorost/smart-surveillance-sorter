@@ -26,11 +26,10 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 | Getting Started | Configuration | Advanced | Benchmarks |
 |----------------|---------------|----------|------------|
 | [How It Works](docs/how-works.md) | [Camera Config](docs/cameras-config.md) | [Real-Time & Resume](docs/realtime-resume.md) | [Benchmarks Index](docs/benchmarks-index.md) |
-| [Mode Comparison](docs/mode-comparison.md) | [Tuning Guide](docs/tuning-guide.md) | [Lens Health Check](docs/lens-health.md) | [Model Comparison](docs/model-comparison.md) |
-| [WebUI Guide](docs/webui.md) | [CLIP/BLIP Settings](docs/blip-clip-config.md) | [Manual Install](docs/manual-install.md) | [YOLO Model Comparison](docs/yolo-model-comparison.md) |
-| [CLI Reference](docs/cli-usage.md) | [YOLO Tuning](docs/yolo-tuning.md) | [AMD GPU Setup](docs/gpu-setup-amd.md) | | [Mode Comparison](docs/mode-comparison.md)
-| [Testing Guide](docs/testing-guide.md) | [Edge Cases](docs/edge-cases.md) | | |
-
+| [WebUI Guide](docs/webui.md) | [Tuning Guide](docs/tuning-guide.md) | [Lens Health Check](docs/lens-health.md) | [Model Comparison](docs/model-comparison.md) |
+| [CLI Reference](docs/cli-usage.md) | [CLIP/BLIP Settings](docs/blip-clip-config.md) | [Manual Install](docs/manual-install.md) | [YOLO Model Comparison](docs/yolo-model-comparison.md) |
+| [Testing Guide](docs/testing-guide.md) | [YOLO Tuning](docs/yolo-tuning.md) | [AMD GPU Setup](docs/gpu-setup-amd.md) | [Mode Comparison](docs/mode-comparison.md) |
+| | [Edge Cases](docs/edge-cases.md) | | |
 ---
 
 ## Features
@@ -141,7 +140,7 @@ Tested on **521 videos + 480 images** (1 day of NVR footage, 8 cameras, mixed ou
 Hardware: Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) / Vulkan (Windows)
 
 >[!TIP]
-> Full benchmark details: [docs/benchmarks.md](docs/benchmarks.md)
+> Full benchmark details: [Benchmarks Index](docs/benchmarks-index.md)
 
 ### Performance
 
