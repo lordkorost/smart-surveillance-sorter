@@ -17,6 +17,11 @@ from colorama import Fore, Style
 log = logging.getLogger(__name__)
 
 class Scanner():
+    """Main video surveillance scanner orchestrating YOLO and vision model processing.
+    
+    Manages the complete workflow: indexing, YOLO scanning, vision refinement,
+    and output organization for detected objects.
+    """
     def __init__(self, mode, device=None, is_refine=False, is_fallback=False, is_test = False,engine="blip",is_check_clean=False,is_real_time=False,is_sort=True):     
 
         self.mode = mode
@@ -53,15 +58,15 @@ class Scanner():
 
         log_resource_usage(log, "START")
         
-        # 3. Stato dell'analisi
+        # 3. Analysis state
         self.skipped_index = {}
-        self.results = []               # Risultati pronti per il report/sorting
-        self.resolved_videos = set()    # Per evitare di ri-analizzare video già risolti
+        self.results = []               # Results ready for report/sorting
+        self.resolved_videos = set()    # To avoid re-analyzing already resolved videos
         self.frames_dir = None          
         self.final_reports = []
         self.vision_engine = None
 
-        # Istanza del motore 
+        # Engine instance 
         self.yolo_engine = YoloEngine(
             mode=self.mode,
             device=self.device,
@@ -71,33 +76,36 @@ class Scanner():
         )
 
     def scan_folder(self, input_dir,output_dir):
+        """Execute complete workflow: Scan -> Analyze (YOLO/Vision) -> Finalize -> Sort.
+        
+        Args:
+            input_dir: Directory containing input videos/images
+            output_dir: Directory for output results
         """
-        Esegue il flusso completo: Scansione -> Analisi (YOLO/Vision) -> Finalizzazione -> Sorting.
-        """
-        # --- TIMER INIZIO ---
+        # --- START TIMER ---
         t_start = time.time()
 
-        # 1. Normalizzazione Input
+        # 1. Input normalization
         self.input_dir = Path(input_dir)
         self.output_dir = Path(output_dir)
         
 
         if not self._check_engine_integrity():
-        # Solleviamo un errore bloccante
+        # Raise blocking error
             raise RuntimeError("Engine changed between scans! Delete results json or use the correct engine to resume/continue.")
-        # 2. Setup Directory di Lavoro
+        # 2. Working directory setup
         self.frames_dir = self.output_dir / FRAME_DIR
         self.frames_dir.mkdir(parents=True, exist_ok=True)
         log.debug(f"Frames directory={self.frames_dir}")
 
-        # 3. Indicizzazione e Associazione
+        # 3. Indexing and association
         raw_index = build_index(input_dir,self.settings)
         self.full_index = associate_files(raw_index,self.input_dir)
         
-        #4. controlliamo se esistono risultati di yolo precedenti per il resume
+        # 4. Check if previous YOLO results exist for resume
         self._handle_yolo_cache()
         
-        # 4. Scansione yolo (sempre)
+        # 4. YOLO scanning (always)
         if self.new_video_count > 0:
             if not self.processed_set:
                 log.info("NVR Images scan for person.")
@@ -109,29 +117,29 @@ class Scanner():
         else:
             log.info("All video processed.")
 
-        #ora bisogna dividere il flusso yolo -> blip oppure yolo -> vision
-        # Lo scopo qui è popolare 'final_data', l'unico oggetto che il Sorter leggerà.
+        # Now must split flow: YOLO -> BLIP or YOLO -> Vision
+        # Purpose here is to populate 'final_data', the only object the Sorter will read
         self.final_data = []
         self.final_reports = []
 
         if self.is_refine and self.engine=="blip":
-            #funzione corso blip 
+            # Function using BLIP
             self._clip_blip_scan()
         if self.is_refine and self.engine=="vision":
-            #funzione corso vision
+            # Function using Vision
             self._vision_scan()
 
-        #abbiamo final data e final_reports passiamo al sorter
-        # 6. Fase 4: Sorter 
+        # We have final data and final_reports, pass to sorter
+        # 6. Phase 4: Sorter 
         if self.final_data:
-            # Salvataggio unico del verdetto
+            # Single verdict save
             final_report_path = self.output_dir / FINAL_REPORT
             save_json(self.final_data, final_report_path)
             log.info(f"Final results saved in file={final_report_path}")
             
-            #controlliamo se dobbiamo organizzare i video
+            # Check if we need to organize videos
             if self.is_sort:
-                # Reintegra i video skippati nel full_index per il sorter
+                # Reinteg rate skipped videos in full_index for the sorter
                 for cam_id, entries in self.skipped_index.items():
                     if cam_id in self.full_index:
                         self.full_index[cam_id].extend(entries)
@@ -143,7 +151,7 @@ class Scanner():
 
         total_time = time.time()-t_start
         log.info(f"Folder scan in {total_time}s")
-        #se è test dobbiamo salvare le metriche in un json
+        # If test, save metrics in JSON
         if(self.is_test):
             save_test_metrics(output_dir, self.final_reports, total_time, self.stats, self.mode,self.settings)
 
@@ -152,7 +160,7 @@ class Scanner():
         self._clip_blip_scan_refine()
         if self.is_fallback:
             #blip -> vision
-            #caricamento dei casi dubbi da passare
+            # Load doubtful cases to process
             vision_queue = self._get_arbitration_queue()
             if vision_queue:
                     log.info("Fallback step with vision on blip results")
@@ -160,7 +168,7 @@ class Scanner():
                     #inizializziamo vision
                     self._ensure_vision_initialized() 
                     log.info(f"{len(vision_queue)} to process.")
-                    # Passiamo la coda filtrata
+                    # Pass filtered queue
                     self._fallback_blip_vision(vision_queue)
         #in ogni caso  abbiamo il risultato
         log.info("Scan end. Start folder sorting.")
@@ -183,9 +191,9 @@ class Scanner():
           
         # self._refine_with_vision popola internamente self.final_reports
         log_resource_usage(log, "VISION")
-        #yolo -> vision (refine)
+        # YOLO -> Vision (refine)
         self._vision_scan_refine()
-        #controllo se --fallback anche su --vision
+        # Check if --fallback also on --vision
         if self.is_fallback:
             self._fallback_vision_vision()
         #in ogni caso abbiamo final reports
@@ -193,17 +201,17 @@ class Scanner():
         log_resource_usage(log, "END VISION")
 
     def _handle_yolo_cache(self):
-        #recupero eventuale yolo cache per resume/skip
+        # Recover potential YOLO cache for resume/skip
         yolo_cache_file = Path(self.output_dir) / YOLO_CACHE
         self.yolo_cache_file = yolo_cache_file
 
-        #se la cache esiste carichiamo i dati in self results.
+        # If cache exists load data in self.results.
         if yolo_cache_file.exists():
             log.warning("YOLO Cache found. Resume prev results.")
 
             try:
                 loaded_data = load_json(yolo_cache_file)
-                # Assicuriamoci che sia una lista di dizionari
+                # Ensure it is a list of dictionaries
                 self.results = [r for r in loaded_data if isinstance(r, dict)]
             except Exception:
                 log.error("YOLO Cache corrupted. Resume abort, starting new scan.")
@@ -215,12 +223,12 @@ class Scanner():
         else:
             self.results = []
         
-        # 3. FILTRAGGIO INDICE
+        # 3. INDEX FILTERING
         original_video_count = sum(len(v_list) for v_list in self.full_index.values())
         
         self.processed_set = {str(r.get("video_path")) for r in self.results if isinstance(r, dict) and r.get("video_path")}
 
-        # Salva i video già processati in un indice separato
+        # Save already processed videos in separate index
         self.skipped_index = {
             cam_id: [
                 v for v in v_list
@@ -228,7 +236,7 @@ class Scanner():
             ]
             for cam_id, v_list in self.full_index.items()
         }
-        # Filtriamo mantenendo la struttura
+        # Filter while maintaining the structure
         self.full_index = {
             cam_id: [
                 v for v in v_list 
@@ -237,7 +245,7 @@ class Scanner():
             for cam_id, v_list in self.full_index.items()
         }
 
-        # Ricalcoliamo il totale reale dei video rimasti
+        # Recalculate the real total of remaining videos
         self.new_video_count = sum(len(v_list) for v_list in self.full_index.values())
         self.skipped = original_video_count - self.new_video_count
 
@@ -433,7 +441,7 @@ class Scanner():
                 video_info = video_dict.get(video_path_key, {})
                 raw_category = video_info.get("video_category")
 
-            # --- CREAZIONE REPORT 
+            # --- REPORT CREATION 
             if raw_category:
                 final_category = raw_category.lower()
                 if final_category != "empty":
@@ -484,7 +492,7 @@ class Scanner():
         """
         vision_queue = []
 
-        # 1. Set dei video "attivi" nel ciclo corrente (full_index + skipped_index)
+        # 1. Set of "active" videos in current cycle (full_index + skipped_index)
         active_videos = set()
         for cam_id, entries in self.full_index.items():
             for entry in entries:
@@ -506,11 +514,11 @@ class Scanner():
         for video_data in self.results:
             video_path = str(video_data.get("video_path"))
 
-            # Skippa video non attivi (già ordinati in cicli precedenti)
+            # Skip inactive videos (already sorted in previous cycles)
             if video_path not in active_videos:
                 continue
 
-            # Cache Vision: già processato, aggiorna clip_blip_results e skippa
+            # Vision cache: already processed, update clip_blip_results and skip
             if video_path in processed_vision:
                 cache_entry = processed_vision[video_path]
                 for i, r in enumerate(self.clip_blip_results):
@@ -550,14 +558,14 @@ class Scanner():
         
         vision_cache_file = Path(self.output_dir) / CLIPBLIP_FALLBACK_CACHE
 
-        # 1. CARICAMENTO CUMULATIVO 
+        # 1. CUMULATIVE LOADING 
         if vision_cache_file.exists():
-            # Carichiamo i vecchi risultati per non perderli
+            # Load old results to not lose them
             self.vision_results = load_json(vision_cache_file)
         else:
             self.vision_results = []
 
-        # # Creiamo un set dei path già presenti per evitare duplicati nel file
+        # # Create set of already-present paths to avoid duplicates in file
         existing_paths = {str(r["video_path"]) for r in self.vision_results}
        
         msg_start = f"Start vision arbitration on num_vid={len(vision_queue)}"
@@ -579,7 +587,7 @@ class Scanner():
             report_vision = self.vision_engine.refine_single_video(video_data)
             
             if report_vision:
-                # Cerchiamo il vecchio report di BLIP e lo rimpiazziamo con quello di Vision
+                # Search for old BLIP report and replace with Vision result
                 for i, r in enumerate(self.clip_blip_results):
                     if r["video_path"] == video_path:
                         self.clip_blip_results[i] = report_vision
@@ -590,15 +598,15 @@ class Scanner():
                     self.vision_results.append(report_vision)
                     existing_paths.add(video_path)
                 
-                # 4. SALVATAGGIO INCREMENTALE 
+                # 4. INCREMENTAL SAVING 
                 save_json(self.vision_results, vision_cache_file)
                 
-                # Logging del ragionamento 
+                # Log reasoning 
                 if self.is_test and report_vision.get("thinking"):
                     pbar.write(f"Thinking: {report_vision.get("thinking")}")
                     pbar.write(f"\n🧠 Arbitration: {report_vision['video_name']} -> {report_vision['category']}")
 
-        # 4. SALVATAGGIO finale
+        # 4. Final saving
         save_json(self.vision_results, vision_cache_file)
     
     def _vision_scan_refine(self):
@@ -615,7 +623,7 @@ class Scanner():
         else:
             self.vision_results = []
 
-        # Creiamo il set per saltare i video già fatti
+        # Create set to skip already-processed videos
         processed_vision_paths = {str(r["video_path"]) for r in self.vision_results}
         
      
@@ -641,7 +649,7 @@ class Scanner():
             for video_data in pbar:
                 video_path = str(video_data.get("video_path"))
 
-                # --- 1. SALTO SE GIÀ IN CACHE ---
+                # --- 1. SKIP IF ALREADY IN CACHE ---
                 if video_path in processed_vision_paths:
                     cache_entry = next((r for r in self.vision_results if str(r["video_path"]) == video_path), None)
                     if cache_entry:
@@ -677,7 +685,7 @@ class Scanner():
                 
                 if report:
                     self.vision_results.append(report)
-                    # SALVATAGGIO INCREMENTALE 
+                    # INCREMENTAL SAVE 
                     save_json(self.vision_results, vision_cache_file)
 
                     # --- LOGGING TEST ---
@@ -803,7 +811,7 @@ class Scanner():
                     tqdm.write(f"{Fore.CYAN}{'='*40}{Style.RESET_ALL}\n")
 
                 if cat != "nothing":
-                    # Calcolo priorità
+                    # Calculate priority
                     priority_idx = priority_order.index(cat) if cat in priority_order else len(priority_order)
                     
                     if priority_idx == 0: # Person trovata
@@ -818,13 +826,13 @@ class Scanner():
             #     self.final_reports.append(best_report)
             #     tqdm.write(f"✨ {Fore.GREEN}RECUPERATO:{Style.RESET_ALL} {v_name} -> {best_report.get('category')}")
             if best_report:
-                # Rimpiazza l'others in vision_results con il risultato del fallback
+                # Replace others in vision_results with fallback result
                 for i, r in enumerate(self.vision_results):
                     if r["video_name"] == v_name:
                         self.vision_results[i] = best_report
                         break
                 
-                # Salvataggio incrementale
+                # Incremental save
                 vision_cache_file = Path(self.output_dir) / VISION_CACHE
                 save_json(self.vision_results, vision_cache_file)
                 
@@ -883,7 +891,7 @@ class Scanner():
                 log.debug(f"Cam_id={cam_id}] No image found in folder=/checks for this camera.")
                 continue
 
-            # 2. Cerchiamo un'immagine NVR scattata di notte
+            # 2. Search for an NVR image taken at night
             night_sample = None
             for rec in records:
                 _, timestamp = parse_filename(
@@ -897,7 +905,7 @@ class Scanner():
                         night_sample = rec["nvr_images"][0]
                         break
 
-            # 3. Se abbiamo entrambi i file, interroghiamo il Vision Engine
+            # 3. If we have both files, query the Vision Engine
             if night_sample:
                 log.info(f"Cam_id={cam_id}] comparison with image={Path(night_sample).name}")
                 self._ensure_vision_initialized()
@@ -913,10 +921,15 @@ class Scanner():
         return results
         
     def _get_reference_path(self, cam_id):
+        """Find reference image (e.g. 02.jpg) in 'checks' folder.
+        
+        Args:
+            cam_id: Camera identifier
+            
+        Returns:
+            Path to reference image if found, None otherwise
         """
-        Cerca l'immagine di riferimento (es. 02.jpg) nella cartella 'checks'.
-        """
-        # Usiamo la costante CHECKS_DIR che punta alla cartella /checks
+        # Use CHECKS_DIR constant pointing to /checks folder
         for ext in [".jpg", ".png", ".jpeg", ".JPG", ".PNG"]:
             potential_ref = CHECKS_DIR / f"{cam_id}{ext}"
             if potential_ref.exists():
@@ -973,7 +986,7 @@ class Scanner():
             cam_id = str(item["camera_id"])
             cam_name = self.cameras_config.get(cam_id, {}).get("name", f"Camera_{cam_id}")
 
-            # Se l'item viene da Vision/Fallback, ha già la categoria decisa
+            # If item comes from Vision/Fallback, already has category decided
             if engine == "vision_complex" or "category" in item:
                 winner_cat = item["category"]
                 best_frame = item.get("frame_priority") or item.get("best_frame_path")
@@ -1011,7 +1024,7 @@ class Scanner():
     def _check_engine_integrity(self):
         final_report_path = self.output_dir / FINAL_REPORT
         
-        # Se non c'è il report finale, la cartella è considerata "nuova"
+        # If no final report, folder is considered "new"
         if not final_report_path.exists():
             return True 
 
@@ -1019,7 +1032,7 @@ class Scanner():
         vision_cache_file = self.output_dir / VISION_CACHE
         blip_cache_file = self.output_dir / CLIPBLIP_CACHE
 
-        # LOGICA DI BLOCCO
+        # 3. BLOCKING LOGIC
         # Se l'utente ha scelto BLIP ma esiste la cache di VISION
         if self.engine == "blip" and vision_cache_file.exists():
             log.critical("--- ENGINE MISMATCH DETECTED ---")

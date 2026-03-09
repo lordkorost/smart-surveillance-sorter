@@ -13,12 +13,12 @@ set MKL_NUM_THREADS=%NUMBER_OF_PROCESSORS%
 set OLLAMA_VULKAN=1
 
 
-:: Check aggiornamenti
+:: Check updates (only if git is available)
 for /f %%i in ('git rev-parse HEAD 2^>nul') do set CURRENT=%%i
 for /f %%i in ('git ls-remote origin HEAD 2^>nul') do set REMOTE=%%i
 if not "%CURRENT%"=="%REMOTE%" (
     if not "%REMOTE%"=="" (
-        echo ⚠️  Nuova versione disponibile! Esegui: git pull ^&^& pip install -e .
+        echo  New version available! Run: git pull ^&^& pip install -e .
     )
 )
 if not exist models mkdir models

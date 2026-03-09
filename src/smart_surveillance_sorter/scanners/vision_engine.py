@@ -11,7 +11,19 @@ from ..utils import calculate_score, load_json
 from .vision_helpers import build_dynamic_prompt 
 log = logging.getLogger(__name__) 
 class VisionEngine:
+    """Vision model engine using Ollama for refined object analysis.
+    
+    Uses large language models to verify and refine YOLO detections through
+    natural language reasoning about image content.
+    """
     def __init__(self, settings, cameras_config, mode):
+        """Initialize Vision engine with Ollama configuration.
+        
+        Args:
+            settings: Application settings
+            cameras_config: Camera configurations
+            mode: Detection mode
+        """
      
         self.settings = settings
         self.cameras_config = cameras_config
@@ -27,6 +39,15 @@ class VisionEngine:
         
 
     def query_vision_model(self, prompt, image_paths):
+        """Query the vision model with prompt and images.
+        
+        Args:
+            prompt: Text prompt for the model
+            image_paths: Path or list of paths to images
+            
+        Returns:
+            Model response text
+        """
         vision_model = self.vision_cfg.get("model_name", "qwen3-vl:8b")
         temperature = self.vision_cfg.get("temperature",1)
         top_k = self.vision_cfg.get("top_k",20)
@@ -51,12 +72,12 @@ class VisionEngine:
 
           
          
-            # 2. Prendi il testo 
+            # 2. Get response text
             full_response = response.get('response', '').lower().strip()
             thinking_content = response.get('thinking', '') 
             
             
-            # 3. Estrazione Verdetto con logica a cascata
+            # 3. Extract verdict with cascade logic
             answer = "others" # Default
 
             if "final verdict:" in full_response:
@@ -80,10 +101,18 @@ class VisionEngine:
         except Exception as e:
             log.error(f"Call to Ollama mode=({vision_model}) fail error={str(e)}")
             import traceback
-            log.error(traceback.format_exc()) # Questo ti dice l'esatta riga dell'errore
+            log.error(traceback.format_exc())  # This shows you the exact error line
             return {"label": "others", "thinking": f"Error: {str(e)}"}
 
     def refine_single_video(self, video_data):
+        """Refine YOLO detection results using vision model analysis.
+        
+        Args:
+            video_data: Dictionary with video metadata and detection results
+            
+        Returns:
+            Refined detection results with vision model classifications
+        """
 
         cam_id     = video_data["camera_id"]
         video_path = Path(video_data["video_path"])
@@ -109,8 +138,8 @@ class VisionEngine:
 
         scores         = defaultdict(float)
         last_frame     = {}
-        confirm_count  = defaultdict(int)   # contatore conferme per categoria
-        others_count   = 0                  # contatore "others" consecutivi
+        confirm_count  = defaultdict(int)   # Counter confirmations per category
+        others_count   = 0                  # Counter consecutive others
 
         for frame in frames:
             category = frame["category"]
@@ -136,7 +165,7 @@ class VisionEngine:
                 others_count = 0  # reset others
                 # Exit se: conf alta (1 conferma) oppure 2 conferme qualsiasi
                 if conf >= 0.65 or confirm_count[vision_answer] >= 2:
-                    log.debug(f"✅ Fast exit {vision_answer} conf={conf:.2f} confirms={confirm_count[vision_answer]}")
+                    log.debug(f"Fast exit {vision_answer} conf={conf:.2f} confirms={confirm_count[vision_answer]}")
                     return self._build_result(cam_id, video_path, vision_answer,
                                               img_path, frames, thinking)
 
@@ -144,10 +173,10 @@ class VisionEngine:
             if vision_answer == "others":
                 others_count += 1
                 if others_count >= 2:
-                    log.debug(f"⏩ Fast bail-out: Vision said others {others_count}x → ballot")
+                    log.debug(f"Fast bail-out: Vision said others {others_count}x → ballot")
                     break
 
-            # Accumulo score per il ballot
+            # Accumulate score for ballot voting
             if vision_answer == "others":
                 current_gain = -10.0
             elif vision_answer == category:
@@ -174,7 +203,7 @@ class VisionEngine:
                                      if f["category"] == "person" and f["confidence"] > min_conf]
             if high_conf_yolo_person:
                 best = max(high_conf_yolo_person, key=lambda x: x["confidence"])
-                log.debug(f"⚠️ OVERRIDE: YOLO Person ({best['confidence']:.2f}) Vision discarded.")
+                log.debug(f"OVERRIDE: YOLO Person ({best['confidence']:.2f}) Vision discarded.")
                 return self._build_result(cam_id, video_path, "person",
                                           best["frame_path"], frames, thinking)
 
@@ -193,22 +222,22 @@ class VisionEngine:
     def _build_result(self, cam_id, video_path, category, frame_used, all_frames,thinking):
         video_path_obj = Path(video_path)
         
-        # 1. Recupero il nome umano dal config caricato nello Scanner
-        # self.cameras_config è il dizionario { "03": {"name": "Orto", ...} }
+        # 1. Retrieve human name from config loaded in Scanner
+        # self.cameras_config is the dictionary { "03": {"name": "Garden", ...} }
         cam_info = self.cameras_config.get(str(cam_id), {})
         cam_name = cam_info.get("name", f"Camera_{cam_id}")
 
-        # 2. Cerco la confidenza del frame usato 
-        # Vision non restituisce confidenza, mettiamo 1.0 come verdetto 
+        # 2. Search for confidence of used frame
+        # Vision does not return confidence, set 1.0 as verdict 
         confidence = 1.0
         if frame_used:
-            # Cerchiamo nei dettagli se esiste il frame_used per prenderne la confidenza
+            # Search in details if frame_used exists to get its confidence
             for f in all_frames:
                 if f.get("frame_path") == str(frame_used):
                     confidence = f.get("confidence", 1.0)
                     break
 
-        # 3. Costruisco la struttura identica a YOLO
+        # 3. Build structure identical to YOLO
         return {
             "camera_id": str(cam_id),
             "camera_name": cam_name,
@@ -223,6 +252,14 @@ class VisionEngine:
     
 
     def refine_fallback(self, suspect):
+        """Fallback refine for edge cases when primary method fails.
+        
+        Args:
+            suspect: Detection suspect data
+            
+        Returns:
+            Refined classification result
+        """
         
         img_path = suspect["image_path"]
         cam_id = suspect["camera_id"]
@@ -238,13 +275,13 @@ class VisionEngine:
             is_fallback=True
         )
 
-        # 3. Interroghiamo il modello
+        # 3. Query the model
         result = self.query_vision_model(prompt, [img_path])
      
         answer = result.get("label", "others").lower()
-        if answer == "nothing": answer = "others" # Bridge per sicurezza
+        if answer == "nothing": answer = "others"  # Safety bridge
         thinking = result.get("thinking", "")
-        # 4. Validazione e creazione del report
+        # 4. Validation and report creation
         if answer != "others":
             return {
                 "camera_id": cam_id_str,
@@ -262,8 +299,16 @@ class VisionEngine:
     
 
 
-    def analyze_cleanliness(self, image_list, cam_id,):
-        """
+    def analyze_cleanliness(self, image_list, cam_id,):        
+        """Analyze lens cleanliness from a series of frames.
+        
+        Args:
+            image_list: List of image paths to analyze
+            cam_id: Camera identifier
+            
+        Returns:
+            Cleanliness assessment result
+        """        """
         image_list = [path_riferimento, path_nvr_notturna]
         """
       
@@ -286,10 +331,10 @@ class VisionEngine:
            
             log.debug(f"Thinking: {thinking_content}")
            
-            # 3. Estrazione Verdetto con logica a cascata
+            # 3. Extract verdict with cascade logic
             answer = "uncertain" # Default
 
-            # Logica specifica per la pulizia
+            # Lens-specific logic
             if any(word in full_response for word in ["clean", "perfect"]):
                 answer = "clean"
             elif any(word in full_response for word in ["dirty", "dust"]):

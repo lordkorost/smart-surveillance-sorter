@@ -40,10 +40,10 @@ def load_smart_yolo(model_name, device=None):
     available for the smart surveillance sorter pipeline. [1]
     """
 
-    # 2. Normalizza (assicura .pt) e usa la costante MODELS_DIR
+    # 2. Normalize (ensure .pt) and use MODELS_DIR constant
     model_file = model_name if model_name.endswith(".pt") else f"{model_name}.pt"
     local_path = MODELS_DIR / model_file
-    # 3. Caricamento fisico
+    # 3. Physical loading
     if local_path.exists():
         log.info(f"📦 [YOLO] Loading: {local_path}")
         model = YOLO(str(local_path))

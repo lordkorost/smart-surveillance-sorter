@@ -11,6 +11,11 @@ from smart_surveillance_sorter.utils import cleanup
 
 
 def run_loop():
+    """Run continuous real-time surveillance monitoring loop.
+    
+    Repeatedly scans input directory at configured intervals,
+    processing new videos as they arrive.
+    """
     parser = argparse.ArgumentParser(description="Real-time NVR Surveillance Sorter")
     parser.add_argument("--dir",        required=True)
     parser.add_argument("--output-dir", dest="output_dir")

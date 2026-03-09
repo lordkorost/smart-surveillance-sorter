@@ -1,15 +1,11 @@
 from datetime import datetime
 import json
 import logging
-#import os
 import re
-#import socket
 import requests
-#import sys
 import cv2
 from pathlib import Path
 from smart_surveillance_sorter.constants import PROJECT_ROOT
-#from colorama import Fore, Style
 import json
 from astral.geocoder import database, lookup
 from smart_surveillance_sorter.constants import COORDS_CACHE_JSON
@@ -18,6 +14,7 @@ from astral.sun import sun
 from datetime import timedelta
 import pytz
 from smart_surveillance_sorter.logger import log_resource_usage
+
 log = logging.getLogger(__name__) 
 LABEL_TO_CAT = {
         "person": "PERSON", "people": "PERSON",
@@ -26,7 +23,14 @@ LABEL_TO_CAT = {
     }
 
 def load_json(full_path):
+    """Load JSON data from file.
     
+    Args:
+        full_path: Path to JSON file (Path object or string)
+        
+    Returns:
+        Loaded JSON data or None if file not found or invalid JSON
+    """
     if not isinstance(full_path, Path):
         full_path = PROJECT_ROOT / full_path
     try:
@@ -40,8 +44,14 @@ def load_json(full_path):
         return None
 
 def save_json(data, full_path):
-    """
-    Salva dati in un file JSON assicurandosi che la cartella esista.
+    """Save data to JSON file, creating parent directories as needed.
+    
+    Args:
+        data: Data to save (will be converted to JSON)
+        full_path: Path where to save the JSON file (Path object or string)
+        
+    Returns:
+        True if successful, False otherwise
     """
     if not isinstance(full_path, Path):
         full_path = PROJECT_ROOT / full_path
@@ -56,7 +66,14 @@ def save_json(data, full_path):
         return False
 
 def get_video_capture(video_path):
-    """Apre un video e restituisce l'oggetto cv2.VideoCapture."""
+    """Open a video file and return cv2.VideoCapture object.
+    
+    Args:
+        video_path: Path to the video file
+        
+    Returns:
+        cv2.VideoCapture object if successful, None otherwise
+    """
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         log.warning(f"Error is not possible open vid={video_path}")
@@ -64,15 +81,23 @@ def get_video_capture(video_path):
     return cap
 
 def get_camera_by_filename(filename, cameras_dict):
-    """
-    Cerca di identificare la telecamera controllando se uno dei pattern 
-    definiti è presente nel nome del file.
+    """Identify which camera a file belongs to by examining search patterns.
+    
+    Attempts to identify the camera by checking if one of the defined
+    search patterns is present in the filename.
+    
+    Args:
+        filename: Name of the file to check
+        cameras_dict: Dictionary of camera configurations
+        
+    Returns:
+        Camera configuration dict if match found, None otherwise
     """
     filename_lower = filename.lower()
     
     for cam_id, config in cameras_dict.items():
         patterns = config.get("search_patterns", [])
-        # Aggiungiamo di default anche l'ID della camera come pattern
+        # Also add the camera ID as a default pattern
         patterns.append(f"_{cam_id}_") 
         
         for pattern in patterns:
@@ -82,7 +107,16 @@ def get_camera_by_filename(filename, cameras_dict):
     return None
 
 def get_crop_coordinates(bbox, frame_shape, margin_perc=1.0):
-   
+    """Calculate crop coordinates with margin from a bounding box.
+    
+    Args:
+        bbox: Bounding box as [x1, y1, x2, y2]
+        frame_shape: Shape of the frame (height, width, ...)
+        margin_perc: Margin percentage relative to bbox size (default: 1.0 = 100%)
+        
+    Returns:
+        List of cropped coordinates [x1, y1, x2, y2] clamped to frame boundaries
+    """
     x1, y1, x2, y2 = bbox
     h, w = frame_shape[:2]
     
@@ -136,10 +170,10 @@ def get_target_ids(model, settings, mode, camera_ignore_labels):
     mapped to numeric IDs using the YOLO model’s class mapping
     [1].
     """
-    # 1. Mappa nomi -> ID del modello (es. {'person': 0, 'bicycle': 1...})
+    # 1. Model name -> ID mapping (e.g. {'person': 0, 'bicycle': 1...})
     model_name_to_id = {v: k for k, v in model.names.items()}
     
-    # 2. Definiamo quali gruppi attivare in base al MODE
+    # 2. Define which groups to activate based on MODE
     mode_map = {
         "full": ["PERSON", "ANIMAL", "VEHICLE"],
         "person": ["PERSON"],
@@ -147,38 +181,52 @@ def get_target_ids(model, settings, mode, camera_ignore_labels):
     }
     active_groups = mode_map.get(mode, ["PERSON"])
     
-    # 3. Costruiamo la lista di etichette "candidate" dai gruppi attivi
+    # 3. Build list of "candidate" labels from active groups
     candidate_labels = []
     #groups_config = settings["yolo_settings"]["detection_groups"]
-    # 1. Recupera yolo_settings (se manca, usa un dizionario vuoto {})
+    # 1. Retrieve yolo_settings (if missing, use empty dict {})
     yolo_conf = settings.get("yolo_settings", {})
 
-    # 2. Recupera detection_groups (se manca, usa una lista o dict vuoto a seconda di cosa ti aspetti)
+    # 2. Retrieve detection_groups (if missing, use empty list/dict)
     groups_config = yolo_conf.get("detection_groups", [])
 
     for group in active_groups:
         candidate_labels.extend(groups_config.get(group, []))
     
-    # 4. Sottraiamo le ignore_labels specifiche della telecamera
+    # 4. Remove camera-specific ignore labels
     final_labels = [
         label for label in candidate_labels 
         if label not in camera_ignore_labels
     ]
     
-    # 5. Trasformiamo i nomi in ID numerici (solo se esistono nel modello)
+    # 5. Transform names to numeric IDs (only if they exist in the model)
     target_ids = [
         model_name_to_id[name] 
         for name in final_labels 
         if name in model_name_to_id
     ]
     
-    return list(set(target_ids)) # Ritorna ID unici
+    return list(set(target_ids)) # Return unique IDs
 
 def calculate_score(category, conf, vision_answer, scoring_settings):
+    """Calculate detection score based on confidence and vision model agreement.
+    
+    Combines YOLO confidence with vision model verification to produce a final score.
+    Applies multipliers and weights based on configuration.
+    
+    Args:
+        category: Detected object category
+        conf: YOLO confidence score (0-1)
+        vision_answer: Vision model's assessment of the detection
+        scoring_settings: Dict with "weights" and "multipliers" configuration
+        
+    Returns:
+        Final score after applying weights and multipliers
+    """
     weights = scoring_settings.get("weights", {})
     multipliers = scoring_settings.get("multipliers", {})
 
-    # 1. Punteggio base basato sulla confidenza YOLO
+    # 1. Base score calculation based on YOLO confidence
     if conf >= 0.70:
         base = weights.get("score_high", 3.0)
     elif conf >= 0.55:
@@ -188,9 +236,9 @@ def calculate_score(category, conf, vision_answer, scoring_settings):
     else:
         base = 0.3
 
-    # 2. Modificatore basato sulla risposta di Vision
+    # 2. Modifier based on Vision model response
     if vision_answer == category:
-        # CONFERMA: Bonus pesante
+        # CONFIRMATION: Heavy bonus
         multiplier = multipliers.get(category, 1.6)
         base *= multiplier
     
@@ -203,7 +251,7 @@ def calculate_score(category, conf, vision_answer, scoring_settings):
     return base
 
 def cleanup():
-    """Funzione dedicata alla pulizia profonda della memoria."""
+    """Clean up memory by running garbage collection and clearing GPU cache."""
     import gc
     gc.collect()
     try:
@@ -217,8 +265,16 @@ def cleanup():
     log_resource_usage(log, "Free memory")
 
 def get_safe_path(base_dir, camera_name, category, structure_type):
-    """
-    Costruisce il percorso di destinazione in base alla preferenza dell'utente.
+    """Build output file path based on user's preferred folder structure.
+    
+    Args:
+        base_dir: Base output directory
+        camera_name: Name of the camera
+        category: Content category
+        structure_type: Either "camera_first", "category_first", or "flat"
+        
+    Returns:
+        Constructed Path object for the destination directory
     """
     safe_camera = re.sub(r'[\\/*?:"<>|]', "", camera_name).strip()
     
@@ -231,8 +287,10 @@ def get_safe_path(base_dir, camera_name, category, structure_type):
     
 def get_camera_mapping():
 
-    """
-    Crea un dizionario semplice { "id": "Nome Umano" } dal file cameras.json.
+    """Create a simple { "id": "Human Name" } mapping from cameras.json.
+    
+    Returns:
+        Dictionary mapping camera IDs to camera names, empty dict if error
     """
     CONFIG_DIR = PROJECT_ROOT / "config"
     cameras_config_path = CONFIG_DIR / "cameras.json"
@@ -246,6 +304,16 @@ def get_camera_mapping():
         return {}
     
 def save_test_metrics(output_dir, final_reports, total_time, stats, mode,settings=None):
+    """Save test execution metrics and performance statistics to JSON file.
+    
+    Args:
+        output_dir: Directory where metrics file will be saved
+        final_reports: List of detection reports
+        total_time: Total execution time in seconds
+        stats: Dictionary with performance statistics per phase
+        mode: Detection mode used
+        settings: Optional settings dict for parameter logging
+    """
     metrics_path = Path(output_dir) / "test_metrics.json"
     performance_summary = {}
     for phase, data in stats.items():
@@ -260,7 +328,7 @@ def save_test_metrics(output_dir, final_reports, total_time, stats, mode,setting
             }
 
 
-    # Estrai parametri rilevanti dal settings
+    # Extract relevant parameters from settings
     yolo_params = {}
     engine_params = {}
     if settings:
@@ -307,15 +375,15 @@ def save_test_metrics(output_dir, final_reports, total_time, stats, mode,setting
 
 def check_dir(dir: str, is_readable=False, is_writeable=False):
 
-    """Controlla se la cartella esiste ed è leggibile o scrivibile.
+    """Check if a directory exists and verify read/write permissions.
 
     Args:
-        dir (str): Percorso della cartella da controllare.
-        is_readable (bool, optional): Se True, verifica anche se la cartella è leggibile. Defaults to False.
-        is_writeable (bool, optional): Se True, verifica anche se la cartella è scrivibile. Defaults to False.
+        dir (str): Path to the directory to check.
+        is_readable (bool, optional): If True, also verify read access. Defaults to False.
+        is_writeable (bool, optional): If True, also verify write access. Defaults to False.
 
     Returns:
-        bool: True se tutte le condizioni sono soddisfatte, False altrimenti.
+        bool: True if all conditions are met, False otherwise.
     """
     import os
 
@@ -331,8 +399,13 @@ def check_dir(dir: str, is_readable=False, is_writeable=False):
     return True
 
 def validate_ollama_setup(vision_settings):
-    """
-    Controllo di pre-volo: Ollama è vivo? Il modello qwen3-vl:8b è caricato?
+    """Pre-flight check: is Ollama server active and is the required model loaded?
+    
+    Args:
+        vision_settings: Vision settings dict containing ollama_conf and model_name
+        
+    Returns:
+        True if Ollama server is reachable and model is available, False otherwise
     """
     conf = vision_settings.get('ollama_conf', {})
     ip = conf.get('ip', '127.0.0.1')
@@ -359,7 +432,18 @@ def validate_ollama_setup(vision_settings):
         return False
     
 def fetch_coords_logic(city_name):
-    # LIVELLO 1: PROVA ONLINE (Geopy)
+    """Fetch geocoordinates for a city using online and offline methods.
+    
+    Attempts to fetch coordinates online first (Geopy), falls back to offline
+    Astral database if no internet, and defaults to Rome if city not found.
+    
+    Args:
+        city_name: Name of the city to find coordinates for
+        
+    Returns:
+        Dictionary with "lat" and "lon" keys
+    """
+    # LEVEL 1: Try online (Geopy)
     try:
         # Controllo rapido connessione
         from geopy.geocoders import Nominatim
@@ -368,36 +452,47 @@ def fetch_coords_logic(city_name):
         if loc:
             return {"lat": loc.latitude, "lon": loc.longitude}
     except Exception:
-        log.critical(f"No internet access. Searchig city='{city_name}' in local db.")
+        log.critical(f"No internet access. Searching city='{city_name}' in local db.")
 
-    # LIVELLO 2: FALLBACK OFFLINE (Astral Database)
+    # LEVEL 2: OFFLINE fallback (Astral Database)
     try:
         city_data = lookup(city_name, database())
         return {"lat": city_data.latitude, "lon": city_data.longitude}
     except KeyError:
         log.critical(f"City='{city_name}' not found offline. Fallback on Rome")
-        return {"lat": 41.89, "lon": 12.49} # Default universale    
+        return {"lat": 41.89, "lon": 12.49} # Default universal fallback    
 
 def get_smart_coordinates(city_from_settings):
+    """Get and cache geocoordinates for the configured city.
+    
+    Checks if coordinates are cached for the current city, returns cached values if valid,
+    otherwise fetches new coordinates and updates cache.
+    
+    Args:
+        city_from_settings: City name from configuration
+        
+    Returns:
+        Tuple of (latitude, longitude)
+    """
     update_needed = False
 
-    # 1. Carichiamo la cache (se il file non esiste o è corrotto, avremo un dizionario vuoto)
+    # 1. Load cache (empty dict if file missing or corrupted)
     cache = load_json(COORDS_CACHE_JSON) or {}
 
-    # 2. Verifichiamo se la città è la stessa e se le coordinate esistono
+    # 2. Check if city is the same and coordinates exist
     if cache.get("city_name") == city_from_settings:
         lat, lon = cache.get("lat"), cache.get("lon")
         if lat is not None and lon is not None:
             return lat, lon
     
-    # 3. Se arriviamo qui (città diversa o dati mancanti), serve aggiornare
+    # 3. If we reach here (different city or missing data), we need to update
     update_needed = True
 
-    # 2. Se serve, cerchiamo le nuove coordinate
+    # 2. If needed, fetch new coordinates
     if update_needed:
         coords = fetch_coords_logic(city_from_settings)
         
-        # Prepariamo i dati da salvare
+        # Prepare data to save
         new_cache_data = {
             "city_name": city_from_settings,
             "lat": coords["lat"],
@@ -409,18 +504,31 @@ def get_smart_coordinates(city_from_settings):
         return coords["lat"], coords["lon"]  
 
 def is_night_astronomic(dt_frame, lat, lon):
-    # Observer usa solo matematica locale
+    """Check if a given time is within astronomical night for a location.
+    
+    Determines if the frame timestamp is in astronomical night, applying a
+    20-minute offset before sunset for civil twilight detection.
+    
+    Args:
+        dt_frame: Datetime of the frame (with timezone info)
+        lat: Latitude of the location
+        lon: Longitude of the location
+        
+    Returns:
+        True if the frame is during night, False otherwise
+    """
+    # Observer uses only local mathematics
     obs = Observer(latitude=lat, longitude=lon)
     
-    # Calcolo del sole per la data del video
+    # Calculate sun position for the video date
     s = sun(obs, date=dt_frame.date())
     
-    # Applichiamo l'offset di 20 min (crepuscolo civile)
-    # Il boost si attiva 20 min prima del tramonto astronomico
+    # Apply 20 min offset (civil twilight)
+    # Detection boost activates 20 min before astronomical sunset
     sunset_limit = s["sunset"] - timedelta(minutes=20)
     sunrise_limit = s["sunrise"] + timedelta(minutes=20)
     
-    # Portiamo il timestamp del frame in UTC per il confronto
+    # Convert frame timestamp to UTC for comparison
     dt_utc = dt_frame.astimezone(pytz.utc)
     
     return dt_utc > sunset_limit or dt_utc < sunrise_limit

@@ -6,10 +6,25 @@ from smart_surveillance_sorter.constants import FINAL_REPORT, GROUND_TRUTH
 from smart_surveillance_sorter.utils import load_json
 
 def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
+    """
+    Compares Ground Truth results with AI predictions.
+    
+    Calculates per-category metrics such as True Positives, False Positives, 
+    and recall (excluding 'OTHERS'), printing a summary table and discrepancy details.
+    
+    Args:
+        session_dir (str): Input directory containing the data.
+        gt_file (str): Path to the ground_truth.json file.
+        res_file (str): Path to the classification_results.json file.
+        log (logging.Logger): Optional logging handle for output messages.
+
+    Returns:
+        None: Prints global accuracy and average recall directly.
+    """
     def _print(msg): log.info(msg) if log else print(msg)
     def _err(msg): log.error(msg) if log else print(f"❌ {msg}")
 
-    # --- LOGICA DI RISOLUZIONE PERCORSI ---
+    # --- Path resolve logic ---
     path_gt = None
     path_res = None
 
@@ -35,21 +50,21 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
         _err("Error loading json: One or all file missing or corrupted.")
         return
 
-    # Normalizzazione GT
+    # GT map
     gt_map = {os.path.basename(item["video_name"]): item["category"].upper() for item in gt_list}
 
-    # Normalizzazione Risultati AI
+    # AI res
     if isinstance(res_data, list):
         res_map = {os.path.basename(item["video_name"]): item["category"].upper() for item in res_data}
     else:
         res_map = {os.path.basename(path): data["video_category"].upper() for path, data in res_data.items()}
 
-    # --- INTERSEZIONE E VIDEO MANCANTI ---
+    # --- Intersection all videos and missing videos ---
     all_videos  = set(gt_map.keys()).intersection(set(res_map.keys()))
     only_in_gt  = set(gt_map.keys()) - set(res_map.keys())
     only_in_res = set(res_map.keys()) - set(gt_map.keys())
 
-    # --- CALCOLO STATISTICHE ---
+    # --- Calculate stats ---
     categories = ["PERSON", "VEHICLE", "ANIMAL", "OTHERS"]
     stats = {cat: {"FP": 0, "FN": 0, "TP": 0} for cat in categories}
     discrepancies = []
@@ -74,7 +89,7 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
             stats[predicted]["FP"] += 1
             discrepancies.append((video, actual, predicted))
 
-    # --- RIEPILOGO GENERALE ---
+    
     total_videos      = len(all_videos)
     total_tp          = sum(s["TP"] for s in stats.values())
     total_misclassified = len(discrepancies)
@@ -83,14 +98,14 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
     _print("=" * 65)
     _print(f"  Total videos compared : {total_videos}")
     if only_in_gt:
-        _print(f"  ⚠️  In GT but not in results : {len(only_in_gt)} (not processed?)")
+        _print(f"In GT but not in results : {len(only_in_gt)} (not processed?)")
     if only_in_res:
-        _print(f"  ⚠️  In results but not in GT : {len(only_in_res)}")
+        _print(f"In results but not in GT : {len(only_in_res)}")
     _print(f"  Correctly classified  : {total_tp:<5} ({global_acc:.1f}%)")
     _print(f"  Misclassified         : {total_misclassified:<5} ({100 - global_acc:.1f}%)")
     _print("=" * 65)
 
-    # --- TABELLA PER CATEGORIA ---
+    # --- tab for category ---
     _print(f"{'CATEGORY':<12} | {'TP':<5} | {'FP':<5} | {'FN':<5} | {'PRECISION':<10} | {'RECALL':<8}")
     _print("-" * 65)
 
@@ -109,7 +124,7 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, log=None):
     _print(f"  Avg recall (excl. Others)  : {avg_recall:.2f}%")
     _print("=" * 65)
 
-    # --- DETTAGLIO ERRORI ---
+    # --- Error detail ---
     if discrepancies:
         _print(f"\n  Misclassified videos ({len(discrepancies)}):")
         _print(f"  {'VIDEO':<45} | {'GT':<10} | {'PREDICTED'}")

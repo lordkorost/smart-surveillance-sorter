@@ -1,19 +1,19 @@
 """
-ClipBlipEngine v2 — Sistema di scoring semplificato
-====================================================
+ClipBlipEngine v2 — Simplified scoring system
+=============================================
 
-Principi:
-  - PERSON ha priorità assoluta (soglia bassa, fake penalty leggera)
-  - Un solo flusso decisionale per frame (no if annidati multipli)
-  - Tutti i parametri in clip_blip_settings_v2.json, documentati
-  - Fix falsi negativi: bbox_size_bonus per oggetti piccoli (teste angolate)
+Principles:
+  - PERSON has absolute priority (low threshold, light fake penalty)
+  - Single decision flow per frame (no multiple nested ifs)
+  - All parameters in clip_blip_settings_v2.json, documented
+  - Fix false negatives: bbox_size_bonus for small objects (angled heads)
 
-Rispetto alla v1:
-  - Eliminati: PERSON_FAKE_RELATIVE, PERSON_BOOST_TOLERANCE, DELTA_THRESHOLD,
-               PERSON_PRIORITY_THRESHOLD, DAY_ANIMAL_MIN_CONF, DAY_ANIMAL_MARGIN,
-               ANIMAL_AGG_THRESHOLDS, VEHICLE_AGG_THRESHOLDS
-  - Sostituiti da: FAKE_PENALTY_WEIGHT per classe + THRESHOLD per classe
-  - _calculate_day_category e _calculate_night_category → unico _decide_frame_label
+Differences from v1:
+  - Removed: PERSON_FAKE_RELATIVE, PERSON_BOOST_TOLERANCE, DELTA_THRESHOLD,
+             PERSON_PRIORITY_THRESHOLD, DAY_ANIMAL_MIN_CONF, DAY_ANIMAL_MARGIN,
+             ANIMAL_AGG_THRESHOLDS, VEHICLE_AGG_THRESHOLDS
+  - Replaced by: FAKE_PENALTY_WEIGHT per class + THRESHOLD per class
+  - _calculate_day_category and _calculate_night_category → single _decide_frame_label
 """
 
 import logging
@@ -30,7 +30,20 @@ log = logging.getLogger(__name__)
 
 
 class ClipBlipEngine:
+    """CLIP-BLIP scoring engine for object classification and filtering.
+    
+    Uses CLIP for semantic similarity scoring and BLIP for caption-based refinement.
+    Applies confidence thresholds, fake object penalties, and multi-frame aggregation.
+    """
     def __init__(self, settings, cameras_config, mode, device):
+        """Initialize CLIP-BLIP engine with models and configuration.
+        
+        Args:
+            settings: Application settings dictionary
+            cameras_config: Camera configurations
+            mode: Detection mode
+            device: Computing device (cuda or cpu)
+        """
         self.clip_blip_settings = load_json(CLIP_BLIP_JSON)
         self.DEVICE = device
         self.mode = mode
@@ -61,37 +74,37 @@ class ClipBlipEngine:
         self.BLIP_KEYWORDS = cb.get("BLIP_KEYWORDS", {})
 
 
-        # Soglia minima di score CLIP perché un frame sia "significativo"
-        # (evita che frame completamente vuoti guidino la decisione)
+        # Minimum CLIP score threshold for a frame to be "significant"
+        # (prevents completely empty frames from guiding the decision)
         self.SIGNIFICANCE_THRESHOLD = cb.get("SIGNIFICANCE_THRESHOLD", 0.15)
 
-        # Pesi crop vs frame intero nel calcolo dello score CLIP
+        # Weights for crop vs full frame in CLIP score calculation
         self.FINAL_WEIGHT_CROP  = cb.get("FINAL_WEIGHT_CROP", 0.7)
         self.FINAL_WEIGHT_FRAME = cb.get("FINAL_WEIGHT_FRAME", 0.3)
 
-        # Boost BLIP quando la caption contiene keyword di quella classe
+        # BLIP boost when caption contains keywords for that class
         self.BLIP_BOOST = cb.get("BLIP_BOOST", {"PERSON": 0.35, "ANIMAL": 0.10, "VEHICLE": 0.10})
 
-        # Soglia di score finale (dopo boost e penalty) per classificare un frame
-        # PERSON: valore basso = preferiamo avere falsi positivi a falsi negativi
+        # Final score threshold (after boost and penalty) to classify a frame
+        # PERSON: low value = prefer false positives over false negatives
         self.THRESHOLD = cb.get("THRESHOLD", {"PERSON": 0.15, "ANIMAL": 0.35, "VEHICLE": 0.30})
 
-        # Quanto i fake score penalizzano lo score finale di ogni classe
-        # Valore basso = classe favorita (fake non la penalizzano molto)
-        # Valore alto  = classe penalizzata dai fake
+        # How much fake scores penalize the final score for each class
+        # Low value = favored class (fakes don't penalize much)
+        # High value = penalized class (fakes penalize heavily)
         self.FAKE_PENALTY_WEIGHT = cb.get("FAKE_PENALTY_WEIGHT", {"PERSON": 0.3, "ANIMAL": 0.5, "VEHICLE": 0.6})
 
-        # Fix falsi negativi: bonus persona se bbox è piccolo (testa nell'angolo)
-        # BBOX_SMALL_RATIO: se bbox_area / frame_area < questa soglia → oggetto piccolo
-        # BBOX_SMALL_PERSON_BONUS: bonus aggiunto allo score PERSON
-        self.BBOX_SMALL_RATIO        = cb.get("BBOX_SMALL_RATIO", 0.04)   # < 4% del frame
+        # Fix false negatives: person bonus if bbox is small (head in corner)
+        # BBOX_SMALL_RATIO: if bbox_area / frame_area < this threshold → small object
+        # BBOX_SMALL_PERSON_BONUS: bonus added to PERSON score
+        self.BBOX_SMALL_RATIO        = cb.get("BBOX_SMALL_RATIO", 0.04)   # < 4% of frame
         self.BBOX_SMALL_PERSON_BONUS = cb.get("BBOX_SMALL_PERSON_BONUS", 0.15)
 
-        # Boost notturno per PERSON (la notte è più difficile per CLIP)
+        # Night boost for PERSON (night is harder for CLIP)
         self.YOLO_NIGHT_BOOST = cb.get("YOLO_NIGHT_BOOST", 0.30)
 
-        # Soglie aggregazione video: quanti frame servono e con che score medio
-        # per classificare l'intero video come ANIMAL o VEHICLE
+        # Video aggregation thresholds: how many frames needed and with what average score
+        # to classify the entire video as ANIMAL or VEHICLE
         self.ANIMAL_START_THRESHOLD   = cb.get("ANIMAL_START_THRESHOLD", 0.45)
         self.ANIMAL_STEP_REDUCTION    = cb.get("ANIMAL_STEP_REDUCTION", 0.05)
         self.ANIMAL_MIN_THRESHOLD     = cb.get("ANIMAL_MIN_THRESHOLD", 0.15)
@@ -99,12 +112,12 @@ class ClipBlipEngine:
         self.VEHICLE_STEP_REDUCTION   = cb.get("VEHICLE_STEP_REDUCTION", 0.05)
         self.VEHICLE_MIN_THRESHOLD    = cb.get("VEHICLE_MIN_THRESHOLD", 0.20)
 
-        # Coordinate per calcolo notte astronomica
+        # Coordinates for astronomical night calculation
         self.city_name = self.settings.get("city", "Roma")
         self.lat, self.lon = get_smart_coordinates(self.city_name)
         log.debug(f"ClipBlipEngine  — city={self.city_name} ({self.lat}, {self.lon})")
 
-        # Mappa label YOLO → classe principale
+        # YOLO label mapping → main class
         self.label_to_main_class = {}
         groups = self.settings.get("yolo_settings", {}).get("detection_groups", {})
         for main_cls, labels in groups.items():
@@ -127,27 +140,26 @@ class ClipBlipEngine:
             return {cls: float(sim[0, i]) for i, cls in enumerate(texts)}
 
     # ------------------------------------------------------------------
-    # Scoring per singolo frame 
+    # Scoring per single frame 
     # ------------------------------------------------------------------
 
     def _score_frame(self, frame, active_rules, is_night):
-        """
-        Calcola lo score finale per un frame e restituisce la label.
+        """Calculate final score for a frame and return the label.
 
-        Flusso:
-          1. CLIP score (crop pesato + frame intero)
-          2. BLIP boost (keyword nella caption)
-          3. Fake penalty (sottrai fake_score * peso)
-          4. Bbox small bonus (fix teste piccole)
-          5. Night boost (PERSON di notte)
-          6. Confronta con soglia → label
+        Process:
+          1. CLIP score (weighted crop + full frame)
+          2. BLIP boost (keywords in caption)
+          3. Fake penalty (subtract fake_score * weight)
+          4. Bbox small bonus (fix small heads)
+          5. Night boost (PERSON at night)
+          6. Compare with threshold → label
         """
         yolo_category = frame.get("category", "").upper()
         current_main_class = [yolo_category] if yolo_category in self.MAIN_CLASSES else self.MAIN_CLASSES
 
         frame_path = frame.get("frame_path")
         crop_path  = frame.get("crop_path")
-        bbox       = frame.get("bbox")  # [x1, y1, x2, y2] in pixel assoluti
+        bbox       = frame.get("bbox")  # [x1, y1, x2, y2] in absolute pixels
 
         # --- Immagini ---
       
@@ -167,7 +179,7 @@ class ClipBlipEngine:
         
        
         
-        # --- CLIP scores su crop e frame ---
+        # --- CLIP scores on crops and frames ---
         fake_prompts = [desc for descs in self.FAKE_KEYS.values() for desc in descs]
         all_prompts  = current_main_class + fake_prompts
         #t0 = time.time()
@@ -176,7 +188,7 @@ class ClipBlipEngine:
         clip_frame = self._get_clip_score(frame_img, all_prompts)
         
 
-        # Pesi crop/frame (sovrascrivibili per camera)
+        # Weights crop/frame (overridable per camera)
         w_crop  = active_rules["FINAL_WEIGHT_CROP"]
         w_frame = active_rules["FINAL_WEIGHT_FRAME"]
 
@@ -200,7 +212,7 @@ class ClipBlipEngine:
             has_keyword = any(k.lower() in caption.lower() for k in self.BLIP_KEYWORDS.get(cls, []))
             blip_bonus = blip_boost if has_keyword else 0.0
 
-            # 3. Fake penalty (più alta per classi non prioritarie)
+            # 3. Fake penalty (higher for non-priority classes)
             penalty_weight = active_rules["FAKE_PENALTY_WEIGHT"].get(cls, 0.7)
             fake_penalty = max_fake_score * penalty_weight
 
@@ -230,9 +242,9 @@ class ClipBlipEngine:
 
     def _get_bbox_small_bonus(self, bbox, frame_path, active_rules):
         """
-        Se il bbox della persona occupa meno di BBOX_SMALL_RATIO del frame,
-        aggiunge un bonus allo score PERSON.
-        Questo corregge i falsi negativi dove si vede solo la testa in un angolo.
+        If the person bbox occupies less than BBOX_SMALL_RATIO of the frame,
+        add a bonus to the PERSON score.
+        This corrects false negatives where only the head is visible in a corner.
         """
         try:
             with Image.open(frame_path) as img:
@@ -251,10 +263,10 @@ class ClipBlipEngine:
 
     def _decide_frame_label(self, final_scores, yolo_category, active_rules):
         """
-        Regola semplice:
-          - Scorre le classi in ordine di priorità (PERSON > VEHICLE > ANIMAL)
-          - La prima che supera la sua soglia vince
-          - PERSON ha soglia bassa → priorità massima
+        Frame label decision rule:
+          - Iterates through classes in priority order (PERSON > VEHICLE > ANIMAL)
+          - First one to exceed its threshold wins
+          - PERSON has low threshold → maximum priority
         """
         thresholds = active_rules["THRESHOLD"]
         priority   = ["PERSON", "ANIMAL", "VEHICLE"]
@@ -271,16 +283,16 @@ class ClipBlipEngine:
         return "OTHERS"
 
     # ------------------------------------------------------------------
-    # Scan singolo video
+    # Single video scan
     # ------------------------------------------------------------------
 
     def scan_single_video(self, video_data):
         frames = video_data.get("frames", [])
         if not frames:
-            log.debug(f"  (Nessun frame per video={video_data.get('video_path')})")
+            log.debug(f"  (No frames for video={video_data.get('video_path')})")
             return {}
 
-        # Fast-track NVR: se il NVR stesso ha già classificato come persona, fiducia piena
+        # Fast-track NVR: if NVR itself already classified as person, full confidence
         is_nvr = video_data.get("resolved_by") == "nvr_image"
         has_yolo_person = any(f.get("category") == "person" for f in frames)
         if is_nvr and has_yolo_person:
@@ -334,11 +346,11 @@ class ClipBlipEngine:
 
     def _decide_video_category(self, frames_list, active_rules):
         """
-        Priorità: PERSON > VEHICLE > ANIMAL
-        PERSON: basta UN frame con label PERSON
-        ANIMAL/VEHICLE: score medio > soglia dinamica (diminuisce con più frame)
+        Priority: PERSON > VEHICLE > ANIMAL
+        PERSON: at least one frame with label PERSON
+        ANIMAL/VEHICLE: average score > dynamic threshold (decreases with more frames)
         """
-        # 1. Persona: basta un frame
+        # 1. Person: just one frame is enough
         if any(f["label"] == "PERSON" for f in frames_list):
             return "PERSON"
 
@@ -359,7 +371,7 @@ class ClipBlipEngine:
         return "OTHERS"
 
     def _get_dynamic_threshold(self, count, category, rules):
-        """Soglia che scende all'aumentare dei frame: più evidenza → soglia più bassa."""
+        """Threshold that decreases as frames increase: more evidence → lower threshold."""
         prefix  = category.upper()
         start   = rules.get(f"{prefix}_START_THRESHOLD", 0.45)
         step    = rules.get(f"{prefix}_STEP_REDUCTION", 0.05)
@@ -371,9 +383,16 @@ class ClipBlipEngine:
     # ------------------------------------------------------------------
 
     def _get_active_rules(self, camera_id):
-        """
-        Ritorna le regole attive per la camera specificata.
-        Ogni valore nel JSON della camera sovrascrive il default globale.
+        """Get active BLIP-CLIP rules for the specified camera.
+        
+        Each value in the camera JSON overrides the global default.
+        Merges global clip_blip_settings with camera-specific blip_rules.
+        
+        Args:
+            camera_id: Camera identifier
+            
+        Returns:
+            Dictionary of rules to apply for this camera
         """
         custom = self.ch_configs.get(camera_id, {}).get("blip_rules", {})
 
@@ -404,6 +423,6 @@ class ClipBlipEngine:
             "VEHICLE_STEP_REDUCTION":  c("VEHICLE_STEP_REDUCTION",  self.VEHICLE_STEP_REDUCTION),
             "VEHICLE_MIN_THRESHOLD":   c("VEHICLE_MIN_THRESHOLD",   self.VEHICLE_MIN_THRESHOLD),
 
-            # Pesi fake per camera (sovrascrive completamente se presente)
+            # Fake weights for camera (completely overrides if present)
             "FAKE_WEIGHTS": c("FAKE_WEIGHTS", {}),
         }

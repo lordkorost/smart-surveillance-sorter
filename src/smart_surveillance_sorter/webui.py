@@ -26,6 +26,11 @@ SETTINGS_BACKUP  = Path(SETTINGS_JSON).parent / "settings_backup.json"
 # UTILITY
 # ==============================================================================
 def get_system_info():
+    """Collect and format system information for display (CPU, RAM, GPU, Ollama status).
+    
+    Returns:
+        Formatted string with system specifications
+    """
     import platform, psutil, torch
     cpu = platform.processor() or platform.machine()
     ram_used = psutil.virtual_memory().used / 1024**3
@@ -61,23 +66,48 @@ def get_system_info():
     return "\n\n".join(lines)
 
 def disable_btns():
+    """Disable UI buttons for process control.
+    
+    Returns:
+        List of Gradio update objects setting buttons to non-interactive
+    """
     return [gr.update(interactive=False)] * 3
 
 def enable_btns():
+    """Enable UI buttons for process control.
+    
+    Returns:
+        List of Gradio update objects setting buttons to interactive
+    """
     return [gr.update(interactive=True)] * 3
 
 def get_available_models():
+    """Get list of available YOLO model files.
+    
+    Returns:
+        List of model filenames found in MODELS_DIR
+    """
     if MODELS_DIR.exists():
         models = [f.name for f in MODELS_DIR.glob("*.pt")]
         return models if models else ["yolov8l.pt"]
     return ["yolov8l.pt"]
 
 def shutdown_server():
+    """Gracefully shutdown the WebUI server.
+    
+    Returns:
+        Message indicating server shutdown
+    """
     print("🛑 WebUI shutdown...")
     os.kill(os.getpid(), signal.SIGINT)
     return "Server stop. You can close this tab."
 
 def load_configs():
+    """Load configuration files (settings, cameras, prompts) as formatted JSON strings.
+    
+    Returns:
+        Tuple of (settings_json, cameras_json, prompts_json) as formatted strings
+    """
     def _load(path):
         try:
             if path.exists():
@@ -89,10 +119,19 @@ def load_configs():
     return _load(SETTINGS_JSON), _load(CAMERAS_JSON), _load(PROMPTS_JSON)
 
 def save_config_ui(content, file_path):
+    """Save configuration from UI editor to file.
+    
+    Args:
+        content: JSON content as string
+        file_path: Path to save configuration to
+        
+    Returns:
+        Status message indicating success or failure
+    """
     try:
         data = json.loads(content)
         if save_json(data, file_path):
-            return f"✅ Salvato: {file_path.name} ({time.strftime('%H:%M:%S')})"
+            return f"✅ Saved: {file_path.name} ({time.strftime('%H:%M:%S')})"
         return f"❌ Save error {file_path.name}"
     except Exception as e:
         return f"❌ Error JSON: {str(e)}"
@@ -113,12 +152,17 @@ def backup_settings():
 
 
 def restore_settings_backup():
+    """Restore settings from pre-test backup.
+    
+    Returns:
+        Tuple with status message and updated UI values
+    """
     try:
         if not SETTINGS_BACKUP.exists():
             return "⚠️ No backup found.", *([gr.update()] * 4)
         import shutil
         shutil.copy2(SETTINGS_BACKUP, SETTINGS_JSON)
-        # Rileggi i valori ripristinati
+        # Re-read restored values
         s = load_json(SETTINGS_JSON)
         dss = s["yolo_settings"]["dynamic_stride_settings"]
         return (
@@ -132,6 +176,11 @@ def restore_settings_backup():
         return f"❌ Error: {str(e)}", *([gr.update()] * 4)
     
 def restore_settings_default():
+    """Restore settings to default values.
+    
+    Returns:
+        Status message indicating success or failure
+    """
     try:
         if not SETTINGS_DEFAULT.exists():
             return "⚠️ settings_default.json file not found in config folder."
@@ -146,6 +195,16 @@ def restore_settings_default():
 # ==============================================================================
 
 def ui_validate_ollama(ip, port, model_name):
+    """Validate Ollama server connectivity and model availability.
+    
+    Args:
+        ip: Ollama server IP address
+        port: Ollama server port
+        model_name: Name of the model to check
+        
+    Returns:
+        Status message indicating validation result
+    """
     mock_settings = {"model_name": model_name, "ollama_conf": {"ip": ip, "port": port}}
     if validate_ollama_setup(mock_settings):
         return "✅ Ollama responds correctly."
@@ -168,6 +227,25 @@ def ui_validate_ollama(ip, port, model_name):
 #     except Exception as e:
 #         return f"❌ Prompt construction error: {str(e)}"
 def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean, mode, is_fallback, cam_id):
+    """Generate a preview of the prompt that will be sent to the vision model.
+    
+    Args:
+        sys_inst: System instruction text
+        rules: Mandatory rules text
+        d_p: Person class description
+        d_a: Animal class description
+        d_v: Vehicle class description
+        d_clean: Clean check description
+        m_c: Analyst mission for crops
+        m_f: Fallback header
+        m_clean: Clean header
+        mode: Detection mode
+        is_fallback: Whether using fallback mode
+        cam_id: Camera ID to use for test context
+        
+    Returns:
+        Generated prompt text or error message
+    """
     cameras = load_json(CAMERAS_JSON)
     cam_cfg = cameras.get(cam_id, {}) if cam_id else {"desc": "Test Zone: Main entrance.", "filters": {"ignore_labels": []}}
     
@@ -184,6 +262,22 @@ def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_cl
     except Exception as e:
         return f"❌ Prompt construction error: {str(e)}"
 def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
+    """Save vision model prompts and instructions to configuration file.
+    
+    Args:
+        sys_inst: System instruction text
+        rules: Mandatory rules text
+        d_p: Person class description
+        d_a: Animal class description
+        d_v: Vehicle class description
+        d_clean: Clean check description
+        m_c: Analyst mission for crops
+        m_f: Fallback header
+        m_clean: Clean header
+        
+    Returns:
+        Status message indicating success or failure
+    """
     try:
         data = load_json(PROMPTS_JSON)
         data["shared_components"]["system_instruction"]   = sys_inst
@@ -202,6 +296,14 @@ def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
 
 
 def load_camera_details(cam_id):
+    """Load camera configuration details for display in UI.
+    
+    Args:
+        cam_id: Camera ID to load
+        
+    Returns:
+        List of camera configuration values
+    """
     empty = ["", "", "", "", "", False, "", 0.49, 0.55, 0.30, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
     if not cam_id:
         return empty
@@ -237,14 +339,35 @@ def load_camera_details(cam_id):
     ]
 
 
-# 2) save_single_camera — riga 185
-# Costruisce FAKE_WEIGHTS solo con i valori >= 0 (omette le chiavi a -1)
+# Build FAKE_WEIGHTS with only values >= 0 (omit keys set to -1)
 
 def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ignore,
                        th_p, th_v, th_a, nth_p, nth_v, nth_a,
                        fw_ground, fw_garden, fw_shoe, fw_wood,
                        thr_person, thr_vehicle, thr_animal,
                        fpw_person, fpw_animal, fpw_vehicle):
+    """Save individual camera configuration.
+    
+    Builds FAKE_WEIGHTS with only values >= 0 (omits keys set to -1).
+    
+    Args:
+        cam_id: Camera ID
+        name: Camera name
+        loc: Camera location
+        patterns: Comma-separated search patterns
+        priority: Priority category
+        desc: Camera description
+        dynamic: Whether to use dynamic stride
+        ignore: Comma-separated ignore labels
+        th_p/th_v/th_a: Day thresholds for person/vehicle/animal
+        nth_p/nth_v/nth_a: Night thresholds
+        fw_ground/fw_garden/fw_shoe/fw_wood: Fake weight values
+        thr_person/thr_vehicle/thr_animal: BLIP threshold overrides
+        fpw_person/fpw_animal/fpw_vehicle: Fake penalty weight overrides
+        
+    Returns:
+        Status message
+    """
     cameras = load_json(CAMERAS_JSON)
 
     thresholds_night = {}
@@ -262,7 +385,7 @@ def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ign
     if float(fpw_animal)  >= 0: penalty_override["ANIMAL"]  = float(fpw_animal)
     if float(fpw_vehicle) >= 0: penalty_override["VEHICLE"] = float(fpw_vehicle)
 
-    # FAKE_WEIGHTS: salva solo i valori >= 0, omette le chiavi a -1
+    # FAKE_WEIGHTS: save only values >= 0, omit keys set to -1
     fake_weights = {}
     if float(fw_ground) >= 0: fake_weights["GROUND"] = float(fw_ground)
     if float(fw_garden) >= 0: fake_weights["GARDEN"] = float(fw_garden)
@@ -289,15 +412,19 @@ def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ign
     return f"✅ Cam {cam_id} ({name}) saved!"
 
 
-# 3) add_new_camera — riga 221
-# Nuova camera senza FAKE_WEIGHTS (vuoto = usa global default)
+# Create new camera without FAKE_WEIGHTS (empty = use global default)
 
 def add_new_camera():
+    """Add a new camera with default settings.
+    
+    Returns:
+        Gradio update object with updated camera list
+    """
     cameras = load_json(CAMERAS_JSON)
     existing_ids = sorted([int(k) for k in cameras.keys()])
     next_id = f"{max(existing_ids) + 1:02d}" if existing_ids else "00"
     cameras[next_id] = {
-        "name": "Nuova Cam", "search_patterns": [f"_{next_id}_"],
+        "name": "New Camera", "search_patterns": [f"_{next_id}_"],
         "thresholds": {"person": 0.49, "vehicle": 0.55, "animal": 0.30},
         "blip_rules": {"FAKE_WEIGHTS": {}}
     }
@@ -306,6 +433,14 @@ def add_new_camera():
 
 
 def delete_camera(cam_id):
+    """Delete a camera configuration.
+    
+    Args:
+        cam_id: Camera ID to delete
+        
+    Returns:
+        Tuple of (updated dropdown, status message)
+    """
     if not cam_id:
         return gr.update(), "⚠️ Select a camera."
     cameras = load_json(CAMERAS_JSON)
@@ -324,6 +459,14 @@ def delete_camera(cam_id):
 # ==============================================================================
 
 def update_engines_availability(engine):
+    """Update UI element availability based on selected inference engine.
+    
+    Args:
+        engine: Name of the engine ("vision" enables vision settings, others limit options)
+        
+    Returns:
+        Tuple of Gradio update objects for UI elements
+    """
     if engine == "vision":
         return gr.update(interactive=True), gr.update(interactive=True)
     else:
@@ -334,6 +477,17 @@ def update_engines_availability(engine):
 # ==============================================================================
 
 def save_comprehensive_settings(*args):
+    """Save all application settings to configuration files.
+    
+    Processes and saves YOLO, vision, scoring, CLIP-BLIP, and storage settings
+    to their respective JSON configuration files.
+    
+    Args:
+        *args: Variable number of configuration values from UI
+        
+    Returns:
+        Status message indicating success or failure
+    """
     try:
         (city, priority, save_others, fn_temp, ts_format, struct,
          y_mod, y_dev, y_stride_sec, y_occ, y_gap,
@@ -393,11 +547,26 @@ def save_comprehensive_settings(*args):
 # ==============================================================================
 
 class QueueHandler(logging.Handler):
+    """Logging handler that queues log records to a thread-safe queue.
+    
+    Used to stream logs from worker processes to the WebUI.
+    """
     def __init__(self, log_queue):
+        """Initialize handler with a log queue.
+        
+        Args:
+            log_queue: Queue to put log records into
+        """
         super().__init__()
         self.log_queue = log_queue
 
     def emit(self, record):
+        """Emit a log record by adding it to the queue.
+        
+        Args:
+            record: LogRecord to emit
+        """
+        self.log_queue.put(record)
         try:
             self.log_queue.put_nowait(self.format(record))
         except Exception:
@@ -407,7 +576,7 @@ def _run_scanner(input_path, output_path, mode, model_name,
                  use_refine, engine, use_fallback, is_clean_check,
                  no_sort, test_mode, device):
     """Start Scanner in thread and return (thread, result_holder, log_queue, q_handler)."""
-    # Aggiorna model e device nel settings.json
+    # Update model and device in settings.json
     try:
         with open(SETTINGS_JSON, "r", encoding="utf-8") as f:
             settings_dict = json.load(f)
@@ -597,7 +766,7 @@ def run_realtime(input_path, output_path, mode, model_name, engine, device, inte
                 )
                 scanner.scan_folder(input_path, final_output)
             except RuntimeError as e:
-                log.critical(f"Errore: {e}")
+                log.critical(f"Error: {e}")
                 break
             except Exception as e:
                 log.error(f"Error cycle #{cycle}: {e}")
@@ -677,7 +846,7 @@ def run_compare(session_dir, gt_file, res_file):
             log=_ListLogger()
         )
     except Exception as e:
-        lines.append(f"❌ Errore: {str(e)}")
+        lines.append(f"❌ Error: {str(e)}")
     return "\n".join(lines)
 
 def run_check_clean(input_dir, output_dir):
@@ -758,7 +927,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                 with gr.Column(scale=1):
                     rt_input    = gr.Textbox(label="Input Directory", placeholder="/home/user/videos")
                     rt_output   = gr.Textbox(label="Output Directory (optional)")
-                    rt_mode     = gr.Radio(["full", "person", "person_animal"], label="Modalità", value="person")
+                    rt_mode     = gr.Radio(["full", "person", "person_animal"], label="Mode", value="person")
                     rt_interval = gr.Slider(10, 300, step=10, value=60, label="Interval between cycles (sec)")
 
                 with gr.Column(scale=1):
@@ -925,7 +1094,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             cb_blip_v = gr.Slider(0, 1, step=0.05, value=cb_set["BLIP_BOOST"]["VEHICLE"], label="VEHICLE")
                         gr.Markdown("**BBOX Small Bonus**")
                         with gr.Row():
-                            cb_bbox_ratio = gr.Slider(0, 0.2, step=0.005, value=cb_set.get("BBOX_SMALL_RATIO", 0.04),        label="Ratio Soglia")
+                            cb_bbox_ratio = gr.Slider(0, 0.2, step=0.005, value=cb_set.get("BBOX_SMALL_RATIO", 0.04),        label="Ratio Threshold")
                             cb_bbox_bonus = gr.Slider(0, 0.5, step=0.05,  value=cb_set.get("BBOX_SMALL_PERSON_BONUS", 0.15), label="Bonus PERSON")
 
                     with gr.Accordion("⚖️ Scoring System", open=False):
@@ -969,7 +1138,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                 # ── Cameras ───────────────────────────────────────────────────
                 with gr.Tab("📹 Cameras"):
                     with gr.Row():
-                        cam_selector = gr.Dropdown(choices=camera_ids, label="Telecamera",
+                        cam_selector = gr.Dropdown(choices=camera_ids, label="Camera",
                                                    value=camera_ids[0] if camera_ids else None, interactive=True)
                         add_cam_btn  = gr.Button("➕ Add", variant="secondary")
                     with gr.Group():

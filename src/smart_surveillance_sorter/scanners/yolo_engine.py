@@ -1,16 +1,16 @@
 """
-YoloEngine — Motore di inferenza YOLO per sorveglianza smart
-=============================================================
+YoloEngine — YOLO inference engine for smart surveillance
+============================================================
 
-Funzionalità principali:
-  - Lazy loading del modello (carica solo quando serve)
-  - scan_single_image: analisi immagini NVR ad alta confidenza (>=0.60)
-  - scan_video: analisi video con stride adattivo e early exit
-  - Soglie giorno/notte per telecamera (thresholds / thresholds_night)
-  - Stride basato su FPS reali del video (vid_stride_sec in settings)
-  - Warmup iniziale a stride ridotto (primi warmup_sec secondi)
-  - Dynamic stride per telecamere con molto silenzio (es. parcheggio)
-  - low_conf_image_scan: scan a bassa confidenza per fallback
+Main features:
+  - Lazy loading of model (loads only when needed)
+  - scan_single_image: analyze NVR images with high confidence (>=0.60)
+  - scan_video: analyze videos with adaptive stride and early exit
+  - Day/night thresholds per camera (thresholds / thresholds_night)
+  - Stride based on actual video FPS (vid_stride_sec in settings)
+  - Initial warmup at reduced stride (first warmup_sec seconds)
+  - Dynamic stride for quiet cameras (e.g. parking lot)
+  - low_conf_image_scan: low confidence scan for fallback
 """
 
 import logging
@@ -32,22 +32,28 @@ log = logging.getLogger(__name__)
 
 
 class YoloEngine:
-    """
-    Motore YOLO con lazy loading, stride adattivo e soglie giorno/notte.
-    """
+    """YOLO detection engine with lazy loading, adaptive stride, and day/night thresholds."""
 
     def __init__(self, mode, device, settings, cameras_config):
+        """Initialize YOLO engine.
+        
+        Args:
+            mode: Detection mode (full, person, person_animal)
+            device: Computing device (cuda or cpu)
+            settings: Application settings dictionary
+            cameras_config: Camera configuration dictionary
+        """
         self.mode           = mode
         self.device         = device
         self.settings       = settings
         self.cameras_config = cameras_config
 
-        # Lazy loading — il modello viene caricato solo alla prima chiamata
+        # Lazy loading — model is loaded only on first call
         self.model      = None
         self.name_to_id = None
         self.yolo_cfg   = self.settings.get("yolo_settings", {})
 
-        # Coordinate per calcolo astronomico notte (usate per soglie giorno/notte)
+        # Coordinates for astronomical night calculation (used for day/night thresholds)
         city = self.settings.get("city", "Roma")
         self.lat, self.lon = get_smart_coordinates(city)
 
@@ -56,7 +62,10 @@ class YoloEngine:
     # ------------------------------------------------------------------
 
     def ensure_model_loaded(self):
-        """Carica il modello in VRAM solo se non è già presente."""
+        """Load model to GPU/CPU only if not already present (lazy loading).
+        
+        Loads the YOLO model into VRAM only on first call to optimize memory usage.
+        """
         if self.model is None:
             self.model = load_smart_yolo(
                 model_name=self.yolo_cfg.get("model_path", "yolov8l"),
@@ -65,13 +74,21 @@ class YoloEngine:
             self.name_to_id = {v: k for k, v in self.model.names.items()}
 
     # ------------------------------------------------------------------
-    # Helper: soglie giorno/notte per telecamera
+    # Helper: day/night thresholds per camera
     # ------------------------------------------------------------------
 
     def _get_thresholds(self, cam_cfg: dict, timestamp: datetime) -> dict:
-        """
-        Restituisce le soglie corrette in base all'orario.
-        Se la telecamera non ha 'thresholds_night', usa le soglie di giorno.
+        """Get correct thresholds based on current time (day vs night).
+        
+        If camera doesn't have 'thresholds_night', uses day thresholds instead.
+        Determines day/night based on astronomical sunset/sunrise.
+        
+        Args:
+            cam_cfg: Camera configuration dict
+            timestamp: Frame timestamp with timezone info
+            
+        Returns:
+            Threshold dictionary (day or night version)
         """
         thresholds_day   = cam_cfg.get("thresholds", {})
         thresholds_night = cam_cfg.get("thresholds_night", thresholds_day)
@@ -79,15 +96,24 @@ class YoloEngine:
         return thresholds_night if is_night else thresholds_day
 
     # ------------------------------------------------------------------
-    # Scan immagine NVR (alta confidenza)
+    # Scan NVR image (high confidence)
     # ------------------------------------------------------------------
 
     def scan_single_image(self, image_path: Path, video_path: Path,
                           frames_dir: Path, cam_id: str) -> Optional[dict]:
-        """
-        Analizza una singola immagine NVR con soglia alta (>=0.60).
-        Usato per il fast-track: se l'immagine NVR è già sufficiente,
-        il video viene classificato senza aprirlo.
+        """Analyze a single NVR image with high confidence threshold (>=0.60).
+        
+        Used for fast-track: if NVR image is already sufficient,
+        the video is classified without opening it.
+        
+        Args:
+            image_path: Path to NVR image
+            video_path: Associated video file path
+            frames_dir: Directory for saving extracted frames
+            cam_id: Camera identifier
+            
+        Returns:
+            Detection result dict or None if no promising detections
         """
         MIN_CONFIDENCE = 0.60
         MIN_AREA_RATIO = 0.002
@@ -122,7 +148,7 @@ class YoloEngine:
         if not best_det:
             return None
 
-        # Salva crop
+        # Save crop
         frames_dir.mkdir(parents=True, exist_ok=True)
         crop_path = frames_dir / f"{image_path.stem}_crop{image_path.suffix}"
         try:
@@ -160,13 +186,13 @@ class YoloEngine:
 
     def scan_video(self, video_path: Path, frames_dir: Path, cam_id: str) -> Optional[dict]:
         """
-        Analizza un video con stride adattivo e early exit.
+        Analyze video with adaptive stride and early exit.
 
-        Novità rispetto alla versione precedente:
-          - Soglie giorno/notte per telecamera (thresholds / thresholds_night)
-          - Stride calcolato in secondi reali (vid_stride_sec)
-          - Warmup iniziale a stride ridotto (primi warmup_sec secondi)
-          - Dynamic stride invariato (opzionale per telecamera)
+        Changes from previous version:
+          - Day/night thresholds per camera (thresholds / thresholds_night)
+          - Stride calculated in real seconds (vid_stride_sec)
+          - Initial warmup with reduced stride (first warmup_sec seconds)
+          - Dynamic stride unchanged (optional per camera)
         """
         # ------------------------------------------------------------------
         # 1. Configurazione e Target IDs
@@ -183,7 +209,7 @@ class YoloEngine:
             camera_ignore_labels=ignore_labels,
         )
         if not final_target_ids:
-            log.warning(f"Nessuna classe target per cam={cam_id}")
+            log.warning(f"No target class for camera={cam_id}")
             return None
 
         # ------------------------------------------------------------------
@@ -195,11 +221,11 @@ class YoloEngine:
 
         fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
 
-        # Soglie giorno/notte basate sul mtime del video
+        # Day/night thresholds based on video mtime
         video_ts   = datetime.fromtimestamp(video_path.stat().st_mtime)
         thresholds = self._get_thresholds(cam_cfg, video_ts)
 
-        # Stride in secondi reali → frame
+        # Stride in real seconds → frame
         stride_sec = self.yolo_cfg.get("vid_stride_sec", None)
         if stride_sec is not None:
             stride_std = max(1, round(fps * stride_sec))
@@ -231,7 +257,7 @@ class YoloEngine:
         prev_stride           = stride_std
 
         # ------------------------------------------------------------------
-        # 4. Loop di Analisi
+        # 4. Analysis Loop
         # ------------------------------------------------------------------
         while True:
             ret, frame = cap.read()
@@ -286,7 +312,7 @@ class YoloEngine:
                 log.debug(f"Early stop su video={video_path.name}")
                 break
 
-            # Calcolo stride per il prossimo salto
+            # Calculate stride for next jump
             current_stride = self._get_next_stride(
                 frame_idx, fps, found_valid_target, cam_cfg, stride_std
             )
@@ -304,7 +330,7 @@ class YoloEngine:
         cap.release()
 
         # ------------------------------------------------------------------
-        # 5. Estrazione Frame Finali
+        # 5. Final frame extraction
         # ------------------------------------------------------------------
         if not any(detections.values()):
             return {
@@ -347,31 +373,31 @@ class YoloEngine:
         }
 
     # ------------------------------------------------------------------
-    # Stride adattivo
+    # Adaptive stride
     # ------------------------------------------------------------------
 
     def _get_next_stride(self, frame_idx: int, fps: float,
                          found_valid_target: bool, cam_config: dict,
                          stride_std: int) -> int:
         """
-        Calcola lo stride per il prossimo salto di frame.
+        Calculate stride for next frame jump.
 
-        Logica in ordine di priorità:
-          1. Warmup: primi warmup_sec secondi → stride ridotto (alta sensibilità)
-          2. Telecamera senza dynamic_stride → stride standard
-          3. Detection attiva → stride standard
-          4. Pre-roll (zona protetta dopo warmup) → stride standard
-          5. Cooldown dopo ultima detection → stride standard
-          6. Velocità crociera → stride_fast
+        Priority logic:
+          1. Warmup: first warmup_sec seconds → reduced stride (high sensitivity)
+          2. Camera without dynamic_stride → standard stride
+          3. Detection active → standard stride
+          4. Pre-roll (protected zone after warmup) → standard stride
+          5. Cooldown after last detection → standard stride
+          6. Cruising speed → stride_fast
         """
         dyn_settings = self.yolo_cfg.get("dynamic_stride_settings", {})
 
-        # 1. Warmup iniziale: sempre attivo, indipendentemente dal dynamic_stride
+        # 1. Initial warmup: always active, regardless of dynamic_stride
         warmup_sec = dyn_settings.get("warmup_sec", 5)
         if frame_idx < int(warmup_sec * fps):
-            return max(1, round(fps * 0.25))  # ~4 frame/sec nei primi N secondi
+            return max(1, round(fps * 0.25))  # ~4 frame/sec in first N seconds
 
-        # 2. Senza dynamic_stride: stride standard per tutta la durata
+        # 2. Without dynamic_stride: standard stride for entire duration
         if not cam_config.get("dynamic_stride", False):
             return stride_std
 
@@ -389,21 +415,21 @@ class YoloEngine:
         if frame_idx < int(pre_roll_sec * fps):
             return stride_std
 
-        # 6. Cooldown dopo l'ultima detection
+        # 6. Cooldown after last detection
         if (frame_idx - self.last_detection_idx) < int(cooldown_sec * fps):
             return stride_std
 
-        # 7. Velocità crociera: niente trovato da un po'
+        # 7. Cruising speed: nothing found for a while
         return stride_fast
 
     # ------------------------------------------------------------------
-    # Scan fallback (bassa confidenza su immagine NVR)
+    # Scan fallback (low confidence on NVR image)
     # ------------------------------------------------------------------
 
     def scan_fallback(self, image_path: Path, target_ids: list) -> Optional[dict]:
         """
-        Scan ad alta sensibilità su immagine NVR per il fallback.
-        Usato per recuperare eventi che YOLO ha mancato al primo passaggio.
+        High sensitivity scan on NVR image for fallback recovery.
+        Used to recover events that YOLO missed in the first pass.
         """
         res = self.model(
             str(image_path), classes=target_ids,
@@ -422,14 +448,14 @@ class YoloEngine:
         }
 
     # ------------------------------------------------------------------
-    # Scan a bassissima confidenza (per run_fallback_phase)
+    # Very low confidence scan (for fallback phase)
     # ------------------------------------------------------------------
 
     def low_conf_image_scan(self, image_path: Path, video_path: Path,
                             cam_id: str) -> Optional[dict]:
         """
-        Scan a confidenza molto bassa (0.05) su immagine NVR.
-        Usato nella fase di fallback avanzato per recuperare eventi borderline.
+        Very low confidence scan (0.05) on NVR image.
+        Used in advanced fallback phase to recover borderline events.
         """
         cam_cfg       = self.cameras_config.get(str(cam_id), {})
         ignore_labels = cam_cfg.get("filters", {}).get("ignore_labels", [])

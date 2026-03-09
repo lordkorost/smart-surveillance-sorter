@@ -13,6 +13,11 @@ from smart_surveillance_sorter.utils import check_dir, cleanup, save_json
 import argparse
 
 def parse_args():
+    """Parse command-line arguments for the surveillance sorter.
+    
+    Returns:
+        Namespace object with parsed arguments
+    """
     parser = argparse.ArgumentParser(description="AI Surveillance Video Sorter")
 
     # 1. Posizionale: Mode
@@ -52,7 +57,11 @@ def parse_args():
 
 
 def main():
-   
+    """Main entry point for the surveillance video sorter application.
+    
+    Orchestrates the complete workflow: argument parsing, validation, scanning,
+    and optional ground truth generation or result comparison.
+    """
     args = parse_args()
     input_dir = args.dir
 
@@ -93,7 +102,7 @@ def main():
             log.error(f"❌Error during generate Ground Truth: error={e}")
             sys.exit(1)
 
-    # --- MODALITÀ CONFRONTO ---
+    # --- COMPARISON MODE ---
     if args.compare:
         log.info(f"Compare mode")
         gt_path = args.gt if args.gt else Path(output_dir) / GROUND_TRUTH
@@ -113,11 +122,11 @@ def main():
             f"Test={args.is_test}"
         )
     
-    # --- LOGICA SCANNER ---
+    # --- SCANNER LOGIC ---
     # parametri per lo splat
     params = vars(args).copy()
 
-    # Pulizia: via tutto ciò che NON è nell'__init__ dello Scanner
+    # Cleanup: remove everything NOT in Scanner.__init__
     to_remove = ['dir', 'output_dir', 'ground', 'compare', 'gt', 'res']
     for key in to_remove:
         params.pop(key, None)

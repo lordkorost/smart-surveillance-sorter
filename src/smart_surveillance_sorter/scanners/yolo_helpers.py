@@ -46,8 +46,8 @@ def extract_frames_with_cache(
     saved_frames = []
     frame_cache = {}
     frames_dir = Path(frames_dir)
-    # 1. Creiamo una lista piatta di tutti i frame unici che dobbiamo estrarre
-    # Ordiniamo per categoria e confidenza 
+    # 1. Create flat list of all unique frames to extract
+    # Sort by category and confidence 
     target_detections = []
     for cat, items in detections.items():
         items.sort(key=lambda x: x["confidence"], reverse=True)
@@ -57,13 +57,13 @@ def extract_frames_with_cache(
             det["category"] = cat
             target_detections.append(det)
 
-    # 2. Estrazione
+    # 2. Extraction
     for det in target_detections:
         frame_idx = det["frame_idx"]
         cat = det["category"]
         rank = det["cat_rank"]
 
-        # Recupero frame 
+        # Retrieve frame 
         if frame_idx not in frame_cache:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
@@ -73,29 +73,29 @@ def extract_frames_with_cache(
         else:
             frame = frame_cache[frame_idx]
 
-        # -------- Calcolo Timestamp --------
-        # Usiamo mtime del file + offset del frame
+        # -------- Calculate Timestamp --------
+        # Use file mtime + frame offset
         video_start_ts = video_path.stat().st_mtime
         ts_sec = frame_idx / fps
         ts_iso = datetime.fromtimestamp(video_start_ts + ts_sec).isoformat()
 
-        # -------- Salvataggio Frame Intero (PULITO per Vision AI) --------
+        # -------- Save Full Frame (CLEAN for Vision AI) --------
         out_name = f"{video_path.stem}_{cat}_{rank}.jpg"
         out_path = frames_dir / out_name
         cv2.imwrite(str(out_path), frame)
         
 
-        # -------- Salva Crop (Dettaglio per controllo) --------
+        # -------- Save Crop (Detail for review) --------
         c_x1, c_y1, c_x2, c_y2 = get_crop_coordinates(det["bbox"], frame.shape)
         cropped_frame = frame[c_y1:c_y2, c_x1:c_x2]
         
         out_name_crop = f"{video_path.stem}_{cat}_{rank}_crop.jpg"
         out_path_crop = frames_dir / out_name_crop
-        if cropped_frame.size > 0: # Evitiamo crash su crop vuoti
+        if cropped_frame.size > 0: # Avoid crash on empty crops
             cv2.imwrite(str(out_path_crop), cropped_frame)
         
 
-            # -------- Record Unico per Frame + Crop --------
+            # -------- Single Record for Frame + Crop --------
             saved_frames.append({
                 "category": cat,
                 "yolo_label": det.get("yolo_label", ""),

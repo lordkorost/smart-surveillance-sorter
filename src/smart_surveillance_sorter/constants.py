@@ -2,13 +2,13 @@ import os
 import sys
 from pathlib import Path
 
-# Radice assoluta del progetto
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 sys.path.append(str(PROJECT_ROOT / "src"))
 
-# Costanti per le cartelle
+# Costants folder
 CONFIG_DIR = PROJECT_ROOT / "config"
 MODELS_DIR = PROJECT_ROOT / "models"
 LOGS_DIR   = PROJECT_ROOT / "logs"

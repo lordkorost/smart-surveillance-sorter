@@ -7,10 +7,27 @@ from smart_surveillance_sorter.constants import FINAL_REPORT, GROUND_TRUTH
 from smart_surveillance_sorter.utils import load_json
 
 def compare_results(session_dir=None, gt_file=None, res_file=None, copy_wrong=None, log=None):
+    """
+    Compares Ground Truth (GT) results with AI predictions.
+    
+    Calculates per-category metrics such as True Positives, False Positives, 
+    and recall (excluding 'OTHERS'), printing a summary table and discrepancy details [1].
+    Computes global accuracy and average recall across real categories [1].
+    
+    Args:
+        session_dir (str): Input directory containing the data.
+        gt_file (str): Path to the ground_truth.json file [1].
+        res_file (str): Path to the classification_results.json file [1].
+        copy_wrong (any): Optional parameter potentially related to copying or wrong results.
+        log (logging.Logger): Optional logging handle for output messages [1].
+
+    Returns:
+        None: Prints global accuracy and average recall directly to the console [1].
+    """
     def _print(msg): log.info(msg) if log else print(msg)
     def _err(msg): log.error(msg) if log else print(f"❌ {msg}")
 
-    # --- LOGICA DI RISOLUZIONE PERCORSI ---
+    # --- Resolve path ---
     path_gt = None
     path_res = None
 
@@ -29,7 +46,7 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, copy_wrong=No
         _err("Use valid --dir or  path to files with --gt e --res")
         return
 
-    _print(f"📊 Compare...\n📖 GT: {path_gt}\n🤖 AI: {path_res}")
+    _print(f"Compare...\n GT: {path_gt}\n AI: {path_res}")
 
     gt_list = load_json(path_gt)
     res_data = load_json(path_res)
@@ -45,7 +62,7 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, copy_wrong=No
     else:
         res_map = {os.path.basename(path): data["video_category"].upper() for path, data in res_data.items()}
 
-    # --- CALCOLO STATISTICHE ---
+    # --- stats ---
     categories = ["PERSON", "VEHICLE", "ANIMAL", "OTHERS"]
     stats = {cat: {"FP": 0, "FN": 0, "TP": 0} for cat in categories}
     all_videos = set(gt_map.keys()).union(set(res_map.keys()))
@@ -71,7 +88,7 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, copy_wrong=No
             stats[predicted]["FP"] += 1
             discrepancies.append((video, actual, predicted))
 
-    # --- OUTPUT TABELLA ---
+    # --- tab output ---
     header = f"{'CATEGORY':<12} | {'TP':<5} | {'FP':<5} | {'FN':<5} | {'PRECISION':<10} | {'RECALL':<10}"
     _print(header)
     _print("-" * 70)
@@ -101,38 +118,38 @@ def compare_results(session_dir=None, gt_file=None, res_file=None, copy_wrong=No
         for video, actual, predicted in sorted(discrepancies):
             _print(f"Video={video:<40} | GT={actual:<10} | PREDICT={predicted:<10}")
 
-    # --- COPIA VIDEO SBAGLIATI ---
+    # --- copy wrong---
     if copy_wrong and discrepancies:
         source_dir = path_gt.parent
         
-        # Sottocartelle per tipo di errore: GT_ANIMAL/PRED_OTHERS etc.
+        # Subfolder for error type: GT_ANIMAL/PRED_OTHERS etc.
         wrong_root = Path(copy_wrong)
         copied = 0
         not_found = 0
 
-        _print(f"\n📂 Copio {len(discrepancies)} video sbagliati in {wrong_root}...")
+        _print(f"\nCopy {len(discrepancies)} wrong videos in {wrong_root}...")
 
         for video_name, actual, predicted in discrepancies:
-            # Sottocartella GT_X__PRED_Y per organizzare per tipo di errore
+            # Subfolder GT_X__PRED_Y organize for error type
             sub_dir = wrong_root / f"GT_{actual}__PRED_{predicted}"
             sub_dir.mkdir(parents=True, exist_ok=True)
 
             candidates = list(source_dir.rglob(video_name))
             if candidates:
                 src = candidates[0]
-                dst = sub_dir / video_name  # filename originale intatto
+                dst = sub_dir / video_name  
                 try:
                     shutil.copy2(src, dst)
                     copied += 1
                 except Exception as e:
-                    _print(f"  ⚠️ Error copy {video_name}: {e}")
+                    _print(f"  Error copy {video_name}: {e}")
             else:
-                _print(f"  ⚠️ Video not found: {video_name}")
+                _print(f"  Video not found: {video_name}")
                 not_found += 1
 
-        _print(f"  ✅ Copied {copied}/{len(discrepancies)} video")
+        _print(f"  Copied {copied}/{len(discrepancies)} video")
         if not_found:
-            _print(f"  ⚠️ Not found: {not_found}")
+            _print(f"  Not found: {not_found}")
 
 
 if __name__ == "__main__":
