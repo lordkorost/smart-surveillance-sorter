@@ -766,20 +766,11 @@ def run_realtime(input_path, output_path, mode, model_name, engine, device, inte
 
     _rt_thread = threading.Thread(target=_loop, daemon=True)
     _rt_thread.start()
-
-    log_lines = []
-    time.sleep(0.5)  # wait for thread to start
-    while _rt_thread.is_alive() or not log_queue.empty():
-        try:
-            line = log_queue.get(timeout=0.1)
-            log_lines.append(line)
-        except queue.Empty:
-            pass
-        yield "\n".join(log_lines[-80:])
-        time.sleep(0.1)
-
+  
+    yield "🚀 Real-time sorter started. Check the terminal for live logs."
+    _rt_thread.join()
     logging.getLogger().removeHandler(q_handler)
-    yield "\n".join(log_lines) + "\n\n🛑 Real-time stopped."
+    yield "🛑 Real-time stopped."
 
 
 def stop_realtime():
