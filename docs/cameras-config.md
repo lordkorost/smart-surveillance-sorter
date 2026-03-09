@@ -5,7 +5,7 @@
 **This file must be configured before the first run.**
 
 >[!TIP]
-> 💡 **Recommended**: Edit camera configuration directly from the **WebUI → Settings → Cameras** tab — it provides a visual editor with validation and live preview.  
+> **Recommended**: Edit camera configuration directly from the **WebUI → Settings → Cameras** tab — it provides a visual editor with validation and live preview.  
 > Manual JSON editing is also supported for advanced users or automation.
 
 ![Camera Settings WebUI](./assets/webui-settings-cameras.png)
