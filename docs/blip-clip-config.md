@@ -22,7 +22,7 @@ Settings are stored in `config/clip_blip_settings.json`. Most values can be over
 | `blip_model` | `blip-image-captioning-large` | BLIP captioning model. `large` slightly improves animal precision over `base` with ~1 min overhead. |
 
 >[!TIP]
-> See [Model Comparison](benchmarks/model-comparison.md) for benchmark results across different model combinations.
+> See [Model Comparison](model-comparison.md) for benchmark results across different model combinations.
 
 ---
 
