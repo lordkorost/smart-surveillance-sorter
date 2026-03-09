@@ -3,7 +3,7 @@
 **Dataset:** Folder February 17th — 399 videos + 505 images  
 **Scene:** Rain, lightning, 6+ hours of continuous recording. Camera "Parking" with ~50% empty 3-minute videos.  
 **Hardware:** AMD Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) | Videos on Samba share 
-**Cameras** 8 Reolink 4K Outdoor
+**Cameras** 8 Reolink 4K outdoor
 **Models:** YOLOv8l, BLIP large, CLIP ViT-L-14, qwen3-vl:8b  
 **YOLO min conf:** Person 0.49, Vehicle 0.55, Animal 0.3 (same for all cameras, day and night)
 
