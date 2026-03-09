@@ -1,11 +1,12 @@
-# 🔬 Model Comparison & Vision Temperature
+# Model Comparison & Vision Temperature
 
 **Dataset:** Folder March 1st — 521 videos + 480 images, 8 cameras, mixed scenes  
 **Hardware:** AMD Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux)
+**Cameras:** Reolink 4k outdoor
 
 ---
 
-## 🎯 CLIP Model Comparison
+## CLIP Model Comparison
 
 | CLIP Model | BLIP Model | BLIP Time | Total Time | Global Acc | Animal Precision | Animal Recall |
 |------------|------------|-----------|------------|------------|-----------------|---------------|
@@ -49,7 +50,7 @@
 
 ---
 
-## 🌡️ Vision Fallback Temperature Comparison
+## Vision Fallback Temperature Comparison
 
 Tests run with `--refine --blip --fallback` on 22 ambiguous videos selected by the fallback logic.  
 Models: ViT-L-14 + BLIP large
@@ -102,7 +103,7 @@ With `num_predict` unlimited, the model used all available tokens without produc
 
 ---
 
-## 🔭 Vision Mode (qwen3-vl:8b, temperature 1.0)
+## Vision Mode (qwen3-vl:8b, temperature 1.0)
 
 | Metric | Value |
 |--------|-------|
@@ -118,13 +119,15 @@ With `num_predict` unlimited, the model used all available tokens without produc
 | ANIMAL | 22 | 1 | 4 | 95.7% | 84.6% |
 | OTHERS | 292 | 0 | 0 | 100.0% | 100.0% |
 
-*FN on PERSON: arm visible through a window from inside — not considered a meaningful false negative.
+>[!NOTE]
+>*FN on PERSON: arm visible through a window from inside — not considered a meaningful false negative.
 
-> ⚠️ Vision results are non-deterministic (temperature=1.0). FN on PERSON may be 0 or 1 depending on the reasoning path. In a second run: PERSON TP=188, FN=0.
+>[!NOTE]
+> Vision results are non-deterministic (temperature=1.0). FN on PERSON may be 0 or 1 depending on the reasoning path. In a second run: PERSON TP=188, FN=0.
 
 ---
 
-## 💡 Key Takeaways
+## Key Takeaways
 
 1. **ViT-L-14 + BLIP large** is the optimal model combination — best accuracy/speed tradeoff
 2. **ViT-H-14 is not recommended** — larger model, worse results for surveillance
