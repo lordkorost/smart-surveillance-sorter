@@ -1,6 +1,6 @@
-# ⏯️ Real-Time Mode & Resume
+# Real-Time Mode & Resume
 
-## 🧠 The Core Concept
+## The Core Concept
 
 Both real-time and resume share the same principle — **the system never re-processes what it has already seen**.
 
@@ -13,7 +13,7 @@ This means:
 
 ---
 
-## ⏩ Resume
+## Resume
 
 If a scan is interrupted (Ctrl+C, crash, power loss), simply re-run the same command:
 
@@ -30,11 +30,13 @@ The system will:
 
 If new videos are added to a folder that was already fully processed, just re-run the same command — only the new videos will be processed.
 
-### ⚠️ Important Rules for Resume
+### Important Rules for Resume
 
+>[!WARNING]
 > **Never change the engine between runs on the same folder.**  
 > Mixing `--blip` and `--vision` results on the same folder causes incorrect classifications. The system will warn you if it detects a mismatch — do not bypass this warning.
 
+>[!NOTE]
 > **Settings changes between runs are applied only to new videos.**  
 > If the first 100 videos were processed with `vid_stride_sec=0.6` and you change it to `1.0` before resuming, the remaining videos will use the new setting. Results will be inconsistent. Change settings only before starting a fresh run.
 
@@ -48,7 +50,7 @@ If new videos are added to a folder that was already fully processed, just re-ru
 
 ---
 
-## 🔄 Real-Time Mode
+## Real-Time Mode
 
 Real-time mode runs continuous scan cycles at a defined interval, processing only new videos each time.
 
@@ -83,7 +85,8 @@ The system uses a **safe detection mechanism** to avoid processing incomplete fi
 | `--refine` | required | Enable BLIP or Vision refinement |
 | `--blip` / `--vision` | blip | Refinement engine |
 
-> ⚠️ The following options are **not supported** in real-time mode:
+>[!NOTE]
+> The following options are **not supported** in real-time mode:
 > - `--test` — files must be moved, not copied
 > - `--no-sort` — same reason
 > - `--fallback` — not compatible with continuous processing
@@ -105,10 +108,11 @@ sss-rt --dir /mnt/nvr/2026-03-06 --mode full --refine --vision --interval 120
 - Stop anytime with Ctrl+C — resume is automatic next time
 - At midnight, start a new session on the new day's folder
 
-> ℹ️ You can switch between real-time and normal mode on the same folder. Running `sss-rt` after a normal `sss` run (or vice versa) works correctly — the resume mechanism is shared.
+>[!NOTE]
+> You can switch between real-time and normal mode on the same folder. Running `sss-rt` after a normal `sss` run (or vice versa) works correctly — the resume mechanism is shared.
 
 ---
-## 📦 Cumulative Archive Mode
+## Cumulative Archive Mode
 
 By keeping the same `--output-dir` across multiple runs with different input folders, 
 SSS builds a permanent categorized archive automatically:
@@ -128,7 +132,7 @@ from all processed days — ready to search without ever watching a single video
 
 ---
 
-## ⚠️ What to Avoid
+## What to Avoid
 
 | Action | Risk | Why |
 |--------|------|-----|
