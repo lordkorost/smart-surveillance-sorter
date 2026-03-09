@@ -2,7 +2,8 @@
 
 This guide is for users who prefer to set up the Python environment manually instead of using `install.sh` / `install.bat`.
 
-> ℹ️ The automated installers (`install.sh` / `install.bat`) are the recommended way to install Smart Surveillance Sorter. Use this guide only if you have a specific reason to install manually.
+>[!TIP]
+> The automated installers (`install.sh` / `install.bat`) are the recommended way to install Smart Surveillance Sorter. Use this guide only if you have a specific reason to install manually.
 
 ---
 
@@ -14,7 +15,7 @@ This guide is for users who prefer to set up the Python environment manually ins
 
 ---
 
-## 🐧 Linux
+## Linux
 
 ### AMD GPU (ROCm 6.4)
 
@@ -36,7 +37,8 @@ pip install -e .
 
 ### NVIDIA GPU (CUDA)
 
-> ⚠️ CUDA support has not been tested by the maintainers — no NVIDIA hardware was available for testing. The installation procedure follows standard PyTorch CUDA guidelines. Community feedback welcome.
+>[!WARNING]
+> CUDA support has not been tested by the maintainers — no NVIDIA hardware was available for testing. The installation procedure follows standard PyTorch CUDA guidelines. Community feedback welcome.
 
 ```bash
 # Create venv
@@ -74,7 +76,7 @@ pip install -e .
 
 ---
 
-## 🪟 Windows
+## Windows
 
 ### AMD GPU (ROCm 7.2)
 
@@ -105,11 +107,13 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-> ⚠️ The AMD ROCm repository URLs may change with new releases. Check [repo.radeon.com/rocm/windows](https://repo.radeon.com/rocm/windows/) for the latest wheel paths.
+>[!WARNING]
+> The AMD ROCm repository URLs may change with new releases. Check [repo.radeon.com/rocm/windows](https://repo.radeon.com/rocm/windows/) for the latest wheel paths.
 
 ### NVIDIA GPU (CUDA)
 
-> ⚠️ CUDA support has not been tested by the maintainers — no NVIDIA hardware was available for testing. Community feedback welcome.
+>[!WARNING]
+> CUDA support has not been tested by the maintainers — no NVIDIA hardware was available for testing. Community feedback welcome.
 
 ```bat
 :: Create venv
@@ -156,4 +160,5 @@ pip install -e .
 | NVIDIA CUDA 12.4 | 2.5.1+cu124 | Not tested ⚠️ |
 | CPU | latest stable | Tested ✅ |
 
+>[!WARNING]
 > ⚠️ `ultralytics==8.4.9` is pinned in `requirements.txt` — do not upgrade without testing, as newer versions may break compatibility.
