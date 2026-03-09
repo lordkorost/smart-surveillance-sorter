@@ -1,4 +1,4 @@
-# 🔍 Edge Cases & Camera Tuning
+# Edge Cases & Camera Tuning
 
 This page documents real-world edge cases encountered during testing, with step-by-step diagnosis and configuration fixes. These cases illustrate the tuning workflow described in the [Testing Guide](testing-guide.md).
 
