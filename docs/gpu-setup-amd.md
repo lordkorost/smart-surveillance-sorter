@@ -7,7 +7,7 @@ This guide covers AMD GPU driver installation for Smart Surveillance Sorter on L
 
 ---
 
-## 🐧 Linux
+## Linux
 
 ### Step 1 — Install ROCm drivers
 
@@ -99,7 +99,7 @@ sudo apt install rocminfo
 
 ---
 
-## 🪟 Windows
+## Windows
 >[!NOTE]
 > **PyTorch ROCm support on Windows is not officially maintained by the PyTorch team.** It is provided by AMD directly. See [AMD's announcement](https://rocm.docs.amd.com/en/latest/) for current status.
 
