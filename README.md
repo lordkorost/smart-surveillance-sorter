@@ -47,7 +47,7 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 
 **Web UI** – An intuitive Gradio-based interface to configure and launch the sorter in all modes.
 
-![WebUI](docs/assets/webui-run-scan.png)
+![WebUI](docs/assets/webui-scan.png)
 ---
 ## Quick Start
 
@@ -122,7 +122,7 @@ Dahua (es: 2026-02-28_06-34-26_cam1.mp4)
 "timestamp_format": "%Y-%m-%d_%H-%M-%S",
 "filename_template": "{timestamp}_{nvr_name}{camera_id}"
 ```
-* Cameras Setup: Define your cameras in config/cameras.json. You can use [**cameras setting guide**](docs/cameras_setting.md) as reference.
+* Cameras Setup: Define your cameras in config/cameras.json. You can use [**cameras setting guide**](docs/cameras-config.md) as reference.
 
 > [!CAUTION]
 > Always use **Test Mode** first! Before letting the sorter move your real NVR recordings, run it with the `--test` flag (or enable "Test Mode" in the Web UI). In this mode, the software will copy files instead of moving them, allowing you to verify detection and categorization for your specific camera setup. See the [Testing Guide](docs/testing-guide.md) for details.
@@ -167,7 +167,7 @@ Hardware: Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) / Vulkan (Windows)
 | YOLO+Vision | ~58 min | ~1h 21 min | — | — |
 
 >[!NOTE]
-> CPU times measured with standard PyTorch build (MKL). ROCm build on CPU is significantly slower — see [docs/benchmarks.md](docs/benchmarks.md).
+> CPU times measured with standard PyTorch build (MKL). ROCm build on CPU is significantly slower — see [docs/benchmarks.md](docs/benchmarks-index.md).
 
 ### Accuracy (YOLO + BLIP, default params)
 
