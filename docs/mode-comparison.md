@@ -1,4 +1,4 @@
-# 🎛️ Mode Comparison
+# Mode Comparison
 
 **Dataset:** Folder March 5th — 376 videos + 298 images, single camera (Parking/Camera 02)  
 **Scene:** Spider web on camera lens, 6+ hours of continuous recording, mostly empty 3-minute videos. 3 cars always parked → no OTHERS category.  
@@ -9,7 +9,7 @@
 
 ---
 
-## 📋 Tested Configurations
+## Tested Configurations
 
 | Config | Mode | ignore_labels | Notes |
 |--------|------|--------------|-------|
@@ -20,7 +20,7 @@
 
 ---
 
-## ⏱️ Performance
+## Performance
 
 | Config | YOLO img | YOLO vid | BLIP | Total |
 |--------|----------|----------|------|-------|
@@ -29,15 +29,17 @@
 | C — person_animal | 00:16 | 26:34 (4.52s/vid) ✅ | 01:12 | ~28 min |
 | D — full + ignore | 00:16 | 25:40 (4.36s/vid) ✅ | 01:10 | ~27 min |
 
-> ℹ️ **Why is `--mode full` significantly slower?**  
+>[!NOTE]
+> **Why is `--mode full` significantly slower?**  
 > Vehicle detections prevent dynamic stride from activating — YOLO stays at `stride=0.6s` instead of switching to `stride_fast=1.0s`. With vehicle labels ignored (Config D), dynamic stride activates normally, matching the speed of `--mode person`.
->
-> ℹ️ **Why is BLIP so much slower in Config A (14 min vs ~1 min)?**  
+
+>[!NOTE]
+> **Why is BLIP so much slower in Config A (14 min vs ~1 min)?**  
 > In `--mode full`, YOLO saves up to 3 frames per category × 3 categories = 9 frames + 9 crops per video in the worst case. With `--mode person`, only person frames are saved → ~1 frame per video on average.
 
 ---
 
-## 🎯 Accuracy
+## Accuracy
 
 ### Config A — `--mode full`, no ignore_labels
 
@@ -49,7 +51,8 @@
 | OTHERS | 0 | 0 | 0 | — | — |
 | **Global** | | | | **94.99%** | Avg: 86.5% |
 
-> ℹ️ No OTHERS category — 3 cars always present in frame means every video has at least one vehicle detection.
+>[!NOTE]
+> No OTHERS category — 3 cars always present in frame means every video has at least one vehicle detection.
 
 ---
 
@@ -62,6 +65,7 @@
 | ANIMAL | — | — | — | not searched | — |
 | **Person only** | | | | **98.1% precision** | **98.1% recall** |
 
+>[!NOTE]
 > *FN: person on tractor passing outside the gate at ~0:35, visible for <1s. Dynamic stride already active (pre_roll=20s elapsed). Not considered a real security false negative — subject is outside the monitored area. In a properly configured system this area would be masked on the NVR.
 
 ---
@@ -76,6 +80,7 @@
 | **Avg Precision** | | | | **98.2%** | |
 | **Avg Recall** | | | | | **80.3%** |
 
+>[!NOTE]
 > *Same FN as Config B — tractor person.
 
 ---
@@ -97,26 +102,28 @@
 | **Avg Precision** | | | | **99.05%** | |
 | **Avg Recall** | | | | | **80.3%** |
 
+>[!NOTE]
 > *Same FN as Config B — tractor person.
-> 💡 **Why ignore vehicles on a parking camera?**  
+> **Why ignore vehicles on a parking camera?**  
 > In a parking area, vehicles are part of the background — like a house or a tree. We're not interested in the vehicles themselves, but in whether someone enters the parking area. SSS does not detect movement and cannot tell if a car is new or has moved. However, any vehicle entering or leaving must be driven by a person — who will be seen getting in or out. Detecting that person is equivalent to detecting the vehicle event, without the false positives and processing overhead that static parked cars generate.
 
 
-> 💡 **Another example — barn or livestock camera:**  
-> A camera monitoring a stable always has livestock in frame — they are background, just like parked cars. The goal is to detect intruders or predators, not the animals that are always there.  
-> Using `ignore_labels` selectively allows ignoring *known* animals while keeping detection active for *unexpected* ones:
->
-> ```json
-> "filters": {
->     "ignore_labels": ["cow", "sheep", "horse"]
-> }
-> ```
->
-> Result: cows, sheeps and horses are ignored. A person entering the stable, a bear, or a stray dog will still be detected. Even a fox — which YOLO may classify as `dog` or `cat` — will still trigger an ANIMAL alert.  
-> Any real threat requires a physical presence that SSS will catch.
+**Another example — barn or livestock camera:**  
+A camera monitoring a stable always has livestock in frame — they are background, just like parked cars. The goal is to detect intruders or predators, not the animals that are always there.  
+Using `ignore_labels` selectively allows ignoring *known* animals while keeping detection active for *unexpected* ones:
+
+```json
+"filters": {
+     "ignore_labels": ["cow", "sheep", "horse"]
+ }
+```
+
+Result: cows, sheeps and horses are ignored. A person entering the stable, a bear, or a stray dog will still be detected. Even a fox — which YOLO may classify as `dog` or `cat` — will still trigger an ANIMAL alert.  
+Any real threat requires a physical presence that SSS will catch.
+
 ---
 
-## 📊 Summary
+## Summary
 
 | Config | Time | Person Recall | Animal Recall | Vehicle | Notes |
 |--------|------|---------------|---------------|---------|-------|
@@ -127,7 +134,7 @@
 
 ---
 
-## 💡 Key Takeaways
+## Key Takeaways
 
 1. **`--mode full` without configuration is the slowest** — vehicle detections prevent dynamic stride and force BLIP to process 9 frames/video instead of ~3
 2. **`--mode person` is fastest** — but misses animals entirely
@@ -136,4 +143,5 @@
 5. **BLIP time scales with frames saved** — `--mode full` = up to 9 frames/video, `--mode person` = ~1 frame/video. For large datasets this difference is significant (14 min vs 1 min on this test)
 6. **0 missed persons on Camera 02** in Config A (mode full) — the tractor FN in Config B/C/D is caused by dynamic stride activating, not by mode selection
 
-> 💡 **Recommended setup for a parking camera:** `--mode full` globally + `ignore_classes: ["VEHICLE"]` and `ignore_labels: [car, truck, ...]` in `cameras.json` for the parking camera. This gives you per-camera control without limiting other cameras that may need vehicle detection.
+>[!TIP]
+>  **Recommended setup for a parking camera:** `--mode full` globally + `ignore_classes: ["VEHICLE"]` and `ignore_labels: [car, truck, ...]` in `cameras.json` for the parking camera. This gives you per-camera control without limiting other cameras that may need vehicle detection.
