@@ -1,7 +1,7 @@
 # Model Comparison & Vision Temperature
 
 **Dataset:** Folder March 1st — 521 videos + 480 images, 8 cameras, mixed scenes  
-**Hardware:** AMD Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux)
+**Hardware:** AMD Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux)\
 **Cameras:** Reolink 4k outdoor
 
 ---
