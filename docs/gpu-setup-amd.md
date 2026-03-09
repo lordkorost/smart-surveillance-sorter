@@ -1,8 +1,9 @@
-# 🔴 AMD GPU Setup
+# AMD GPU Setup
 
 This guide covers AMD GPU driver installation for Smart Surveillance Sorter on Linux and Windows.
 
-> ⚠️ **AMD ROCm is officially supported only for specific AMD GPUs.** Check the [official AMD ROCm compatibility list](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html) before proceeding.
+>[!NOTE]
+> **AMD ROCm is officially supported only for specific AMD GPUs.** Check the [official AMD ROCm compatibility list](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html) before proceeding.
 
 ---
 
@@ -29,8 +30,8 @@ sudo apt install ./amdgpu-install_7.2.70200-1_all.deb
 sudo amdgpu-install -y --usecase=graphics,rocm
 sudo usermod -a -G render,video $LOGNAME
 ```
-
-> ℹ️ The only difference between Ubuntu 22.04 and 24.04 is the `wget` URL (`jammy` vs `noble`).
+>[!NOTE]
+> The only difference between Ubuntu 22.04 and 24.04 is the `wget` URL (`jammy` vs `noble`).
 
 **Reboot after installation:**
 ```bash
@@ -69,8 +70,8 @@ Backend : ROCm/HIP (AMD)
 GPU     : AMD Radeon RX ...
 VRAM    : ✅ OK
 ```
-
-> ℹ️ On Linux, AMD GPUs are exposed via the CUDA compatibility layer in PyTorch — `torch.cuda.is_available()` returns `True` for ROCm GPUs. This is expected behavior.
+>[!NOTE]
+> On Linux, AMD GPUs are exposed via the CUDA compatibility layer in PyTorch — `torch.cuda.is_available()` returns `True` for ROCm GPUs. This is expected behavior.
 
 ---
 
@@ -99,18 +100,19 @@ sudo apt install rocminfo
 ---
 
 ## 🪟 Windows
-
-> ⚠️ **PyTorch ROCm support on Windows is not officially maintained by the PyTorch team.** It is provided by AMD directly. See [AMD's announcement](https://rocm.docs.amd.com/en/latest/) for current status.
+>[!NOTE]
+> **PyTorch ROCm support on Windows is not officially maintained by the PyTorch team.** It is provided by AMD directly. See [AMD's announcement](https://rocm.docs.amd.com/en/latest/) for current status.
 
 ### Step 1 — Install AMD Adrenalin driver
 
 Download and install **AMD Adrenalin 26.2.2 or later** from the [AMD drivers page](https://www.amd.com/en/support).
 
-> ⚠️ Older Adrenalin versions do not include the ROCm runtime required for PyTorch. Version 26.2.2+ is required.
+>[!NOTE]
+> Older Adrenalin versions do not include the ROCm runtime required for PyTorch. Version 26.2.2+ is required.
 
 ### Step 2 — Install Ollama (Vision mode only)
-
-> ℹ️ Skip this step if you don't plan to use Vision mode (`--vision` or `--fallback`).
+>[!NOTE]
+> Skip this step if you don't plan to use Vision mode (`--vision` or `--fallback`).
 
 Ollama on Windows must be installed from the **AMD Adrenalin AI Bundle** — this is the only version tested and confirmed to work with AMD GPU acceleration on Windows.
 
@@ -119,7 +121,8 @@ Ollama on Windows must be installed from the **AMD Adrenalin AI Bundle** — thi
 3. Find **AI Bundle** and install it
 4. Select **Ollama** from the bundle components
 
-> ⚠️ The official Ollama installer from ollama.com is not tested and may not support AMD GPU acceleration on Windows. Use the AMD bundle version.
+>[!NOTE]
+> The official Ollama installer from ollama.com is not tested and may not support AMD GPU acceleration on Windows. Use the AMD bundle version.
 
 After installation, enable GPU acceleration:
 
@@ -129,7 +132,8 @@ After installation, enable GPU acceleration:
    - Variable value: `1`
 3. Click OK and **restart your PC**
 
-> ℹ️ Ollama uses Vulkan (not ROCm) for GPU acceleration on Windows. Without `OLLAMA_VULKAN=1`, Ollama runs on CPU only — Vision mode will be very slow.
+>[!NOTE]
+> Ollama uses Vulkan (not ROCm) for GPU acceleration on Windows. Without `OLLAMA_VULKAN=1`, Ollama runs on CPU only — Vision mode will be very slow.
 
 ### Step 3 — Install Smart Surveillance Sorter
 
@@ -139,7 +143,8 @@ After installation, enable GPU acceleration:
 
 The installer downloads and installs the ROCm SDK and PyTorch ROCm 7.2 wheels directly from AMD's repository. This is a **large download (~3-5 GB)** — be patient.
 
-> ℹ️ Run from **Command Prompt** or **PowerShell** in the project folder.
+>[!NOTE]
+> Run from **Command Prompt** or **PowerShell** in the project folder.
 
 ### Step 4 — Verify
 
