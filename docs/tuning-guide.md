@@ -209,7 +209,7 @@ Customize the output folder names for each category.
 
 Advanced per-camera tuning for the CLIP+BLIP engine.
 
-> See [CLIP+BLIP Tuning Guide](blip-clip-tuning.md) for detailed documentation.
+> See [CLIP+BLIP Tuning Guide](blip-clip-config.md) for detailed documentation.
 
 ---
 
@@ -247,6 +247,7 @@ This means two cameras can receive completely different prompts even in the same
 ### Editing Prompts
 
 Use the **WebUI → Settings → Prompt AI** tab to edit all components visually and preview the exact assembled prompt before running a scan.
+![WebUI Settings](assets/dyn-prompt.png)
 
 > [!WARNING]
 > The `templates` section uses Python `.format()` placeholders like `{hierarchy}` and `{allowed_outputs}` — do not remove or rename them or the prompt assembly will fail.
