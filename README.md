@@ -29,7 +29,7 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 | [WebUI Guide](docs/webui.md) | [Tuning Guide](docs/tuning-guide.md) | [Lens Health Check](docs/lens-health.md) | [Model Comparison](docs/model-comparison.md) |
 | [CLI Reference](docs/cli-usage.md) | [CLIP/BLIP Settings](docs/blip-clip-config.md) | [Manual Install](docs/manual-install.md) | [YOLO Model Comparison](docs/yolo-model-comparison.md) |
 | [Testing Guide](docs/testing-guide.md) | [YOLO Tuning](docs/yolo-tuning.md) | [AMD GPU Setup](docs/gpu-setup-amd.md) | [Mode Comparison](docs/mode-comparison.md) |
-| | [Edge Cases](docs/edge-cases.md) | | |
+| | | | [Edge Cases](docs/edge-cases.md) |
 ---
 
 ## Features
