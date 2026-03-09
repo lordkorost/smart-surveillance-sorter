@@ -194,10 +194,10 @@ When Vision says `others` but YOLO detected a person with high confidence, the o
 
 ```json
 "output_mapping": {
-    "person": "people",
-    "animal": "animals", 
-    "vehicle": "vehicles",
-    "nothing": "others"
+    "person": "People",
+    "animal": "Animals", 
+    "vehicle": "Vehicles",
+    "others": "Others"
 }
 ```
 Customize the output folder names for each category.
