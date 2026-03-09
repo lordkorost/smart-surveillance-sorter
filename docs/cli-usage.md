@@ -1,4 +1,4 @@
-## 🖥️ CLI Usage
+## CLI Usage
 
 After installation, the `sss` command is available in the virtual environment.
 
