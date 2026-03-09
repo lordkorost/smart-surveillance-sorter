@@ -1,4 +1,4 @@
-# 🧠 How It Works
+# How It Works
 
 ## The Problem
 
@@ -16,7 +16,8 @@ The goal is to process videos without watching them all, and discard irrelevant 
 
 The system must be **fast enough to be practical** and **highly configurable**: if a camera is replaced, the NVR changes, or indoor cameras are added, the system should continue working correctly. This is made possible by per-camera configuration of almost every parameter — similar to how NVRs allow per-camera sensitivity and trigger settings.
 
-> ⚠️ The NVR configuration matters just as much as the sorter settings. The more "false" videos the NVR records, the more the sorter has to process — increasing both processing time and false positives.
+>[!TIP]
+> The NVR configuration matters just as much as the sorter settings. The more "false" videos the NVR records, the more the sorter has to process — increasing both processing time and false positives.
 
 ---
 
@@ -38,7 +39,8 @@ Frames and crops saved by YOLO are processed by BLIP and CLIP, which determine t
 **Option B — Accurate (YOLO + Vision)**  
 Frames saved by YOLO are sent directly to a Vision model via Ollama (`qwen3-vl:8b` has proven the most reliable), which analyzes the full 4K frames and determines the video category.
 
-> ℹ️ In both pipelines, if YOLO detects a person with medium-high confidence but BLIP/CLIP or Vision disagrees, **YOLO wins**. The refinement steps primarily serve to reduce false positives, not to override confident person detections.
+>[!NOTE]
+> In both pipelines, if YOLO detects a person with medium-high confidence but BLIP/CLIP or Vision disagrees, **YOLO wins**. The refinement steps primarily serve to reduce false positives, not to override confident person detections.
 
 ---
 
@@ -55,7 +57,7 @@ A well-configured NVR makes every subsequent step faster and more accurate.
 
 ---
 
-## 🎯 Subject-Based Detection vs Motion Detection
+## Subject-Based Detection vs Motion Detection
 
 An alternative approach would have been classic motion detection — flag any video where pixels change. However, this was deliberately avoided.
 
@@ -71,8 +73,8 @@ This is why vehicles can be safely ignored on a parking camera — any car enter
 
 SSS doesn't detect movement — it detects **intent**.
 
-> 📖 See [Mode Comparison](benchmarks/mode-comparison.md) for benchmark results across different modes and ignore_labels configurations.  
-> 📖 See [Camera Configuration](cameras-config.md) for per-camera ignore_labels setup and examples.
+> See [Mode Comparison](benchmarks/mode-comparison.md) for benchmark results across different modes and ignore_labels configurations.  
+> See [Camera Configuration](cameras-config.md) for per-camera ignore_labels setup and examples.
 
 ---
 
@@ -120,7 +122,8 @@ With the right fake/background penalty configuration, effectively reduces YOLO f
 **Vision (qwen3-vl:8b)**  
 With the right prompt, acts as a true scene descriptor — analyzes full 4K frames and rarely misses anything visible. Highly reliable on animals, significantly reduces both person false positives and animal false negatives. 
 
-Limitations: at `temperature=1.0` the model is non-deterministic — on genuinely ambiguous scenes (very distant, dark, small subjects) it may produce inconsistent results between runs. On rare occasions, a person that YOLO detected with low confidence may be classified as "nothing" by Vision if they are too small and dark in the 4K frame. The YOLO override clause covers most of these cases.
+>[!NOTE]
+>Limitations: at `temperature=1.0` the model is non-deterministic — on genuinely ambiguous scenes (very distant, dark, small subjects) it may produce inconsistent results between runs. On rare occasions, a person that YOLO detected with low confidence may be classified as "nothing" by Vision if they are too small and dark in the 4K frame. The YOLO override clause covers most of these cases.
 
 ---
 
@@ -130,4 +133,4 @@ Limitations: at `temperature=1.0` the model is non-deterministic — on genuinel
 - **Running persons** may be missed if `vid_stride_sec` is set too high — with default `0.6s` this is rarely an issue
 - **Partially visible persons** (head at the bottom corner, arm through a window or car windshield) are sometimes detected by YOLO, sometimes not — not considered a security risk with overlapping camera coverage
 - **Large animals misclassified as persons** — the system is tuned to prioritize persons, so if YOLO or BLIP classifies an animal as a person in one step, the video may end up in the PERSON folder. Vision mode significantly reduces this
-- **Spider web on camera lens** — triggers detections on every video until cleaned. Use `FAKE_KEYS` or clean the lens 😄
+- **Spider web on camera lens** — triggers detections on every video until cleaned. Use `FAKE_KEYS` or clean the lens
