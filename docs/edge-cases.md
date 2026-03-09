@@ -10,7 +10,7 @@ This page documents real-world edge cases encountered during testing, with step-
 
 ---
 
-## 🪵 Case Study: Wood Piece Misclassified as Bird — Camera 06 (Garden Gate)
+## Case Study: Wood Piece Misclassified as Bird — Camera 06 (Garden Gate)
 
 **Dataset:** February 13th — 84 videos + 70 images, Camera 06 (garden with gate, street visible)  
 **Scene:** Wind-blown wood piece near the gate, scattered garden objects, shadows, direct sunlight  
@@ -59,7 +59,8 @@ Checking `yolo_scan_res.json` confirms the pattern:
 
 The fake weights (GROUND, GARDEN, WOOD, SHOE all at 1.0) reduce false positive frames significantly but cannot eliminate them entirely — some bird frames still pass through BLIP.
 
-> 💡 **Why are we losing vehicles?** The wood piece triggers ANIMAL early exit — YOLO stops analyzing the video after 3 bird detections and moves to the next one, missing vehicles that appear later in the same video.
+>[!NOTE]
+> **Why are we losing vehicles?** The wood piece triggers ANIMAL early exit — YOLO stops analyzing the video after 3 bird detections and moves to the next one, missing vehicles that appear later in the same video.
 
 ---
 
@@ -190,11 +191,12 @@ Total:            ~14 min
 ✅ Last missed animal found by Vision  
 The 2 remaining vehicle FNs are not recoverable — YOLO saved too many false person frames on those videos and vehicle scores cannot override. Not considered a real issue: these are vehicles visible outside the gate (street), which should be masked on the NVR anyway.
 
-> ℹ️ Note on remaining vehicle FNs: filming public streets may raise privacy/legal concerns depending on your jurisdiction. These videos were recorded only for testing purposes and deleted immediately after.
+>[!NOTE]
+>Remaining vehicle FNs: filming public streets may raise privacy/legal concerns depending on your jurisdiction. These videos were recorded only for testing purposes and deleted immediately after.
 
 ---
 
-### 📊 Complete Progression
+### Complete Progression
 
 | Step | Config | Global Acc | Person recall | Animal recall | Vehicle recall |
 |------|--------|------------|---------------|---------------|----------------|
@@ -237,17 +239,17 @@ The 2 remaining vehicle FNs are not recoverable — YOLO saved too many false pe
 
 ---
 
-## 🧹 The Real Fix
+##  The Real Fix
 
 > **The most effective fix for environment-triggered false positives is removing the source.**  
 > The wood piece was brought by wind — once removed, all bird false positives disappeared without any configuration change. `ignore_labels` is a software workaround for a physical problem.  
-> Keep cameras clean and the monitored area tidy for best results. 😄
+> Keep cameras clean and the monitored area tidy for best results.
 
 ---
 
 ---
 
-## 🗿 Case Study: Garden Gnomes Misclassified as Persons — Camera 04 (Balcony)
+## Case Study: Garden Gnomes Misclassified as Persons — Camera 04 (Balcony)
 
 **Dataset:** February 13th — 97 videos + 81 images, Camera 04 (kitchen balcony overlooking garden)  
 **Scene:** Garden visible from balcony, 3-4 garden gnomes on the lawn visible in frame
@@ -319,11 +321,12 @@ Total:   ~7 min
 
 4 false positives resolved. The 1 remaining FP has YOLO confidence = 1.0 — the safety clause overrides Vision's "nothing" verdict and keeps it as PERSON. Acceptable behavior: when YOLO is that confident, we trust it.
 
-> 💡 **`desc` is the most powerful Vision tuning parameter.** A single sentence describing permanent scene elements (statues, decorations, fixed objects) can eliminate entire categories of false positives without touching thresholds or weights.
+>[!TIP]
+> **`desc` is the most powerful Vision tuning parameter.** A single sentence describing permanent scene elements (statues, decorations, fixed objects) can eliminate entire categories of false positives without touching thresholds or weights.
 
 ---
 
-## 🐄 Livestock Camera — Selective Animal Ignoring
+## Livestock Camera — Selective Animal Ignoring
 
 On a camera monitoring a stable or pen, animals are always present — they are background, just like parked cars in a parking area. The goal is to detect intruders or predators, not the animals that are supposed to be there.
 
@@ -339,11 +342,12 @@ Using `ignore_labels` selectively allows ignoring *known* animals while keeping 
 
 **Result:** cows, sheep and horses are ignored. A person entering the stable, a bear, or a stray dog will still trigger an alert. Even a fox — which YOLO may classify as `dog` or `cat` — will still be detected as ANIMAL.
 
-> ℹ️ Any real threat to livestock requires a physical presence that SSS will catch — either as PERSON or as an unexpected ANIMAL.
+[!NOTE]
+> Any real threat to livestock requires a physical presence that SSS will catch — either as PERSON or as an unexpected ANIMAL.
 
 ---
 
-## 🚗 Parking Camera — Vehicles as Background
+## Parking Camera — Vehicles as Background
 
 A parking camera has vehicles in frame at all times — they are background, just like the lawn in a garden or the animals in a stable. The goal is not to detect parked cars but to detect anyone entering or leaving the area.
 
@@ -364,4 +368,4 @@ This has two important side effects:
 
 **2. BLIP processes far fewer frames.** In `--mode full`, YOLO saves up to 9 frames per video (3 per category). With vehicles ignored, only person and animal frames are saved — BLIP time drops dramatically on large parking datasets.
 
-> 📖 See [Mode Comparison](benchmarks/mode-comparison.md) for benchmark results showing the full impact of this configuration on a 376-video parking dataset.
+> See [Mode Comparison](mode-comparison.md) for benchmark results showing the full impact of this configuration on a 376-video parking dataset.
