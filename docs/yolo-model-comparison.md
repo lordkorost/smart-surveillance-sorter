@@ -61,7 +61,7 @@ Each model was tested twice:
 > On this specific camera, **yolov8l + FK=0 actually improves animal recall** (3 TP vs 2 TP) without introducing any false positives — the fake penalty was slightly over-penalizing a real animal. This is a good reminder that fake weights should be tuned per camera, not left at a global default.
 
 **Why don't false positives explode without fake weights?**  
-The crops saved by YOLO on this camera (trees, leaves, table, garden objects) are sufficiently different from person/animal prompts that CLIP scores remain low even without penalty. On cameras with more ambiguous backgrounds (ground, shadows, reflections) the fake penalty would matter much more — as shown in the [Camera 06 edge case](../edge-cases.md#-case-study-wood-piece-misclassified-as-bird--camera-06-garden-gate).
+The crops saved by YOLO on this camera (trees, leaves, table, garden objects) are sufficiently different from person/animal prompts that CLIP scores remain low even without penalty. On cameras with more ambiguous backgrounds (ground, shadows, reflections) the fake penalty would matter much more — as shown in the [Camera 06 edge case](edge-cases.md#case-study-wood-piece-misclassified-as-bird--camera-06-garden-gate).
 
 **yolov8n finds no animals at all** regardless of fake weights — the model simply misses small animals at this confidence threshold. Lowering animal min conf would help but would also increase false positives.
 
