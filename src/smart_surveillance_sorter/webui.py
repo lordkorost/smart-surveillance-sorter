@@ -13,7 +13,7 @@ import gradio as gr
 from smart_surveillance_sorter.constants import CAMERAS_JSON, CLIP_BLIP_JSON, LENS_HEALTH, SETTINGS_JSON, MODELS_DIR, PROMPTS_JSON
 from smart_surveillance_sorter.logger import get_logger
 from smart_surveillance_sorter.scanners.scanner import Scanner
-from smart_surveillance_sorter.scanners.vision_helpers import build_dynamic_prompt
+from smart_surveillance_sorter.scanners.vision_helpers import build_clean_prompt, build_dynamic_prompt
 from smart_surveillance_sorter.utils import load_json, save_json, validate_ollama_setup
 
 log = get_logger(debug=True)
@@ -155,19 +155,34 @@ def ui_validate_ollama(ip, port, model_name):
 # PROMPT
 # ==============================================================================
 
-def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, m_c, m_f, mode, has_crop, is_fallback):
+# def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, m_c, m_f, mode, has_crop, is_fallback):
+#     temp_prompts_config = {
+#         "shared_components": {"system_instruction": sys_inst, "mandatory_rules": rules},
+#         "class_descriptions": {"PERSON": d_p, "ANIMAL": d_a, "VEHICLE": d_v},
+#         "modules": {"analyst_mission_crop": m_c, "fallback_header": m_f},
+#         "templates": load_json(PROMPTS_JSON).get("templates", {})
+#     }
+#     test_cam_cfg = {"desc": "Test Zone: Main entrance with garden and parking.", "filters": {"ignore_labels": []}}
+#     try:
+#         return build_dynamic_prompt(temp_prompts_config, test_cam_cfg, mode=mode, has_crop=has_crop, is_fallback=is_fallback)
+#     except Exception as e:
+#         return f"❌ Prompt construction error: {str(e)}"
+def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean, mode, is_fallback, cam_id):
+    cameras = load_json(CAMERAS_JSON)
+    cam_cfg = cameras.get(cam_id, {}) if cam_id else {"desc": "Test Zone: Main entrance.", "filters": {"ignore_labels": []}}
+    
     temp_prompts_config = {
         "shared_components": {"system_instruction": sys_inst, "mandatory_rules": rules},
-        "class_descriptions": {"PERSON": d_p, "ANIMAL": d_a, "VEHICLE": d_v},
-        "modules": {"analyst_mission_crop": m_c, "fallback_header": m_f},
+        "class_descriptions": {"PERSON": d_p, "ANIMAL": d_a, "VEHICLE": d_v, "CLEAN_CHECK": d_clean},
+        "modules": {"analyst_mission_crop": m_c, "fallback_header": m_f, "clean_header": m_clean},
         "templates": load_json(PROMPTS_JSON).get("templates", {})
     }
-    test_cam_cfg = {"desc": "Test Zone: Main entrance with garden and parking.", "filters": {"ignore_labels": []}}
     try:
-        return build_dynamic_prompt(temp_prompts_config, test_cam_cfg, mode=mode, has_crop=has_crop, is_fallback=is_fallback)
+        if mode == "clean_check":
+            return build_clean_prompt(temp_prompts_config, cam_cfg)
+        return build_dynamic_prompt(temp_prompts_config, cam_cfg, mode=mode, is_fallback=is_fallback)
     except Exception as e:
         return f"❌ Prompt construction error: {str(e)}"
-
 def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
     try:
         data = load_json(PROMPTS_JSON)
@@ -181,9 +196,9 @@ def save_prompts_ui(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean):
         data["modules"]["fallback_header"]                = m_f
         data["modules"]["clean_header"]                   = m_clean
         save_json(data, PROMPTS_JSON)
-        return "✅ Prompt AI aggiornati."
+        return "✅ Prompt AI updated."
     except Exception as e:
-        return f"❌ Errore prompt save: {str(e)}"
+        return f"❌ Error prompt save: {str(e)}"
 
 
 def load_camera_details(cam_id):
@@ -1034,20 +1049,34 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                         m_crop  = gr.Textbox(label="Mission Crop Header", value=current_prompts["modules"]["analyst_mission_crop"], lines=3)
                         m_fall  = gr.Textbox(label="Fallback Header",     value=current_prompts["modules"]["fallback_header"],      lines=2)
                         m_clean = gr.Textbox(label="Clean Check Header",  value=current_prompts["modules"]["clean_header"],         lines=2)
-                        with gr.Accordion("🔍 Dynamic Prompt Preview", open=False):
-                            with gr.Row():
-                                test_mode_p   = gr.Dropdown(choices=["full", "person", "person_animal", "clean_check"], label="Mode", value="full")
-                                test_has_crop = gr.Checkbox(label="Simulate Crop")
-                                test_is_fb    = gr.Checkbox(label="Simulate Fallback")
-                            preview_btn    = gr.Button("🔨 Generate Preview", variant="secondary")
-                            prompt_preview = gr.Code(label="Prompt finale", language="markdown", lines=15)
-                    save_prompt_btn = gr.Button("💾 Save Prompt AI", variant="primary")
-                    status_prompt   = gr.Markdown("")
+                    #     with gr.Accordion("🔍 Dynamic Prompt Preview", open=False):
+                    #         with gr.Row():
+                    #             test_mode_p   = gr.Dropdown(choices=["full", "person", "person_animal", "clean_check"], label="Mode", value="full")
+                    #             test_has_crop = gr.Checkbox(label="Simulate Crop")
+                    #             test_is_fb    = gr.Checkbox(label="Simulate Fallback")
+                    #         preview_btn    = gr.Button("🔨 Generate Preview", variant="secondary")
+                    #         prompt_preview = gr.Code(label="Prompt finale", language="markdown", lines=15)
+                        # save_prompt_btn = gr.Button("💾 Save Prompt AI", variant="primary")
+                        # status_prompt   = gr.Markdown("")
+                    # preview_btn.click(
+                    #     fn=preview_prompt_logic,
+                    #     inputs=[p_sys, p_rules, desc_p, desc_a, desc_v, m_crop, m_fall, test_mode_p, test_has_crop, test_is_fb],
+                    #     outputs=prompt_preview
+                    # )
+                    with gr.Accordion("🔍 Dynamic Prompt Preview", open=False):
+                        with gr.Row():
+                            test_mode_p  = gr.Dropdown(choices=["full", "person", "person_animal", "clean_check"], label="Mode", value="full")
+                            test_cam_sel = gr.Dropdown(choices=list(load_json(CAMERAS_JSON).keys()), label="Camera", value=list(load_json(CAMERAS_JSON).keys())[0])
+                            test_is_fb   = gr.Checkbox(label="Simulate Fallback")
+                        preview_btn    = gr.Button("🔨 Generate Preview", variant="secondary")
+                        prompt_preview = gr.Code(label="Prompt finale", language="markdown", lines=15)
+                        save_prompt_btn = gr.Button("💾 Save Prompt AI", variant="primary")
+                        status_prompt   = gr.Markdown("")
                     preview_btn.click(
                         fn=preview_prompt_logic,
-                        inputs=[p_sys, p_rules, desc_p, desc_a, desc_v, m_crop, m_fall, test_mode_p, test_has_crop, test_is_fb],
+                        inputs=[p_sys, p_rules, desc_p, desc_a, desc_v, desc_clean, m_crop, m_fall, m_clean, test_mode_p, test_is_fb, test_cam_sel],
                         outputs=prompt_preview
-                    )
+)
                     save_prompt_btn.click(
                         fn=save_prompts_ui,
                         inputs=[p_sys, p_rules, desc_p, desc_a, desc_v, desc_clean, m_crop, m_fall, m_clean],
