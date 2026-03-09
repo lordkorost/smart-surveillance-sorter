@@ -1,17 +1,29 @@
-# ⚙️ YOLO Parameter Tuning
+# YOLO Parameter Tuning
 
 **Dataset:** Folder February 17th — 399 videos + 505 images  
 **Scene:** Rain, lightning, 6+ hours of continuous recording. Camera "Parking" with ~50% empty 3-minute videos.  
-**Hardware:** AMD Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) | Videos on Samba share  
+**Hardware:** AMD Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux) | Videos on Samba share 
+**Cameras** 8 Reolink 4K Outdoor
 **Models:** YOLOv8l, BLIP large, CLIP ViT-L-14, qwen3-vl:8b  
 **YOLO min conf:** Person 0.49, Vehicle 0.55, Animal 0.3 (same for all cameras, day and night)
 
-> ℹ️ Dynamic Stride enabled only on "Parking" camera (large area, mostly empty footage).  
-> ℹ️ False positives on PERSON in this dataset are insects on the camera lens and rain reflections — not misclassified humans.
+>[!NOTE]
+> Dynamic Stride enabled only on "Parking" camera (large area, mostly empty footage).  
+> False positives on PERSON in this dataset are insects on the camera lens and rain reflections — not misclassified humans.
 
 ---
+## Contents
+- [Tested Configurations](#tested-configurations)
+- [Performance](#performance)
+- [Accuracy — YOLO + BLIP](#accuracy--yolo--blip)
+- [Accuracy — YOLO + BLIP + Fallback](#accuracy--yolo--blip--fallback)
+- [Accuracy — YOLO + Vision](#accuracy--yolo--vision--recommended)
+- [Detailed Results](#detailed-results)
+- [Key Takeaways](#key-takeaways)
+---
 
-## 📋 Tested Configurations
+
+## Tested Configurations
 
 | Config | stride | num_occ | time_gap | warmup | pre_roll | stride_fast |
 |--------|--------|---------|----------|--------|----------|-------------|
@@ -22,7 +34,7 @@
 
 ---
 
-## ⏱️ Performance
+## Performance
 
 | Config | YOLO img | YOLO vid | BLIP | Total (BLIP) | Total (Vision) |
 |--------|----------|----------|------|--------------|----------------|
@@ -31,11 +43,12 @@
 | Test 3 | 00:31 | 40:16 | 02:00 | ~43 min | ~55 min |
 | Test 4 | 00:31 | 39:38 | 01:55 | ~42 min | ~50 min |
 
-> ℹ️ BLIP time decreases with lower `num_occurrence` — fewer saved frames per video = less BLIP work.
+>[!NOTE]
+> BLIP time decreases with lower `num_occurrence` — fewer saved frames per video = less BLIP work.
 
 ---
 
-## 🎯 Accuracy — YOLO + BLIP
+## Accuracy — YOLO + BLIP
 
 | Config | Global Acc | Person FP | Animal Recall | Vehicle Recall |
 |--------|------------|-----------|---------------|----------------|
@@ -46,7 +59,7 @@
 
 ---
 
-## 🎯 Accuracy — YOLO + BLIP + Fallback
+## Accuracy — YOLO + BLIP + Fallback
 
 | Config | Global Acc | Person FP | Animal Recall | Vehicle Recall |
 |--------|------------|-----------|---------------|----------------|
@@ -57,7 +70,7 @@
 
 ---
 
-## 🎯 Accuracy — YOLO + Vision ✅ Recommended
+## Accuracy — YOLO + Vision ✅ Recommended
 
 | Config | Global Acc | Person FP | Animal Recall | Vehicle Recall |
 |--------|------------|-----------|---------------|----------------|
@@ -68,7 +81,7 @@
 
 ---
 
-## 📊 Detailed Results
+## Detailed Results
 
 ### Default params
 
@@ -167,7 +180,7 @@
 
 ---
 
-## 💡 Key Takeaways
+##  Key Takeaways
 
 1. **Vision consistently outperforms BLIP** on this dataset — especially for reducing Person FP (insects, rain reflections) and improving Animal recall (large white dog)
 2. **Test 2 + Vision is the optimal combination** — 5 min faster than default with significantly better accuracy (98.75% vs 96.99%)
@@ -176,4 +189,5 @@
 5. **BLIP alone struggles on this dataset** — Animal recall 40-47% due to large white dog misclassified as person. Fallback or Vision required.
 6. **0 missed persons (FN=0) across all configurations** — person detection is robust even with aggressive stride settings
 
-> ⚠️ **Important caveat:** These results apply to this specific dataset (slow-moving subjects, mostly empty footage). For cameras with fast-moving subjects (running person, fast vehicles), `vid_stride_sec=0.6` default is recommended to avoid missed detections. See [Edge Cases](edge-cases.md).
+>[!NOTE]
+> **Important caveat:** These results apply to this specific dataset (slow-moving subjects, mostly empty footage). For cameras with fast-moving subjects (running person, fast vehicles), `vid_stride_sec=0.6` default is recommended to avoid missed detections. See [Edge Cases](edge-cases.md).
