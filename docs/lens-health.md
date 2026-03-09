@@ -1,8 +1,9 @@
-# 🔍 Lens Health Check
+# Lens Health Check
 
 The Lens Health Check feature uses a Vision AI model (Ollama) to automatically detect dirty, obstructed, or obscured camera lenses by comparing a known-clean reference image with a recent night image from each camera.
 
-> ℹ️ This feature requires **Ollama** and a Vision model (e.g. `qwen3-vl:8b`). See [AMD GPU Setup](gpu-setup-amd.md) for installation instructions.
+>[!NOTE]
+> This feature requires **Ollama** and a Vision model (e.g. `qwen3-vl:8b`). See [AMD GPU Setup](gpu-setup-amd.md) for installation instructions.
 
 ---
 
@@ -20,7 +21,8 @@ The Vision model looks for:
 - Blurry patches or dark spots not present in the reference
 - Dust, moisture, or insects covering part of the lens
 
-> ℹ️ Night images are used because IR illumination makes lens obstructions like spider webs clearly visible as bright glowing filaments.
+>[!NOTE]
+> Night images are used because IR illumination makes lens obstructions like spider webs clearly visible as bright glowing filaments.
 
 ---
 
@@ -38,9 +40,11 @@ checks/
 
 Supported formats: `.jpg`, `.jpeg`, `.png` (case-insensitive).
 
-> ⚠️ Reference images should be taken when the lens is **known to be clean**. A night IR image works best — the same conditions as the comparison image.
+>[!TIP]
+> Reference images should be taken when the lens is **known to be clean**. A night IR image works best — the same conditions as the comparison image.
 
-> ℹ️ Cameras without a reference image in `/checks` are automatically skipped with a debug log message.
+>[!NOTE]
+> Cameras without a reference image in `/checks` are automatically skipped with a debug log message.
 
 ---
 
@@ -66,6 +70,7 @@ The lens check runs after the Vision refine step, using the same Ollama instance
 
 Go to **Tools → 🔍 Lens Health Check**, enter the input directory and optionally an output directory, then click **Run Lens Check**.
 
+![LENS](assets/webui-lc.png)
 ---
 
 ## Output
@@ -119,21 +124,6 @@ obstruction. Therefore, the output should be 'dirty'.
 ```
 
 The model compares the two images side by side, identifies elements present in the current image that were not in the reference, and determines whether they represent a lens obstruction.
-
----
-
-## Customizing the Prompt
-
-The prompt used for lens analysis can be customized per camera directly from the WebUI:
-
-**WebUI → Cameras → Select camera → Vision Settings → Lens Check Prompt**
-
-This allows you to add camera-specific context, for example:
-
-- *"This camera faces a garden with an orange tree — ignore insects flying near the lens at night."*
-- *"The right edge of this camera has a permanent shadow — ignore it."*
-
-> ℹ️ If no custom prompt is set, the default prompt from `prompts_config.json` is used.
 
 ---
 
