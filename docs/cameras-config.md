@@ -1,17 +1,18 @@
-# 📷 Camera Configuration Guide
+# Camera Configuration Guide
 
 `config/cameras.json` is the most important configuration file — it tells the system how to identify each camera from the filename and how to analyze its videos.
 
 **This file must be configured before the first run.**
 
+>[!TIP]
 > 💡 **Recommended**: Edit camera configuration directly from the **WebUI → Settings → Cameras** tab — it provides a visual editor with validation and live preview.  
 > Manual JSON editing is also supported for advanced users or automation.
 
-![Camera Settings WebUI](./assets/cameras-webui.png)
+![Camera Settings WebUI](./assets/webui-settings-cameras.png)
 
 ---
 
-## 🔑 Minimal Configuration
+## Minimal Configuration
 
 At minimum, each camera needs a name and a search pattern:
 
@@ -30,7 +31,7 @@ Example: `NVR reo_01_20260301121623.mp4` → camera ID `01`
 
 ---
 
-## 📋 Full Configuration Reference
+## Full Configuration Reference
 
 ```json
 {
@@ -75,7 +76,7 @@ Example: `NVR reo_01_20260301121623.mp4` → camera ID `01`
 
 ---
 
-## 🔧 Parameters
+## Parameters
 
 ### Basic
 
@@ -88,11 +89,12 @@ Example: `NVR reo_01_20260301121623.mp4` → camera ID `01`
 | `desc` | | Description of the camera scene — **sent to Vision AI as context** |
 | `dynamic_stride` | | `true` to enable dynamic stride for this camera (see [Tuning Guide](tuning-guide.md)) |
 
-> ℹ️ **`desc` is important for Vision mode** — it helps the AI understand the scene context. Example: `"Garden area with a wooden fence and gnomes on the lawn"` helps Vision avoid misclassifying garden objects.
+>[!TIP]
+> **`desc` is important for Vision mode** — it helps the AI understand the scene context. Example: `"Garden area with a wooden fence and gnomes on the lawn"` helps Vision avoid misclassifying garden objects.
 
 ---
 
-### 🚫 Filters
+### Filters
 
 ```json
 "filters": {
@@ -106,13 +108,15 @@ Example: `NVR reo_01_20260301121623.mp4` → camera ID `01`
 | `ignore_labels` | YOLO labels to ignore for this camera. Matching detections are skipped entirely. |
 | `ignore_classes` | Higher-level categories to ignore (`PERSON`, `ANIMAL`, `VEHICLE`). |
 
-> ℹ️ Labels must match YOLO/COCO class names exactly. Full list of available labels:  
+>[!NOTE]
+> Labels must match YOLO/COCO class names exactly. Full list of available labels:  
 > [COCO Dataset Labels](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/coco.yaml)
 
 **Most common labels for surveillance:**
 `person`, `car`, `truck`, `bus`, `motorcycle`, `bicycle`, `bird`, `cat`, `dog`, `horse`, `sheep`, `cow`, `bear`
 
-> ⚠️ `ignore_labels` applies to **YOLO, BLIP/CLIP, and Vision** — any detection with an ignored label will not trigger analysis.
+>[!NOTE]
+> `ignore_labels` applies to **YOLO, BLIP/CLIP, and Vision** — any detection with an ignored label will not trigger analysis.
 
 **Common use cases:**
 
@@ -122,11 +126,12 @@ Example: `NVR reo_01_20260301121623.mp4` → camera ID `01`
 | Parking camera — vehicles are not relevant | `"ignore_labels": ["car","truck","bus","motorcycle","bicycle"], "ignore_classes": ["VEHICLE"]` |
 | Indoor camera — no vehicles expected | `"ignore_classes": ["VEHICLE"]` |
 
-> ⚠️ Use `ignore_labels` carefully — if a real bird or car should be detected on that camera, adding it to ignore_labels will cause false negatives. See [Edge Cases](edge-cases.md) for examples.
+>[!WARNING]
+> Use `ignore_labels` carefully — if a real bird or car should be detected on that camera, adding it to ignore_labels will cause false negatives. See [Edge Cases](edge-cases.md) for examples.
 
 ---
 
-### 🎯 Thresholds
+### Thresholds
 
 ```json
 "thresholds": {
@@ -147,11 +152,12 @@ YOLO minimum confidence threshold per category. Detections below the threshold a
 - **Higher** = less sensitive, more false negatives
 - `thresholds_night` — optional, applied automatically at night (sunrise/sunset from `city` setting)
 
-> ℹ️ Default values (`person: 0.49`, `animal: 0.3`) work well for most cameras. Adjust only if you notice systematic false positives or false negatives on a specific camera.
+>[!TIP]
+> Default values (`person: 0.49`, `animal: 0.3`) work well for most cameras. Adjust only if you notice systematic false positives or false negatives on a specific camera.
 
 ---
 
-### 🎛️ BLIP Rules (CLIP+BLIP engine only)
+### BLIP Rules (CLIP+BLIP engine only)
 ```json
 "blip_rules": {
     "FAKE_WEIGHTS": {
@@ -179,13 +185,14 @@ YOLO minimum confidence threshold per category. Detections below the threshold a
 - Camera with wooden fence or furniture → increase `WOOD`
 - Camera with floor/pavement → increase `GROUND`
 
-See [CLIP+BLIP Tuning Guide](clip-blip-tuning.md) for the full list of available fake keys.
+See [CLIP+BLIP Tuning Guide](clip-blip-config.md) for the full list of available fake keys.
 
 ---
 
-## 🗺️ Real World Examples
+## Real World Examples
 
 ### Standard outdoor camera
+
 ```json
 "01": {
     "name": "Front Door",
@@ -246,4 +253,4 @@ See [CLIP+BLIP Tuning Guide](clip-blip-tuning.md) for the full list of available
 
 ---
 
-> 📖 For edge cases and advanced tuning see [Edge Cases](edge-cases.md) and [CLIP+BLIP Tuning Guide](clip-blip-tuning.md)
+> For edge cases and advanced tuning see [Edge Cases](edge-cases.md) and [CLIP+BLIP Tuning Guide](clip-blip-config.md)
