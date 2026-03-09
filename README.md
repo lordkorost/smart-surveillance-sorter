@@ -71,8 +71,7 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 git clone https://github.com/lordkorost/smart-surveillance-sorter.git
 cd smart-surveillance-sorter
 ```
->[!TIP]
->No Git? Download the ZIP directly from the [GitHub releases page](https://github.com/lordkorost/smart-surveillance-sorter/releases) or click **Code → Download ZIP** on the repository page.
+
 
 #### 2. Run the installer
 
