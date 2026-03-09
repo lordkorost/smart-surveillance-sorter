@@ -343,7 +343,7 @@ Using `ignore_labels` selectively allows ignoring *known* animals while keeping 
 **Result:** cows, sheep and horses are ignored. A person entering the stable, a bear, or a stray dog will still trigger an alert. Even a fox — which YOLO may classify as `dog` or `cat` — will still be detected as ANIMAL.
 
 >[!NOTE]
-> Any real threat to livestock requires a physical presence that SSS will catch — either as PERSON or as an unexpected ANIMAL.
+>Any real threat to livestock requires a physical presence that SSS will catch — either as PERSON or as an unexpected ANIMAL.
 
 ---
 
