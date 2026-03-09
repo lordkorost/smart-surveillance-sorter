@@ -214,18 +214,6 @@ def ui_validate_ollama(ip, port, model_name):
 # PROMPT
 # ==============================================================================
 
-# def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, m_c, m_f, mode, has_crop, is_fallback):
-#     temp_prompts_config = {
-#         "shared_components": {"system_instruction": sys_inst, "mandatory_rules": rules},
-#         "class_descriptions": {"PERSON": d_p, "ANIMAL": d_a, "VEHICLE": d_v},
-#         "modules": {"analyst_mission_crop": m_c, "fallback_header": m_f},
-#         "templates": load_json(PROMPTS_JSON).get("templates", {})
-#     }
-#     test_cam_cfg = {"desc": "Test Zone: Main entrance with garden and parking.", "filters": {"ignore_labels": []}}
-#     try:
-#         return build_dynamic_prompt(temp_prompts_config, test_cam_cfg, mode=mode, has_crop=has_crop, is_fallback=is_fallback)
-#     except Exception as e:
-#         return f"❌ Prompt construction error: {str(e)}"
 def preview_prompt_logic(sys_inst, rules, d_p, d_a, d_v, d_clean, m_c, m_f, m_clean, mode, is_fallback, cam_id):
     """Generate a preview of the prompt that will be sent to the vision model.
     
@@ -339,7 +327,7 @@ def load_camera_details(cam_id):
     ]
 
 
-# Build FAKE_WEIGHTS with only values >= 0 (omit keys set to -1)
+
 
 def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ignore,
                        th_p, th_v, th_a, nth_p, nth_v, nth_a,
@@ -412,7 +400,6 @@ def save_single_camera(cam_id, name, loc, patterns, priority, desc, dynamic, ign
     return f"✅ Cam {cam_id} ({name}) saved!"
 
 
-# Create new camera without FAKE_WEIGHTS (empty = use global default)
 
 def add_new_camera():
     """Add a new camera with default settings.
@@ -781,6 +768,7 @@ def run_realtime(input_path, output_path, mode, model_name, engine, device, inte
     _rt_thread.start()
 
     log_lines = []
+    time.sleep(0.5)  # wait for thread to start
     while _rt_thread.is_alive() or not log_queue.empty():
         try:
             line = log_queue.get(timeout=0.1)
@@ -1218,20 +1206,6 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                         m_crop  = gr.Textbox(label="Mission Crop Header", value=current_prompts["modules"]["analyst_mission_crop"], lines=3)
                         m_fall  = gr.Textbox(label="Fallback Header",     value=current_prompts["modules"]["fallback_header"],      lines=2)
                         m_clean = gr.Textbox(label="Clean Check Header",  value=current_prompts["modules"]["clean_header"],         lines=2)
-                    #     with gr.Accordion("🔍 Dynamic Prompt Preview", open=False):
-                    #         with gr.Row():
-                    #             test_mode_p   = gr.Dropdown(choices=["full", "person", "person_animal", "clean_check"], label="Mode", value="full")
-                    #             test_has_crop = gr.Checkbox(label="Simulate Crop")
-                    #             test_is_fb    = gr.Checkbox(label="Simulate Fallback")
-                    #         preview_btn    = gr.Button("🔨 Generate Preview", variant="secondary")
-                    #         prompt_preview = gr.Code(label="Prompt finale", language="markdown", lines=15)
-                        # save_prompt_btn = gr.Button("💾 Save Prompt AI", variant="primary")
-                        # status_prompt   = gr.Markdown("")
-                    # preview_btn.click(
-                    #     fn=preview_prompt_logic,
-                    #     inputs=[p_sys, p_rules, desc_p, desc_a, desc_v, m_crop, m_fall, test_mode_p, test_has_crop, test_is_fb],
-                    #     outputs=prompt_preview
-                    # )
                     with gr.Accordion("🔍 Dynamic Prompt Preview", open=False):
                         with gr.Row():
                             test_mode_p  = gr.Dropdown(choices=["full", "person", "person_animal", "clean_check"], label="Mode", value="full")

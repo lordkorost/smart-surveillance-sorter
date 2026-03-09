@@ -82,9 +82,9 @@
         }
     },
     "output_mapping": {
-        "person": "people",
-        "animal": "animals",
-        "vehicle": "vehicles",
-        "others": "others"
+        "person": "Person",
+        "animal": "Animals",
+        "vehicle": "Vehicles",
+        "others": "Others"
     }
 }

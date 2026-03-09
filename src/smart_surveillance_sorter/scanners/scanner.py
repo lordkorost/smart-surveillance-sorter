@@ -714,12 +714,6 @@ class Scanner():
         
         video_to_suspects = {} 
         
-        # # Prepariamo la lista dei video da analizzare per la barra
-        # pending_videos = []
-        # for cam_id, records in self.full_index.items():
-        #     for record in records:
-        #         if record["video_path"].name not in identified_video_names:
-        #             pending_videos.append((cam_id, record))
         new_other_paths = {
             str(r['video_path']) for r in self.final_reports
             if r.get('category') == 'others'
@@ -822,9 +816,6 @@ class Scanner():
                         current_priority_idx = priority_idx
                         best_report = report
 
-            # if best_report:
-            #     self.final_reports.append(best_report)
-            #     tqdm.write(f"✨ {Fore.GREEN}RECUPERATO:{Style.RESET_ALL} {v_name} -> {best_report.get('category')}")
             if best_report:
                 # Replace others in vision_results with fallback result
                 for i, r in enumerate(self.vision_results):
