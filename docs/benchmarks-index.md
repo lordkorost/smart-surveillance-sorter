@@ -8,7 +8,7 @@ This section contains detailed benchmark results for Smart Surveillance Sorter a
 
 | Dataset | Videos | Images | Description |
 |---------|--------|--------|-------------|
-| [Folder March 1st](model-comparison) | 521 | 480 | 8 cameras, mixed scenes, day/night |
+| [Models comparison](model-comparison.md) | 521 | 480 | 8 cameras, mixed scenes, day/night |
 | [Mode Comparison](mode-comparison.md) | 376 | 288  | 6+ hours of continuous recording, mostly empty 3-minute videos. |
 | [YOLO Model Comparison](yolo-model-comparison.md) | 102 | 90 |  Camera 00 + Camera 07 (garden/orchard, two overlapping angles) |
 | [Edge Cases](edge-cases.md) | — | — | Wood/bird false positives, ignore_labels |
