@@ -1069,7 +1069,7 @@ with gr.Blocks(title="Smart Surveillance Sorter", theme=gr.themes.Soft()) as dem
                             test_cam_sel = gr.Dropdown(choices=list(load_json(CAMERAS_JSON).keys()), label="Camera", value=list(load_json(CAMERAS_JSON).keys())[0])
                             test_is_fb   = gr.Checkbox(label="Simulate Fallback")
                         preview_btn    = gr.Button("🔨 Generate Preview", variant="secondary")
-                        prompt_preview = gr.Code(label="Prompt finale", language="markdown", lines=15)
+                        prompt_preview = gr.Code(label="Prompt", language="markdown", lines=15)
                         save_prompt_btn = gr.Button("💾 Save Prompt AI", variant="primary")
                         status_prompt   = gr.Markdown("")
                     preview_btn.click(
