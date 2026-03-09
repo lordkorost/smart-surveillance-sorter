@@ -1,4 +1,4 @@
-# 🤖 YOLO Model Comparison
+# YOLO Model Comparison
 
 **Dataset:** February 17th — 102 videos + 90 images, Camera 00 + Camera 07 (garden/orchard, two overlapping angles)  
 **Hardware:** AMD Ryzen 5 9600X | RX 9060 XT 16GB | ROCm 6.4 (Linux)  
@@ -12,7 +12,7 @@ Each model was tested twice:
 
 ---
 
-## ⏱️ Performance
+## Performance
 
 | Model | YOLO img | YOLO vid | BLIP | Total | Videos in YOLO vid |
 |-------|----------|----------|------|-------|--------------------|
@@ -22,11 +22,12 @@ Each model was tested twice:
 | **yolov8l** ✅ | **16.28 img/s — 00:05** | **4.10 s/vid — 03:16** | **01:18** | **~5 min** | **48** |
 | yolov8x | 9.35 img/s — 00:08 | 5.60 s/vid — 04:34 | 01:26 | ~6 min | 49 (+1) |
 
-> ℹ️ **The YOLO img step matters.** Smaller models are faster per image but detect fewer persons → more videos pass to the YOLO vid step → overall pipeline is slower despite faster per-frame speed. yolov8n processes images 4x faster than yolov8l but ends up with 24 more videos to scan.
+>[!NOTE]
+> **The YOLO img step matters.** Smaller models are faster per image but detect fewer persons → more videos pass to the YOLO vid step → overall pipeline is slower despite faster per-frame speed. yolov8n processes images 4x faster than yolov8l but ends up with 24 more videos to scan.
 
 ---
 
-## 🎯 Accuracy — Default FAKE_WEIGHTS (all 1.0)
+## Accuracy — Default FAKE_WEIGHTS (all 1.0)
 
 | Model | Person TP/FP/FN | Precision | Recall | Animal TP/FP/FN | Global Acc |
 |-------|-----------------|-----------|--------|-----------------|------------|
@@ -38,7 +39,7 @@ Each model was tested twice:
 
 ---
 
-## 🎯 Accuracy — FAKE_WEIGHTS = 0.0 (no fake penalty)
+## Accuracy — FAKE_WEIGHTS = 0.0 (no fake penalty)
 
 | Model | Person TP/FP/FN | Precision | Recall | Animal TP/FP/FN | Global Acc |
 |-------|-----------------|-----------|--------|-----------------|------------|
@@ -50,13 +51,14 @@ Each model was tested twice:
 
 ---
 
-## 📊 Key Findings
+## Key Findings
 
 **yolov8l is the optimal model** — best balance of speed, person recall and false positives in both configurations.
 
 **BLIP/CLIP is robust even without fake penalty.** Removing fake weights entirely (FK=0) causes minimal degradation across all models — only yolov8m introduces 2 animal FP. This demonstrates that the BLIP/CLIP scoring system is solid on its own: the underlying CLIP scores and BLIP captions already provide good discrimination even without additional tuning.
 
-> 💡 On this specific camera, **yolov8l + FK=0 actually improves animal recall** (3 TP vs 2 TP) without introducing any false positives — the fake penalty was slightly over-penalizing a real animal. This is a good reminder that fake weights should be tuned per camera, not left at a global default.
+>[!NOTE]
+> On this specific camera, **yolov8l + FK=0 actually improves animal recall** (3 TP vs 2 TP) without introducing any false positives — the fake penalty was slightly over-penalizing a real animal. This is a good reminder that fake weights should be tuned per camera, not left at a global default.
 
 **Why don't false positives explode without fake weights?**  
 The crops saved by YOLO on this camera (trees, leaves, table, garden objects) are sufficiently different from person/animal prompts that CLIP scores remain low even without penalty. On cameras with more ambiguous backgrounds (ground, shadows, reflections) the fake penalty would matter much more — as shown in the [Camera 06 edge case](../edge-cases.md#-case-study-wood-piece-misclassified-as-bird--camera-06-garden-gate).
@@ -65,7 +67,7 @@ The crops saved by YOLO on this camera (trees, leaves, table, garden objects) ar
 
 ---
 
-## ⚠️ Important Notes
+## Important Notes
 
 1. **Confidence thresholds are model-dependent.** The same min conf values (P=0.49, V=0.55, A=0.3) were used for all models — optimal values differ per model. Switching models requires re-tuning confidence thresholds and BLIP fake weights for best results.
 
@@ -75,7 +77,7 @@ The crops saved by YOLO on this camera (trees, leaves, table, garden objects) ar
 
 ---
 
-## 💡 Recommendation
+## Recommendation
 
 **Use yolov8l (default)** unless you have a specific reason to switch:
 
