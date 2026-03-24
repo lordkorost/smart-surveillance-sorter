@@ -17,7 +17,7 @@
 
     "_doc_BLIP_KEYWORDS": "Keyword cercate nella caption BLIP. Se trovate, aggiungono BLIP_BOOST allo score.",
     "BLIP_KEYWORDS": {
-        "PERSON":  ["person", "people", "human", "officer", "man", "woman", "child", "girl", "boy"],
+        "PERSON":  ["person", "people", "human", "officer", "man", "woman", "child", "girl", "boy","someone", "somebody", "individual"],
         "VEHICLE": ["car", "truck", "bike", "motorcycle", "bus"],
         "ANIMAL":  ["cat", "dog", "horse", "bird", "bear"]
     },

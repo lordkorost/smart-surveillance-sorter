@@ -218,10 +218,12 @@ class ClipBlipEngine:
 
             final_scores[cls] = max(0.0, base + blip_bonus - fake_penalty)
 
-        if bbox and yolo_category == "PERSON" and final_scores["PERSON"] > 0.05:
+        if bbox and yolo_category == "PERSON":
             bbox_bonus = self._get_bbox_small_bonus(bbox, frame_path, active_rules)
-            final_scores["PERSON"] += bbox_bonus
 
+            if bbox_bonus > 0 and final_scores["PERSON"] > 0.01:
+                final_scores["PERSON"] += bbox_bonus
+                
         # 5. Night boost per PERSON
         if is_night and yolo_category == "PERSON":
             final_scores["PERSON"] += active_rules["YOLO_NIGHT_BOOST"]
