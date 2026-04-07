@@ -283,14 +283,26 @@ class YoloEngine:
 
                     if not group or conf < thresholds.get(group, 0.50):
                         continue
-
-                    found_valid_target      = True
-                    self.last_detection_idx = frame_idx
-
+                    
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     bbox_area  = (x2 - x1) * (y2 - y1)
                     h, w_frame = frame.shape[:2]
                     area_ratio = bbox_area / (h * w_frame)
+
+                    #new logic to exlude per bbox from cameras.json
+                    if self._is_excluded_detection(
+                        group=group,
+                        bbox=[x1, y1, x2, y2],
+                        area_ratio=area_ratio,
+                        yolo_reliable=(conf >= yolo_override_threshold),
+                        camera_config=cam_cfg
+                    ):
+                        continue
+
+                    found_valid_target      = True
+                    self.last_detection_idx = frame_idx
+
+                  
 
                     detections[group].append({
                         "frame_idx":     frame_idx,
@@ -504,3 +516,43 @@ class YoloEngine:
             "yolo_category": best_det["category"],
             "yolo_data":     best_det,
         }
+
+    def _center(self, bbox):
+        x1, y1, x2, y2 = bbox
+        return ((x1 + x2) / 2, (y1 + y2) / 2)
+
+
+    def _point_in_box(self, x, y, box):
+        x1, y1, x2, y2 = box
+        return x1 <= x <= x2 and y1 <= y <= y2
+    
+    def _is_excluded_detection(self, group, bbox, area_ratio, yolo_reliable, camera_config):
+        zones = camera_config.get("filters", {}).get("exclusion_zones", [])
+
+        if not zones:
+            return False
+
+        cx, cy = self._center(bbox)
+
+        for zone in zones:
+            # 1. label match
+            if group != zone.get("label"):
+                continue
+
+            # 2. reliable check
+            if zone.get("only_if_unreliable", False):
+                if yolo_reliable:
+                    continue
+
+            # 3. area check
+            if "max_area_ratio" in zone:
+                if area_ratio > zone["max_area_ratio"]:
+                    continue
+
+            # 4. geometry
+            if zone["type"] == "bbox_center":
+                if self._point_in_box(cx, cy, zone["coords"]):
+                    log.debug(f"🚫 EXCLUDED FP: {bbox} area={area_ratio:.5f}")
+                    return True
+
+        return False

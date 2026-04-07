@@ -42,9 +42,18 @@ Example: `NVR reo_01_20260301121623.mp4` → camera ID `01`
         "priority": "person",
         "desc": "Entrance door, garden area",
         "dynamic_stride": false,
-        "filters": {
+           "filters": {
             "ignore_labels": [],
-            "ignore_classes": []
+            "ignored_classes":[],
+            "exclusion_zones": [
+                {
+                "label": "person",
+                "type": "bbox_center",
+                "coords": [170, 590, 270, 740],
+                "max_area_ratio": 0.002,
+                "only_if_unreliable": true
+                }
+            ]
         },
         "thresholds": {
             "person": 0.49,
@@ -99,7 +108,16 @@ Example: `NVR reo_01_20260301121623.mp4` → camera ID `01`
 ```json
 "filters": {
     "ignore_labels": ["bird", "car", "truck"],
-    "ignore_classes": ["VEHICLE"]
+    "ignore_classes": ["VEHICLE"],
+    "exclusion_zones": [
+                {
+                "label": "person",
+                "type": "bbox_center",
+                "coords": [170, 590, 270, 740],
+                "max_area_ratio": 0.002,
+                "only_if_unreliable": true
+                }
+            ]
 }
 ```
 
@@ -107,6 +125,18 @@ Example: `NVR reo_01_20260301121623.mp4` → camera ID `01`
 |-----------|-------------|
 | `ignore_labels` | YOLO labels to ignore for this camera. Matching detections are skipped entirely. |
 | `ignore_classes` | Higher-level categories to ignore (`PERSON`, `ANIMAL`, `VEHICLE`). |
+| `exclusion_zones` | Spatial rules used to filter detections that occur in specific regions of the frame (useful to eliminate recurring false positives).
+
+##### Exclusion zones fields:
+
+| Field                | Description                                                             |
+| -------------------- | ----------------------------------------------------------------------- |
+| `label`              | Target label to which the rule applies (e.g. `person`)                  |
+| `type`               | Zone evaluation method (e.g. `bbox_center`)                             |
+| `coords`             | Bounding box coordinates `[x1, y1, x2, y2]` defining the exclusion area |
+| `max_area_ratio`     | Maximum allowed relative area of the detection inside the zone          |
+| `only_if_unreliable` | Apply the rule only when the detection confidence is low or uncertain   |
+
 
 >[!NOTE]
 > Labels must match YOLO/COCO class names exactly. Full list of available labels:  
