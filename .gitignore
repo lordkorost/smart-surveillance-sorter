@@ -31,4 +31,4 @@ checks/*
 *.log
 .jsonl
 
-config/cameras.json
+

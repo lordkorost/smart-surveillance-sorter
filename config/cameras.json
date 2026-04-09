@@ -1,0 +1,68 @@
+{
+    
+    "00": {
+        "name": "Cam00 Name",
+        "location": "outdoor",
+        "search_patterns": [
+            "_00_",
+            "ch00",
+            "Cam00"
+        ],
+        "priority": "person",
+        "desc": "Entrance door, garden area",
+        "dynamic_stride": false,
+        "filters": {
+            "ignore_labels": []
+        },
+        "thresholds": {
+            "person": 0.49,
+            "vehicle": 0.55,
+            "animal": 0.3
+        },
+        "blip_rules": {
+            "FAKE_WEIGHTS": {
+                "GROUND": 0.3,
+                "GARDEN": 0.3,
+                "SHOE": 0.0,
+                "WOOD": 0.0
+            }
+        },
+        "thresholds_night": {
+            "animal": 0.25
+        }
+    },
+    "01": {
+        "name": "Cam01 Name",
+        "location": "outdoor",
+        "search_patterns": [
+            "_01_",
+            "ch01",
+            "Cam01"
+        ],
+        "priority": "person",
+        "desc": "Parking area",
+        "dynamic_stride": true,
+        "filters": {
+            "ignore_labels": [
+                "car",
+                "truck",
+                "boat",
+                "motorcycle",
+                "bicycle",
+                "bus",
+                "train"
+            ]
+        },
+        "thresholds": {
+            "person": 0.49,
+            "vehicle": 0.55,
+            "animal": 0.3
+        },
+        "blip_rules": {
+            "FAKE_WEIGHTS": {}
+        },
+        "thresholds_night": {
+            "animal": 0.25
+        }
+    }
+}
