@@ -80,8 +80,6 @@ def build_dynamic_prompt(prompts_config, cam_cfg, mode="full", has_crop=False, i
 
     return template.format(**context)
 
-
-
 def build_clean_prompt(prompts_config, cam_cfg):
     """
     Build prompt for lens cleanliness analysis.

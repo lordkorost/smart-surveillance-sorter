@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 from collections import defaultdict
 from ollama import generate
-
+from ollama import Client
 from smart_surveillance_sorter.constants import PROMPTS_JSON
 
 
@@ -28,8 +28,13 @@ class VisionEngine:
         self.settings = settings
         self.cameras_config = cameras_config
         self.mode = mode
-     
+
         self.vision_cfg = self.settings.get("vision_settings", {})
+        self.ollama_cfg = self.vision_cfg.get("ollama_conf", {})
+        self.ollama_ip = self.ollama_cfg.get("ip", "127.0.0.1")
+        self.ollama_port = self.ollama_cfg.get("port", 11434)
+        self.ollama_client = Client(host=f"http://{self.ollama_ip}:{self.ollama_port}")
+
         self.prompts_config = load_json(PROMPTS_JSON)
             
         if not self.prompts_config:
@@ -37,7 +42,6 @@ class VisionEngine:
             self.is_refine = False 
             return
         
-
     def query_vision_model(self, prompt, image_paths):
         """Query the vision model with prompt and images.
         
@@ -58,7 +62,7 @@ class VisionEngine:
         else:
             images = [str(p) for p in image_paths]
         try:
-            response = generate(
+            response =  self.ollama_client.generate(
                 model=vision_model,
                 prompt=prompt,
                 images=images,
@@ -70,8 +74,6 @@ class VisionEngine:
             )
             
 
-          
-         
             # 2. Get response text
             full_response = response.get('response', '').lower().strip()
             thinking_content = response.get('thinking', '') 
@@ -250,7 +252,6 @@ class VisionEngine:
             "thinking":thinking
         }
     
-
     def refine_fallback(self, suspect):
         """Fallback refine for edge cases when primary method fails.
         
@@ -297,8 +298,6 @@ class VisionEngine:
         
         return {"category": "others", "thinking": thinking}
     
-
-
     def analyze_cleanliness(self, image_list, cam_id,):        
         """Analyze lens cleanliness from a series of frames.
         
@@ -319,7 +318,7 @@ class VisionEngine:
       
         try:
             
-            response = generate(
+            response = self.ollama_client.generate(
                 model=vision_model,
                 prompt=prompt,
                 images=image_list,
@@ -345,8 +344,6 @@ class VisionEngine:
             return answer
         except Exception as e:
             return f"error: {str(e)}"
-
-    
 
     def resize_for_vision(image_path, output_path, size=(1280, 720)):
         from PIL import Image
