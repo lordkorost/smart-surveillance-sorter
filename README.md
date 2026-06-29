@@ -6,8 +6,13 @@
 ![AI](https://img.shields.io/badge/AI-YOLO%20%7C%20CLIP%20%7C%20BLIP%20%7C%20Vision-red.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-Organize your NVR videos using the power of YOLO, CLIP, BLIP, and Vision models (Ollama).
-Designed for those overwhelmed by hundreds of useless recordings caused by wind, insects, or leaves, this tool scans every video and automatically categorizes it into: **PERSON**, **ANIMAL**, **VEHICLE**, or **OTHERS**.
+Process and organize NVR surveillance recordings using a local AI pipeline based on YOLO, CLIP, BLIP, and Vision models (Ollama).
+
+The system supports both historical and continuous processing modes, allowing it to analyze existing video archives or monitor active directories where new recordings are continuously added (e.g., NVR daily folders).
+
+Once video files are finalized, they are processed through a multi-stage inference pipeline and categorized into structured classes: PERSON, ANIMAL, VEHICLE, or OTHERS.
+
+Processed outputs can be redirected into fully configurable directory structures (e.g., monthly archives or consolidated categorized datasets), independent of the original NVR storage layout. Users can define custom organization schemes without affecting the underlying AI classification..
 
 <div align="center">
   <img src="docs/assets/sorter.gif" alt="Demo" width="270">
@@ -34,19 +39,21 @@ Designed for those overwhelmed by hundreds of useless recordings caused by wind,
 
 ## Features
 
-- **Hybrid Pipeline** – YOLO for speed → CLIP+BLIP for precision → Vision (Ollama) for uncertain cases (optional).
-- **Highly Customizable** – Fine-tune settings to adapt to any camera, scenario, or environment.
-- **Test Mode** – Built-in sandbox to verify your configuration before running it on real production folders.
-- **Resilient** – Automatic resume at every stage. If the power goes out, it picks up exactly where it left off.
-- **Cumulative Archive** – Use a fixed output folder across multiple runs to automatically build a permanent categorized archive across days, weeks, or months.
-- **Real-Time & Batch** – Works on historical archives or in constant monitoring mode as your NVR saves new files.
-- **Early Exit** – A smart mechanism that stops video analysis once a detection is confirmed, saving significant time.
-- **Total Privacy** – Runs 100% locally. No data ever leaves your network.
-- **Lens Cleanliness Check** – Automatically monitors camera lens status using Vision models (Ollama).
+- **Hybrid Inference Pipeline** – YOLO for fast detection → CLIP+BLIP for refinement → Vision (Ollama) for uncertain cases (optional).
+- **Highly Customizable** – Fine-tune parameters to adapt the pipeline to any camera, scenario, or environment.
+- **Test Mode** – Built-in sandbox for validating configurations before processing production datasets.
+- **Resilient Execution** – Automatic resume at every stage. If interrupted, processing continues exactly from the last completed checkpoint.
+- **Checkpointed Processing** – Multi-stage pipeline with persistent intermediate outputs, allowing selective recomputation per stage.
+- **Incremental Processing (Batch + Continuous)** – Supports both historical dataset processing and continuous ingestion of newly added NVR recordings.
+- **Early Exit Optimization** – Stops video analysis once sufficient confidence is reached, reducing unnecessary computation.
+- **Configurable Output Mapping** – AI categories can be mapped to fully customizable directory structures, independent of the original NVR layout.
+- **Fully Local Execution** – Runs entirely on local hardware. No data is sent externally.
+- **Lens Health Monitoring** – Uses Vision models (Ollama) to detect lens contamination or degradation over time.
 
-**Web UI** – An intuitive Gradio-based interface to configure and launch the sorter in all modes.
+**Web UI** – Gradio-based interface for configuration, execution, and monitoring across all pipeline modes.
 
 ![WebUI](docs/assets/webui-scan.png)
+
 ---
 ## Quick Start
 
